@@ -1,0 +1,36 @@
+export const createBlankReport = (companyName, userIds, newId = `rep-${Date.now()}`) => ({
+  id: newId,
+  name: 'New Custom Report',
+  companyName,
+  category: ['ALL'],
+  assignedUsers: [...userIds],
+  isActive: true,
+  periodFormat: 'standard',
+  theme: 'blue',
+  columns: [
+    { id: 'C1', label: 'Actual', isActive: true, isFormula: false, isPercent: false, formatAsPercent: false, yearMode: 'current', periodMode: 'current', type: 'AC', width: '' }
+  ],
+  rows: [
+    { id: 'r-1', desc: 'Revenue', isActive: true, isHeader: true, isTotal: false, indent: 0 },
+    { id: 'r-2', desc: 'Room Revenue', isActive: true, isHeader: false, isTotal: false, dept: '', groupLevel: 'L4', groups: '', accCodes: '', percentBase: '', formula: '', indent: 1 }
+  ]
+});
+
+export const createOcrReport = (fileName, companyName, userIds, newId = `rep-ocr-${Date.now()}`) => ({
+  id: newId,
+  name: `Imported from ${fileName}`,
+  companyName,
+  category: ['ALL'],
+  assignedUsers: [...userIds],
+  isActive: true,
+  periodFormat: 'standard',
+  theme: 'blue',
+  columns: [
+    { id: 'C1', label: 'Extracted Value', isActive: true, isFormula: false, isPercent: false, formatAsPercent: false, yearMode: 'current', periodMode: 'current', type: 'AC', width: '' }
+  ],
+  rows: [
+    { id: 'r-1', desc: 'Sales (OCR)', isActive: true, isHeader: false, isTotal: false, dept: '', groupLevel: 'L4', groups: '', accCodes: '', percentBase: '', formula: '', indent: 0 },
+    { id: 'r-2', desc: 'Cost (OCR)', isActive: true, isHeader: false, isTotal: false, dept: '', groupLevel: 'L4', groups: '', accCodes: '', percentBase: '', formula: '', indent: 0 }
+  ]
+});
+
