@@ -4,3 +4,7 @@ dist
 .DS_Store
 *.log
 coverage
+.tmp_frd
+.env
+.env.local
+.env.*.local

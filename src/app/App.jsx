@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   FileText,
   Printer, Menu, BarChart3,
@@ -15,6 +15,7 @@ import EditMappingModal from '../features/report/components/EditMappingModal.jsx
 import usePersistentState from '../hooks/usePersistentState.js';
 import { getDefaultReports } from '../features/report/data/defaultReports.js';
 import { createBlankReport, createOcrReport } from '../features/report/data/reportTemplates.js';
+import { fetchCarmenMasterData, isCarmenApiConfigured } from '../features/report/lib/reportApi.js';
 import {
   THEMES,
   INITIAL_MASTER_DATA,
@@ -32,10 +33,39 @@ import {
   buildExcelHtml,
 } from '../features/report/lib/reportLogic.js';
 
+const hasFinancialReportPermission = (user) => Boolean(user?.permissions?.financialReport);
+
+const canSetupFinancialReports = (user) => {
+  const permission = user?.permissions?.financialReport;
+  if (permission) {
+    return Boolean(permission.setup || permission.add || permission.update || permission.delete);
+  }
+  return user?.role === 'Admin';
+};
+
+const canViewFinancialReports = (user) => {
+  const permission = user?.permissions?.financialReport;
+  if (permission) {
+    return Boolean(permission.view || permission.setup || permission.add || permission.update || permission.delete);
+  }
+  return Boolean(user);
+};
+
+const getAccessibleReports = (reports, user) => {
+  if (!canViewFinancialReports(user)) return [];
+  if (canSetupFinancialReports(user)) return reports;
+  if (hasFinancialReportPermission(user)) {
+    // Carmen report definitions still use local assignedUsers, so View-only API users
+    // can see active local reports until report access is backed by Carmen UserId.
+    return reports.filter((report) => report.isActive !== false);
+  }
+  return reports.filter((report) => report.assignedUsers.includes(user.id) && report.isActive !== false);
+};
+
 // ============================================================================
 // 1. MAIN APPLICATION
 // ============================================================================
-export default function App() {
+export default function App({ onLogout = null }) {
   const [activeTab, setActiveTab] = useState('report');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   
@@ -43,8 +73,12 @@ export default function App() {
   const [confirmAction, setConfirmAction] = useState(null);
   
   const [masterData, setMasterData] = usePersistentState('carmen_bi_master_v5_16', INITIAL_MASTER_DATA);
+  const [periodOptions, setPeriodOptions] = useState([]);
+  const [budgetRevisionOptions, setBudgetRevisionOptions] = useState([]);
+  const [masterDataError, setMasterDataError] = useState(null);
+  const [isMasterDataLoading, setIsMasterDataLoading] = useState(false);
 
-  const [currentUser, setCurrentUser] = useState(masterData.users[0]);
+  const [currentUser, setCurrentUser] = useState(masterData.users[0] || INITIAL_MASTER_DATA.users[0]);
   const [tableZoom, setTableZoom] = useState(100);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -60,6 +94,40 @@ export default function App() {
 
   const [engineData, setEngineData] = useState([]); 
   const [budgetData, setBudgetData] = useState([]); 
+
+  useEffect(() => {
+    if (!isCarmenApiConfigured() || !/^\d{4}$/.test(String(globalYear))) return;
+
+    let isCancelled = false;
+    const loadCarmenMasterData = async () => {
+      setIsMasterDataLoading(true);
+      try {
+        const apiData = await fetchCarmenMasterData({ year: globalYear });
+        if (isCancelled) return;
+
+        setMasterData(prev => ({
+          ...prev,
+          companyProfile: apiData.companyProfile || prev.companyProfile,
+          users: apiData.currentUser ? [apiData.currentUser] : prev.users,
+          depts: apiData.depts.length > 0 ? apiData.depts : prev.depts,
+          accCodes: apiData.accCodes.length > 0 ? apiData.accCodes : prev.accCodes,
+        }));
+        if (apiData.currentUser) setCurrentUser(apiData.currentUser);
+        setPeriodOptions(apiData.periods || []);
+        setBudgetRevisionOptions(apiData.budgetRevisions || []);
+        setMasterDataError(null);
+      } catch (error) {
+        if (!isCancelled) setMasterDataError(error.message || 'Unable to load Carmen master data.');
+      } finally {
+        if (!isCancelled) setIsMasterDataLoading(false);
+      }
+    };
+
+    loadCarmenMasterData();
+    return () => {
+      isCancelled = true;
+    };
+  }, [globalYear, setMasterData]);
 
   // ============================================================================
   // 🚀 CSV PARSER
@@ -138,16 +206,24 @@ export default function App() {
   const [isAccessModalOpen, setIsAccessModalOpen] = useState(false); 
   const [modalAccCategory, setModalAccCategory] = useState('ALL'); 
 
-  const accessibleReports = useMemo(() => {
-    let filtered = reports;
-    if (currentUser.role !== 'Admin') {
-      filtered = reports.filter(r => r.assignedUsers.includes(currentUser.id) && r.isActive !== false);
-    }
-    return filtered;
-  }, [reports, currentUser]);
+  const canSetupReports = canSetupFinancialReports(currentUser);
+  const accessibleReports = useMemo(() => getAccessibleReports(reports, currentUser), [reports, currentUser]);
 
-  const activeReport = reports.find(r => r.id === currentReportId) || accessibleReports[0] || reports[0];
-  const updateActiveReport = (updates) => setReports(reports.map(r => r.id === currentReportId ? { ...r, ...updates } : r));
+  const activeReport = accessibleReports.find(r => r.id === currentReportId) || accessibleReports[0] || null;
+  const updateActiveReport = (updates) => {
+    if (!activeReport) return;
+    setReports(reports.map(r => r.id === activeReport.id ? { ...r, ...updates } : r));
+  };
+
+  useEffect(() => {
+    if (!canSetupReports && activeTab === 'setup') setActiveTab('report');
+  }, [activeTab, canSetupReports]);
+
+  useEffect(() => {
+    if (accessibleReports.length > 0 && !accessibleReports.some(report => report.id === currentReportId)) {
+      setCurrentReportId(accessibleReports[0].id);
+    }
+  }, [accessibleReports, currentReportId]);
 
   const handleApplyFilters = () => {
     setAppliedDepts([...globalDepts]);
@@ -253,13 +329,32 @@ export default function App() {
   };
 
   // --- Display Labels (Configurable Period Formats) ---
+  const defaultPeriodOptions = useMemo(
+    () => [...Array(12).keys()].map(i => ({ id: String(i + 1), label: `P${i + 1}` })),
+    []
+  );
+  const periodSelectOptions = periodOptions.length > 0 ? periodOptions : defaultPeriodOptions;
+  const revisionSelectOptions = useMemo(() => {
+    const options = new Map([['0', { id: '0', label: 'Rev 0' }]]);
+    budgetRevisionOptions.forEach(option => options.set(String(option.id), option));
+    return Array.from(options.values()).sort((a, b) =>
+      String(a.id).localeCompare(String(b.id), undefined, { numeric: true, sensitivity: 'base' })
+    );
+  }, [budgetRevisionOptions]);
+  const selectedAppliedPeriod = periodSelectOptions.find(option => String(option.id) === String(appliedPeriod));
+  const selectedPeriodCode = `P${String(appliedPeriod).padStart(2, '0')}`;
   const displayCompanyLabel = activeReport?.companyName || masterData.companyProfile.name;
-  const autoDateLabel = `As of ${formatAutoPeriod(appliedYear, appliedPeriod, 'end_of_month')}`;
+  const autoDateLabel = selectedAppliedPeriod?.dateLabel
+    ? `As of ${selectedAppliedPeriod.dateLabel}`
+    : `As of ${formatAutoPeriod(appliedYear, appliedPeriod, 'end_of_month')}`;
   const displayDateLabel = activeReport?.customDateLabel || autoDateLabel;
-  const autoPeriodLabel = activeReport?.periodFormat !== 'standard' ? formatAutoPeriod(appliedYear, appliedPeriod, activeReport?.periodFormat) : formatAutoPeriod(appliedYear, appliedPeriod, 'standard');
+  const autoPeriodLabel = selectedAppliedPeriod?.dateLabel
+    ? `Period : ${appliedYear}-${selectedPeriodCode}${selectedAppliedPeriod.status ? ` (${selectedAppliedPeriod.status})` : ''}`
+    : (activeReport?.periodFormat !== 'standard' ? formatAutoPeriod(appliedYear, appliedPeriod, activeReport?.periodFormat) : formatAutoPeriod(appliedYear, appliedPeriod, 'standard'));
   const displayPeriodLabel = activeReport?.customPeriodLabel || autoPeriodLabel;
   const activeCategories = Array.isArray(activeReport?.category) ? activeReport.category : ['ALL'];
   const activeCols = activeReport?.columns.filter(c => c.isActive) || [];
+  const userSelectorLabel = hasFinancialReportPermission(currentUser) ? 'Signed In As:' : 'View As Role:';
 
   // --- Export Excel (HTML-to-XLSX) ---
   const exportToExcel = () => {
@@ -328,16 +423,20 @@ export default function App() {
         
         {/* Simulate Role Selector */}
         <div className={`p-4 mx-4 mt-4 bg-purple-50 rounded-xl border border-purple-100 ${!isSidebarOpen && 'hidden'}`}>
-          <span className="text-[10px] font-black text-purple-500 uppercase tracking-widest flex items-center gap-1 mb-1.5"><ShieldCheck size={12}/> View As Role:</span>
-          <select value={currentUser.id} onChange={e => {
+          <span className="text-[10px] font-black text-purple-500 uppercase tracking-widest flex items-center gap-1 mb-1.5"><ShieldCheck size={12}/> {userSelectorLabel}</span>
+          <select value={currentUser?.id || ''} onChange={e => {
               const selectedUser = masterData.users.find(u=>u.id===e.target.value);
+              if (!selectedUser) return;
+              const selectedReports = getAccessibleReports(reports, selectedUser);
               setCurrentUser(selectedUser);
-              if (selectedUser.role !== 'Admin' && !activeReport?.assignedUsers.includes(selectedUser.id)) {
-                setCurrentReportId(reports.filter(r => r.assignedUsers.includes(selectedUser.id))[0]?.id || reports[0]?.id);
+              if (!selectedReports.some(report => report.id === currentReportId)) {
+                setCurrentReportId(selectedReports[0]?.id || null);
+              }
+              if (!canSetupFinancialReports(selectedUser)) {
                 setActiveTab('report');
               }
             }} className="w-full bg-white text-xs font-bold text-purple-900 border border-purple-200 rounded-md px-2 py-1 outline-none cursor-pointer">
-            {masterData.users.map(u => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
+            {masterData.users.map(u => <option key={u.id} value={u.id}>{u.name} ({canSetupFinancialReports(u) ? 'Admin' : 'User'})</option>)}
           </select>
         </div>
 
@@ -358,15 +457,25 @@ export default function App() {
         {/* Header แบ่ง 2 บรรทัด */}
         <header className="flex-shrink-0 z-40 bg-white/90 backdrop-blur-md border-b border-purple-100 p-3 px-6 flex flex-col gap-3 print:hidden shadow-sm">
           <div className="flex justify-between items-center">
-            <div className="flex items-center gap-6">
-              <div className="flex bg-purple-50 p-1 rounded-lg border border-purple-100">
-                <button onClick={() => setActiveTab('report')} className={`px-5 py-1.5 rounded-md text-[11px] font-black transition-all ${activeTab === 'report' ? 'bg-white shadow-sm text-purple-700' : 'text-purple-400 hover:text-purple-600'}`}>VIEW</button>
-                {currentUser.role === 'Admin' && (
-                  <button onClick={() => setActiveTab('setup')} className={`px-5 py-1.5 rounded-md text-[11px] font-black transition-all ${activeTab === 'setup' ? 'bg-white shadow-sm text-purple-700' : 'text-purple-400 hover:text-purple-600'}`}>SETUP</button>
-                )}
+              <div className="flex items-center gap-6">
+                <div className="flex bg-purple-50 p-1 rounded-lg border border-purple-100">
+                  <button onClick={() => setActiveTab('report')} className={`px-5 py-1.5 rounded-md text-[11px] font-black transition-all ${activeTab === 'report' ? 'bg-white shadow-sm text-purple-700' : 'text-purple-400 hover:text-purple-600'}`}>VIEW</button>
+                  {canSetupReports && (
+                    <button onClick={() => setActiveTab('setup')} className={`px-5 py-1.5 rounded-md text-[11px] font-black transition-all ${activeTab === 'setup' ? 'bg-white shadow-sm text-purple-700' : 'text-purple-400 hover:text-purple-600'}`}>SETUP</button>
+                  )}
+                </div>
+                {activeTab === 'setup' && <h2 className="text-lg font-black text-slate-800 tracking-tight">Configuration Mode</h2>}
+                {isMasterDataLoading && <span className="text-[10px] font-black uppercase tracking-widest text-blue-500">Syncing Carmen</span>}
+                {masterDataError && <span className="text-[10px] font-black uppercase tracking-widest text-red-500" title={masterDataError}>Carmen API unavailable</span>}
               </div>
-              {activeTab === 'setup' && <h2 className="text-lg font-black text-slate-800 tracking-tight">Configuration Mode</h2>}
-            </div>
+            {typeof onLogout === 'function' && (
+              <button
+                onClick={onLogout}
+                className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200"
+              >
+                Logout
+              </button>
+            )}
 
             {activeTab === 'report' && (
                <div className="flex items-center gap-2 bg-white p-1 px-3 rounded-lg border border-purple-100 shadow-sm hidden md:flex flex-shrink-0">
@@ -391,14 +500,16 @@ export default function App() {
                   <div className="h-4 w-px bg-purple-100 flex-shrink-0 mx-1"></div>
                   <div className="flex items-center gap-1 flex-shrink-0">
                      <span className="text-[9px] font-black text-purple-400 uppercase tracking-widest">Period:</span>
-                     <select value={globalPeriod} onChange={e=>setGlobalPeriod(e.target.value)} className="text-[11px] font-bold bg-transparent outline-none text-purple-900 cursor-pointer">{[...Array(12).keys()].map(i=><option key={i+1} value={String(i+1)}>P{i+1}</option>)}</select>
+                     <select value={globalPeriod} onChange={e=>setGlobalPeriod(e.target.value)} className="text-[11px] font-bold bg-transparent outline-none text-purple-900 cursor-pointer">
+                        {periodSelectOptions.map(option => <option key={option.id} value={String(option.id)}>{option.label}</option>)}
+                     </select>
                   </div>
                   <div className="h-4 w-px bg-purple-100 flex-shrink-0 mx-1"></div>
                   
                   <div className="flex items-center gap-1 flex-shrink-0">
                      <span className="text-[9px] font-black text-purple-400 uppercase tracking-widest">Rev:</span>
                      <select value={globalRevision} onChange={e=>setGlobalRevision(e.target.value)} className="text-[11px] font-bold bg-transparent outline-none text-purple-900 cursor-pointer">
-                        {[0, 1, 2, 3, 4].map(i=><option key={i} value={String(i)}>Rev {i}</option>)}
+                        {revisionSelectOptions.map(option => <option key={option.id} value={String(option.id)}>{option.label}</option>)}
                      </select>
                   </div>
                   
@@ -441,7 +552,13 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'setup' && activeReport && (
+          {activeTab === 'report' && !activeReport && (
+            <div className="h-full flex items-center justify-center text-sm font-bold text-slate-400">
+              No reports available for this user.
+            </div>
+          )}
+
+          {activeTab === 'setup' && canSetupReports && activeReport && (
             <ReportSetup
               masterData={masterData}
               activeReport={activeReport}
