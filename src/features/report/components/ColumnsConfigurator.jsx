@@ -1,13 +1,51 @@
 import React from 'react';
 import { ArrowLeft, ArrowRight, Percent, Plus, Trash2 } from 'lucide-react';
+import { findBrokenReferences } from '../lib/reportLogic.js';
 
 export default function ColumnsConfigurator({
   activeReport,
+  reportOptions = {},
   handleAddCol,
   handleUpdateCol,
   moveCol,
   handleDeleteCol,
 }) {
+  const reportType = activeReport?.reportType || 'Monthly';
+  const allowedColumnTypes = reportType === 'Daily'
+    ? new Set(['DAC', 'PTD', 'DACBG', 'PTDBG'])
+    : new Set(['AC', 'ACC', 'BUD', 'BUDACC']);
+  const columnTypeOptions = (reportOptions.columnTypes?.length > 0
+    ? reportOptions.columnTypes
+    : [
+        { id: 'AC', label: 'AC' },
+        { id: 'ACC', label: 'ACC' },
+        { id: 'BUD', label: 'BUD' },
+        { id: 'BUDACC', label: 'BUDACC' },
+        { id: 'DAC', label: 'DAC' },
+        { id: 'PTD', label: 'PTD' },
+        { id: 'DACBG', label: 'DACBG' },
+        { id: 'PTDBG', label: 'PTDBG' },
+      ]).filter((option) => allowedColumnTypes.has(option.id));
+  const yearModeOptions = reportOptions.yearModes?.length > 0
+    ? reportOptions.yearModes
+    : [
+        { id: 'current', label: 'Current' },
+        { id: '-1', label: 'Prev' },
+      ];
+  const periodModeOptions = reportOptions.periodModes?.length > 0
+    ? reportOptions.periodModes
+    : [
+        { id: 'current', label: 'Current' },
+        { id: '-1', label: 'Prev' },
+        { id: 'FY', label: 'FY' },
+        { id: 'Q1', label: 'Q1' },
+        { id: 'Q2', label: 'Q2' },
+        { id: 'Q3', label: 'Q3' },
+        { id: 'Q4', label: 'Q4' },
+      ];
+  const hasIncompatibleColumns = activeReport.columns.some((col) => col.type && !allowedColumnTypes.has(String(col.type).trim().toUpperCase()));
+  const brokenColumnReferences = findBrokenReferences(activeReport).filter((issue) => issue.scope === 'column');
+
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-purple-100 overflow-hidden flex-shrink-0">
       <div className="p-3 bg-purple-50/80 flex items-center justify-between border-b border-purple-200">
@@ -18,6 +56,16 @@ export default function ColumnsConfigurator({
           <button onClick={() => handleAddCol('percent')} className="px-2.5 py-1 bg-purple-400 text-white rounded text-[9px] font-black uppercase tracking-widest hover:bg-purple-500 shadow-sm flex items-center gap-1"><Percent size={10} /> Mix %</button>
         </div>
       </div>
+      {hasIncompatibleColumns && (
+        <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest bg-amber-50 text-amber-800 border-b border-amber-100">
+          {reportType} reports should only use compatible column types. Update any mismatched columns before saving.
+        </div>
+      )}
+      {brokenColumnReferences.length > 0 && (
+        <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest bg-red-50 text-red-700 border-b border-red-100">
+          Broken column references found. Fix {brokenColumnReferences.length} invalid reference(s) before saving.
+        </div>
+      )}
 
       <div className="overflow-auto">
         <table className="w-full text-left border-collapse min-w-max">
@@ -55,34 +103,34 @@ export default function ColumnsConfigurator({
                   <input type="checkbox" checked={col.isActive} onChange={e => handleUpdateCol(col.id, 'isActive', e.target.checked)} />
                 </td>
                 <td className="p-1 border-r border-purple-100 text-center">
-                  <select value={col.type || 'AC'} onChange={e => handleUpdateCol(col.id, 'type', e.target.value)} className="w-full text-[9px] font-bold bg-purple-50 border border-purple-200 rounded p-1 outline-none text-purple-700">
-                    <option value="AC">AC</option>
-                    <option value="ACC">ACC</option>
-                    <option value="BUD">BUD</option>
-                    <option value="BUDACC">BUDACC</option>
+                  <select value={col.type || (reportType === 'Daily' ? 'DAC' : 'AC')} onChange={e => handleUpdateCol(col.id, 'type', e.target.value)} className="w-full text-[9px] font-bold bg-purple-50 border border-purple-200 rounded p-1 outline-none text-purple-700">
+                    {columnTypeOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
+                    {col.type && !allowedColumnTypes.has(String(col.type).trim().toUpperCase()) && (
+                      <option value={col.type}>{col.type}</option>
+                    )}
                   </select>
                 </td>
                 <td className="p-1 border-r border-purple-100 text-center">
-                  <select value={col.targetCol || ''} onChange={e => handleUpdateCol(col.id, 'targetCol', e.target.value)} className="w-full text-[10px] font-bold bg-white rounded p-1 outline-none text-purple-800 border border-purple-200">
+                  <select
+                    value={col.targetCol || ''}
+                    onChange={e => handleUpdateCol(col.id, 'targetCol', e.target.value)}
+                    className={`w-full text-[10px] font-bold bg-white rounded p-1 outline-none text-purple-800 border ${String(col.targetCol || '').includes('!REF!') || brokenColumnReferences.some((issue) => issue.id === col.id && issue.field === 'targetCol') ? 'border-red-400 bg-red-50' : 'border-purple-200'}`}
+                    title={brokenColumnReferences.some((issue) => issue.id === col.id && issue.field === 'targetCol')
+                      ? 'Reference Error! Please update the target column.'
+                      : ''}
+                  >
                     <option value="">-</option>
                     {activeReport.columns.map(c => <option key={c.id} value={c.id}>{c.id}</option>)}
                   </select>
                 </td>
                 <td className="p-1 border-r border-purple-100 text-center">
                   <select value={col.yearMode || 'current'} onChange={e => handleUpdateCol(col.id, 'yearMode', e.target.value)} className="w-full text-[9px] font-bold bg-slate-50 border border-slate-200 rounded p-1 outline-none text-slate-700">
-                    <option value="current">Current</option>
-                    <option value="-1">Prev</option>
+                    {yearModeOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
                   </select>
                 </td>
                 <td className="p-1 border-r border-purple-100 text-center">
                   <select value={col.periodMode || 'current'} onChange={e => handleUpdateCol(col.id, 'periodMode', e.target.value)} className="w-full text-[9px] font-bold bg-slate-50 border border-slate-200 rounded p-1 outline-none text-slate-700">
-                    <option value="current">Current</option>
-                    <option value="-1">Prev</option>
-                    <option value="FY">FY</option>
-                    <option value="Q1">Q1</option>
-                    <option value="Q2">Q2</option>
-                    <option value="Q3">Q3</option>
-                    <option value="Q4">Q4</option>
+                    {periodModeOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
                   </select>
                 </td>
                 <td className="p-1 border-r border-purple-100 text-center">

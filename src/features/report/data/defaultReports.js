@@ -7,6 +7,11 @@
       assignedUsers: ['u1', 'u2', 'u3'], 
       isActive: true,
       periodFormat: 'standard', 
+      reportType: 'Monthly',
+      owner: 'u1',
+      overrideDateDisplay: '',
+      overridePeriodDisplay: '',
+      day: '',
       theme: 'blue',
       columns: [
         { id: 'C1', label: 'This Month', isActive: true, isFormula: false, isPercent: false, yearMode: 'current', periodMode: 'current', type: 'AC', width: '' },
@@ -99,6 +104,11 @@
       assignedUsers: ['u1', 'u3'],
       isActive: true,
       periodFormat: 'standard',
+      reportType: 'Monthly',
+      owner: 'u1',
+      overrideDateDisplay: '',
+      overridePeriodDisplay: '',
+      day: '',
       theme: 'green',
       columns: [
         { id: 'C1', label: 'Current Month', isActive: true, isFormula: false, isPercent: false, yearMode: 'current', periodMode: 'current', type: 'ACC', width: '' },

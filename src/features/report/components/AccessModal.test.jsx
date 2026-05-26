@@ -47,4 +47,27 @@ describe('AccessModal', () => {
 
     expect(container).toBeEmptyDOMElement();
   });
+
+  it('derives admin label from financial report permissions', () => {
+    render(
+      <AccessModal
+        isOpen={true}
+        masterData={{
+          users: [
+            {
+              id: 'u3',
+              name: 'Permission Admin',
+              permissions: { financialReport: { setup: true } },
+            },
+          ],
+        }}
+        activeReport={{ assignedUsers: ['u3'] }}
+        onClose={() => {}}
+        onUpdateUsers={() => {}}
+      />
+    );
+
+    expect(screen.getByText('Permission Admin')).toBeInTheDocument();
+    expect(screen.getByText('Admin')).toBeInTheDocument();
+  });
 });

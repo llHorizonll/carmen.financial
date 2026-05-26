@@ -6,6 +6,7 @@ export default function EditMappingModal({
   editingRow,
   setEditingRow,
   masterData,
+  reportOptions = {},
   modalAccCategory,
   setModalAccCategory,
   onOpenDetailSelector,
@@ -13,6 +14,14 @@ export default function EditMappingModal({
   onClose,
 }) {
   if (!isOpen || !editingRow) return null;
+
+  const accountCategoryOptions = reportOptions.accountCategories?.length > 0
+    ? reportOptions.accountCategories
+    : [
+        { id: 'ALL', label: 'All Categories' },
+        { id: 'I', label: 'Income Statement' },
+        { id: 'B', label: 'Balance Sheet' },
+      ];
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
@@ -39,7 +48,15 @@ export default function EditMappingModal({
           <div className="bg-purple-50/50 p-3 rounded-xl border border-purple-100 space-y-3">
             <div className="flex items-center justify-between">
               <label className="text-[11px] font-bold text-slate-700">Group Level Target</label>
-              <select value={editingRow.groupLevel || 'L4'} onChange={e => setEditingRow({ ...editingRow, groupLevel: e.target.value })} className="bg-white border border-purple-200 rounded-md px-2 py-1 text-xs font-bold text-purple-700 outline-none focus:border-purple-500 w-32 cursor-pointer">
+              <select
+                value={editingRow.groupLevel || 'L4'}
+                onChange={e => setEditingRow({
+                  ...editingRow,
+                  groupLevel: e.target.value,
+                  groups: '',
+                })}
+                className="bg-white border border-purple-200 rounded-md px-2 py-1 text-xs font-bold text-purple-700 outline-none focus:border-purple-500 w-32 cursor-pointer"
+              >
                 <option value="L1">L1 (Category)</option><option value="L2">L2 (Sub Category)</option><option value="L3">L3 (Group)</option><option value="L4">L4 (Detail)</option>
               </select>
             </div>
@@ -50,13 +67,33 @@ export default function EditMappingModal({
               </div>
               <input value={editingRow.groups} onChange={e => setEditingRow({ ...editingRow, groups: e.target.value })} placeholder="e.g. Food Revenue" className="w-full border border-slate-300 rounded-md px-3 py-1.5 text-sm text-slate-700 outline-none focus:border-purple-500" />
             </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Dim 1</label>
+                <input
+                  value={editingRow.dim1 || ''}
+                  onChange={e => setEditingRow({ ...editingRow, dim1: e.target.value })}
+                  placeholder="Optional"
+                  className="w-full border border-slate-300 rounded-md px-3 py-1.5 text-sm text-slate-700 outline-none focus:border-purple-500"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Dim 2</label>
+                <input
+                  value={editingRow.dim2 || ''}
+                  onChange={e => setEditingRow({ ...editingRow, dim2: e.target.value })}
+                  placeholder="Optional"
+                  className="w-full border border-slate-300 rounded-md px-3 py-1.5 text-sm text-slate-700 outline-none focus:border-purple-500"
+                />
+              </div>
+            </div>
           </div>
 
           <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
             <div className="flex justify-between items-center">
               <label className="text-[11px] font-bold text-slate-700">Account Codes Filter</label>
               <select value={modalAccCategory} onChange={e => setModalAccCategory(e.target.value)} className="bg-white border border-slate-300 rounded px-2 py-0.5 text-[11px] font-bold text-indigo-700 outline-none cursor-pointer">
-                <option value="ALL">All Categories</option><option value="I">Income Statement</option><option value="B">Balance Sheet</option>
+                {accountCategoryOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
               </select>
             </div>
             <div>

@@ -1,8 +1,10 @@
 import React from 'react';
 import { ArrowDown, ArrowUp, Calculator, Edit3, Layout, Trash2 } from 'lucide-react';
+import { findBrokenReferences, getRowMappingWarnings } from '../lib/reportLogic.js';
 
 export default function RowsConfigurator({
   activeReport,
+  masterData,
   handleAddRow,
   handleUpdateRow,
   handleUpdateRowMulti,
@@ -11,6 +13,8 @@ export default function RowsConfigurator({
   setEditingRow,
   setConfirmAction,
 }) {
+  const brokenRowReferences = findBrokenReferences(activeReport).filter((issue) => issue.scope === 'row');
+
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-purple-100 overflow-hidden flex-1 min-h-[350px] flex flex-col">
       <div className="p-3 bg-purple-50/80 flex items-center justify-between border-b border-purple-200 flex-shrink-0">
@@ -21,6 +25,11 @@ export default function RowsConfigurator({
           <button onClick={() => handleAddRow('formula')} className="px-3 py-1.5 bg-purple-600 text-white rounded text-[8px] font-bold uppercase tracking-widest shadow-sm hover:bg-purple-700 transition-colors">+ Add Formula Row</button>
         </div>
       </div>
+      {brokenRowReferences.length > 0 && (
+        <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest bg-red-50 text-red-700 border-b border-red-100">
+          Broken row references found. Fix {brokenRowReferences.length} invalid reference(s) before saving.
+        </div>
+      )}
 
       <div className="overflow-auto flex-1 custom-scrollbar">
         <table className="w-full text-left border-collapse min-w-max">
@@ -40,20 +49,12 @@ export default function RowsConfigurator({
               const isHeader = row.isHeader || false;
               const isTotal = row.isTotal || false;
               const rowType = isTotal ? 'F' : (isHeader ? 'H' : 'D');
+              const rowFormulaIssues = brokenRowReferences.filter((issue) => issue.id === row.id && issue.field === 'formula');
+              const rowPercentBaseIssues = brokenRowReferences.filter((issue) => issue.id === row.id && issue.field === 'percentBase');
 
-              let isPctBroken = false;
-              if (row.percentBase) {
-                if (row.percentBase.includes('!REF!')) {
-                  isPctBroken = true;
-                } else {
-                  const match = row.percentBase.match(/R(\d+)/i);
-                  if (match) {
-                    const tIdx = parseInt(match[1], 10) - 1;
-                    if (tIdx < 0 || tIdx >= activeReport.rows.length) isPctBroken = true;
-                  }
-                }
-              }
-              const isFormulaBroken = row.formula && row.formula.includes('!REF!');
+              const isPctBroken = rowPercentBaseIssues.length > 0 || (row.percentBase && row.percentBase.includes('!REF!'));
+              const isFormulaBroken = rowFormulaIssues.length > 0 || (row.formula && row.formula.includes('!REF!'));
+              const rowWarnings = getRowMappingWarnings(row, activeReport.rows, masterData);
 
               return (
                 <tr key={row.id} className={`border-b border-purple-50 ${isTotal ? 'bg-purple-50/50' : isHeader ? 'bg-purple-100/40' : 'hover:bg-slate-50/50'}`}>
@@ -93,14 +94,14 @@ export default function RowsConfigurator({
                   </td>
                   <td className="p-1 border-r border-purple-100 text-center bg-purple-50/30">
                     {!isHeader && (
-                      <input
-                        value={row.percentBase}
-                        onChange={e => handleUpdateRow(row.id, 'percentBase', e.target.value.toUpperCase())}
-                        className={`w-10 text-center text-[9px] font-mono font-bold border rounded p-1 outline-none ${isPctBroken ? 'border-red-500 bg-red-50 text-red-600' : 'border-purple-200 text-purple-700 bg-white'}`}
-                        placeholder="R3"
-                        title={isPctBroken ? "Invalid Row Reference!" : ""}
-                      />
-                    )}
+                        <input
+                          value={row.percentBase}
+                          onChange={e => handleUpdateRow(row.id, 'percentBase', e.target.value.toUpperCase())}
+                          className={`w-10 text-center text-[9px] font-mono font-bold border rounded p-1 outline-none ${isPctBroken ? 'border-red-500 bg-red-50 text-red-600' : 'border-purple-200 text-purple-700 bg-white'}`}
+                          placeholder="R3"
+                          title={isPctBroken ? "Reference Error! Please update the % base reference." : ""}
+                        />
+                      )}
                   </td>
                   <td className="p-2 border-r border-purple-100 bg-slate-50/20">
                     {isHeader ? (
@@ -117,11 +118,21 @@ export default function RowsConfigurator({
                         />
                       </div>
                     ) : (
-                      <div className="flex justify-between items-center gap-2">
+                      <div className="flex justify-between items-start gap-2">
                         <div className="flex-1 space-y-1">
                           <div className="text-[9px] font-medium text-slate-600 truncate"><span className="font-bold text-slate-400 text-[7px] uppercase mr-1.5">DEPT:</span>{row.dept || '-'}</div>
                           <div className="text-[9px] font-medium text-slate-600 truncate"><span className="font-bold text-slate-400 text-[7px] uppercase mr-1.5">GRP ({row.groupLevel || 'L4'}):</span>{row.groups || '-'}</div>
                           <div className="text-[9px] font-medium text-slate-600 truncate"><span className="font-bold text-slate-400 text-[7px] uppercase mr-1.5">CODE:</span>{row.accCodes || '-'}</div>
+                          <div className="text-[9px] font-medium text-slate-600 truncate"><span className="font-bold text-slate-400 text-[7px] uppercase mr-1.5">DIM:</span>{[row.dim1, row.dim2].filter(Boolean).join(', ') || '-'}</div>
+                          {rowWarnings.length > 0 && (
+                            <div className="space-y-0.5 pt-1">
+                              {rowWarnings.map((warning) => (
+                                <div key={warning} className="text-[9px] font-bold text-red-500 bg-red-50 border border-red-100 rounded px-2 py-1">
+                                  {warning}
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                         <button onClick={() => setEditingRow({ ...row })} className="p-1.5 text-purple-600 bg-white hover:bg-purple-50 rounded transition-all border border-purple-200 shadow-sm"><Edit3 size={12} /></button>
                       </div>

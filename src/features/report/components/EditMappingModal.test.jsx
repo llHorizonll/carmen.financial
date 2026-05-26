@@ -68,4 +68,50 @@ describe('EditMappingModal', () => {
 
     expect(container).toBeEmptyDOMElement();
   });
+
+  it('uses API-backed group master data for the group selector', () => {
+    const onOpenDetailSelector = vi.fn();
+
+    render(
+      <EditMappingModal
+        isOpen={true}
+        editingRow={{
+          desc: 'Revenue',
+          dept: '',
+          groupLevel: 'L2',
+          groups: '',
+          accCodes: '',
+        }}
+        setEditingRow={() => {}}
+        masterData={{
+          depts: [],
+          groups: {
+            L1: [],
+            L2: [
+              { id: 'ROOMS', name: 'Rooms' },
+              { id: 'FOOD', name: 'Food' },
+            ],
+            L3: [],
+            L4: [],
+          },
+          accCodes: [],
+        }}
+        modalAccCategory="ALL"
+        setModalAccCategory={() => {}}
+        onOpenDetailSelector={onOpenDetailSelector}
+        onApply={() => {}}
+        onClose={() => {}}
+      />
+    );
+
+    fireEvent.click(screen.getAllByText('Select')[1]);
+
+    expect(onOpenDetailSelector).toHaveBeenCalledWith(expect.objectContaining({
+      field: 'groups',
+      items: [
+        { id: 'ROOMS', name: 'Rooms' },
+        { id: 'FOOD', name: 'Food' },
+      ],
+    }));
+  });
 });

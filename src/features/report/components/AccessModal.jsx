@@ -1,6 +1,16 @@
 import React from 'react';
 import { Check, UserCheck, X } from 'lucide-react';
 
+const isSetupAdmin = (user) => {
+  const permission = user?.permissions?.financialReport;
+  if (permission) {
+    return Boolean(permission.setup || permission.add || permission.update || permission.delete);
+  }
+  return user?.role === 'Admin';
+};
+
+const getUserRoleLabel = (user) => (isSetupAdmin(user) ? 'Admin' : 'User');
+
 export default function AccessModal({ isOpen, masterData, activeReport, onClose, onUpdateUsers }) {
   if (!isOpen || !activeReport) return null;
 
@@ -21,7 +31,7 @@ export default function AccessModal({ isOpen, masterData, activeReport, onClose,
               <div className={`w-5 h-5 rounded border flex items-center justify-center ${activeReport.assignedUsers.includes(u.id) ? 'bg-purple-600 border-purple-600' : 'bg-white border-slate-300'}`}>
                 {activeReport.assignedUsers.includes(u.id) && <Check size={14} className="text-white font-bold" />}
               </div>
-              <div><p className="text-sm font-bold">{u.name}</p><p className="text-[10px] text-slate-400">{u.role}</p></div>
+              <div><p className="text-sm font-bold">{u.name}</p><p className="text-[10px] text-slate-400">{getUserRoleLabel(u)}</p></div>
             </label>
           ))}
         </div>

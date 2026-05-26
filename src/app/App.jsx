@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   FileText,
   Printer, Menu, BarChart3,
   ShieldCheck,
-  ZoomIn, ZoomOut, UploadCloud, Download
+  ZoomIn, ZoomOut, UploadCloud, Download, RefreshCw
 } from 'lucide-react';
 
 import DetailSelectorModal from '../features/report/components/DetailSelectorModal.jsx';
@@ -15,7 +15,17 @@ import EditMappingModal from '../features/report/components/EditMappingModal.jsx
 import usePersistentState from '../hooks/usePersistentState.js';
 import { getDefaultReports } from '../features/report/data/defaultReports.js';
 import { createBlankReport, createOcrReport } from '../features/report/data/reportTemplates.js';
-import { fetchCarmenMasterData, isCarmenApiConfigured } from '../features/report/lib/reportApi.js';
+import {
+  cloneCarmenReport,
+  deleteCarmenReport,
+  fetchCarmenMasterData,
+  fetchCarmenReportData,
+  fetchCarmenReportOptions,
+  fetchCarmenReports,
+  getStoredCarmenSession,
+  isCarmenApiConfigured,
+  saveCarmenReport,
+} from '../features/report/lib/reportApi.js';
 import {
   THEMES,
   INITIAL_MASTER_DATA,
@@ -31,6 +41,8 @@ import {
   moveColumnsAndRewriteReferences,
   moveRowsAndRewriteReferences,
   buildExcelHtml,
+  findBrokenReferences,
+  findRowMappingConflicts,
 } from '../features/report/lib/reportLogic.js';
 
 const hasFinancialReportPermission = (user) => Boolean(user?.permissions?.financialReport);
@@ -54,12 +66,121 @@ const canViewFinancialReports = (user) => {
 const getAccessibleReports = (reports, user) => {
   if (!canViewFinancialReports(user)) return [];
   if (canSetupFinancialReports(user)) return reports;
-  if (hasFinancialReportPermission(user)) {
-    // Carmen report definitions still use local assignedUsers, so View-only API users
-    // can see active local reports until report access is backed by Carmen UserId.
-    return reports.filter((report) => report.isActive !== false);
+  const userId = String(user?.id || '').trim();
+  return reports.filter((report) => {
+    if (report?.isActive === false) return false;
+    if (String(report?.owner || '').trim() === userId) return true;
+    if (Array.isArray(report?.assignedUsers) && report.assignedUsers.includes(userId)) return true;
+    return Array.isArray(report?.access) && report.access.some((item) => String(item?.userId || '').trim() === userId && item?.canView !== false);
+  });
+};
+
+const DEFAULT_REPORT_OPTIONS = {
+  themes: [
+    { id: 'blue', label: 'Classic Blue' },
+    { id: 'green', label: 'Emerald Green' },
+    { id: 'gray', label: 'Slate Gray' },
+  ],
+  periodFormats: [
+    { id: 'standard', label: 'Standard (Period : YYYY-MM)' },
+    { id: 'year_month', label: 'Year-Month (YYYY-MM)' },
+    { id: 'numeric', label: 'Numeric Full (MM/YYYY)' },
+    { id: 'numeric_short', label: 'Numeric Short (MM/YY)' },
+    { id: 'short', label: 'Short Month + YYYY' },
+    { id: 'short_yy', label: 'Short Month + YY' },
+    { id: 'long', label: 'Long Month + YYYY' },
+    { id: 'month_only', label: 'Month Only' },
+    { id: 'day_month_year', label: 'Day Month Year' },
+    { id: 'end_of_month', label: 'End of Month' },
+  ],
+  accountCategories: [
+    { id: 'ALL', label: 'All Categories' },
+    { id: 'I', label: 'Income / Expense' },
+    { id: 'B', label: 'Balance Sheet' },
+  ],
+  columnTypes: [
+    { id: 'AC', label: 'Actual Current' },
+    { id: 'ACC', label: 'Actual YTD' },
+    { id: 'BUD', label: 'Budget Current' },
+    { id: 'BUDACC', label: 'Budget YTD' },
+    { id: 'DAC', label: 'Daily Actual Current' },
+    { id: 'PTD', label: 'Period To Date' },
+    { id: 'DACBG', label: 'Daily Budget Current' },
+    { id: 'PTDBG', label: 'Period To Date Budget' },
+  ],
+  yearModes: [
+    { id: 'current', label: 'Current Year' },
+    { id: '-1', label: 'Previous Year' },
+    { id: '+1', label: 'Next Year' },
+  ],
+  periodModes: [
+    { id: 'current', label: 'Current Period' },
+    { id: '-1', label: 'Previous Period' },
+    { id: 'FY', label: 'Fiscal Year' },
+    { id: 'Q1', label: 'Q1' },
+    { id: 'Q2', label: 'Q2' },
+    { id: 'Q3', label: 'Q3' },
+    { id: 'Q4', label: 'Q4' },
+  ],
+  rowTypes: [
+    { id: 'header', label: 'Header' },
+    { id: 'detail', label: 'Detail' },
+    { id: 'total', label: 'Total' },
+  ],
+  indentLevels: Array.from({ length: 8 }, (_, index) => ({ id: String(index), label: `Level ${index}` })),
+};
+
+const DAILY_COLUMN_TYPES = new Set(['DAC', 'PTD', 'DACBG', 'PTDBG']);
+const MONTHLY_COLUMN_TYPES = new Set(['AC', 'ACC', 'BUD', 'BUDACC']);
+const isSessionExpiredError = (error) =>
+  String(error?.message || '').toLowerCase().includes('session expired');
+
+const mergeOptionArrays = (fallbackItems, nextItems) => {
+  const merged = new Map();
+  fallbackItems.forEach((item) => merged.set(String(item.id), item));
+  (Array.isArray(nextItems) ? nextItems : []).forEach((item) => {
+    if (!item) return;
+    const id = String(item.id || item.Id || '').trim();
+    if (!id) return;
+    merged.set(id, { ...item, id });
+  });
+  return Array.from(merged.values());
+};
+
+const mergeReportOptions = (defaults, loaded) => ({
+  ...defaults,
+  ...loaded,
+  themes: mergeOptionArrays(defaults.themes, loaded?.themes),
+  periodFormats: mergeOptionArrays(defaults.periodFormats, loaded?.periodFormats),
+  accountCategories: mergeOptionArrays(defaults.accountCategories, loaded?.accountCategories),
+  columnTypes: mergeOptionArrays(defaults.columnTypes, loaded?.columnTypes),
+  yearModes: mergeOptionArrays(defaults.yearModes, loaded?.yearModes),
+  periodModes: mergeOptionArrays(defaults.periodModes, loaded?.periodModes),
+  rowTypes: mergeOptionArrays(defaults.rowTypes, loaded?.rowTypes),
+  indentLevels: mergeOptionArrays(defaults.indentLevels, loaded?.indentLevels),
+});
+
+const REPORT_STORAGE_KEY = 'carmen_bi_reports_config_v5_16';
+
+const readStoredReports = () => {
+  if (typeof window === 'undefined' || !window.localStorage) return null;
+  try {
+    const raw = window.localStorage.getItem(REPORT_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
   }
-  return reports.filter((report) => report.assignedUsers.includes(user.id) && report.isActive !== false);
+};
+
+const writeStoredReports = (reports) => {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(REPORT_STORAGE_KEY, JSON.stringify(reports));
+  } catch {
+    // Ignore storage write failures and keep the API-backed state in memory.
+  }
 };
 
 // ============================================================================
@@ -75,10 +196,21 @@ export default function App({ onLogout = null }) {
   const [masterData, setMasterData] = usePersistentState('carmen_bi_master_v5_16', INITIAL_MASTER_DATA);
   const [periodOptions, setPeriodOptions] = useState([]);
   const [budgetRevisionOptions, setBudgetRevisionOptions] = useState([]);
+  const [reportOptions, setReportOptions] = useState(DEFAULT_REPORT_OPTIONS);
   const [masterDataError, setMasterDataError] = useState(null);
   const [isMasterDataLoading, setIsMasterDataLoading] = useState(false);
+  const [isReportCatalogLoading, setIsReportCatalogLoading] = useState(false);
+  const [reportCatalogError, setReportCatalogError] = useState(null);
+  const apiConfigured = isCarmenApiConfigured();
+  const storedCarmenSession = apiConfigured ? getStoredCarmenSession() : null;
 
-  const [currentUser, setCurrentUser] = useState(masterData.users[0] || INITIAL_MASTER_DATA.users[0]);
+  const [currentUser, setCurrentUser] = useState(() => {
+    if (apiConfigured) {
+      return storedCarmenSession?.user || null;
+    }
+
+    return INITIAL_MASTER_DATA.users[0];
+  });
   const [tableZoom, setTableZoom] = useState(100);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -94,9 +226,97 @@ export default function App({ onLogout = null }) {
 
   const [engineData, setEngineData] = useState([]); 
   const [budgetData, setBudgetData] = useState([]); 
+  const glUploadRef = useRef(null);
+  const budUploadRef = useRef(null);
+  const reportSaveTimerRef = useRef(null);
+  const reportDataFetchSkipRef = useRef(false);
+
+  // --- Report Configuration Data ---
+  const [reports, setReports] = useState(() => {
+    if (apiConfigured) return [];
+    return readStoredReports() || getDefaultReports();
+  });
+  const [reportsLoaded, setReportsLoaded] = useState(!apiConfigured);
+  const [currentReportId, setCurrentReportId] = useState('rep-carmen-pnl');
+  const [editingRow, setEditingRow] = useState(null);
+  const [detailSelecting, setDetailSelecting] = useState(null); 
+  const [isAccessModalOpen, setIsAccessModalOpen] = useState(false); 
+  const [modalAccCategory, setModalAccCategory] = useState('ALL'); 
+
+  const canSetupReports = canSetupFinancialReports(currentUser);
+  const accessibleReports = useMemo(() => getAccessibleReports(reports, currentUser), [reports, currentUser]);
+  const reportUsers = useMemo(() => {
+    const users = Array.isArray(masterData.users) ? masterData.users : [];
+    if (!currentUser?.id) return users;
+    if (users.some((user) => String(user.id) === String(currentUser.id))) return users;
+    return [currentUser, ...users];
+  }, [masterData.users, currentUser]);
+
+  const activeReport = accessibleReports.find(r => r.id === currentReportId) || accessibleReports[0] || null;
+  const activeReportUsesDayFilter = useMemo(() => {
+    if (!activeReport) return false;
+    if (activeReport.reportType === 'Daily') return true;
+    return Array.isArray(activeReport.columns) && activeReport.columns.some((col) => {
+      const type = String(col?.type || '').trim().toUpperCase();
+      return DAILY_COLUMN_TYPES.has(type);
+    });
+  }, [activeReport]);
+  const activeReportDay = activeReportUsesDayFilter ? activeReport?.day || '' : '';
+  const activeReportUsesBudget = useMemo(() => Boolean(activeReport?.columns?.some((col) => {
+    const type = String(col?.type || '').trim().toUpperCase();
+    return ['BUD', 'BUDACC', 'DACBG', 'PTDBG'].includes(type);
+  })), [activeReport]);
+  const activeReportHasIncompatibleColumns = useMemo(() => {
+    if (!activeReport) return false;
+    const allowedTypes = activeReport.reportType === 'Daily' ? DAILY_COLUMN_TYPES : MONTHLY_COLUMN_TYPES;
+    return Array.isArray(activeReport.columns) && activeReport.columns.some((col) => {
+      const type = String(col?.type || '').trim().toUpperCase();
+      return Boolean(type) && !allowedTypes.has(type);
+    });
+  }, [activeReport]);
+  const appliedBudgetRevision = activeReportUsesBudget ? appliedRevision : '0';
+
+  const loadReportDataFromApi = async ({ reportId, year, period, revision, deptIds, day = '', source = 'report' } = {}) => {
+    if (!apiConfigured || !activeReport?.id) return null;
+
+    if (activeReportUsesDayFilter && String(day || '').trim()) {
+      const dayNumber = Number.parseInt(day, 10);
+      const selectedPeriod = periodOptions.find((option) => String(option.id) === String(period));
+      const referenceDate = selectedPeriod?.date ? new Date(selectedPeriod.date) : new Date(Number(year), Math.max(0, Number(period) - 1), 1);
+      const maxDay = Number.isNaN(referenceDate.getTime())
+        ? 31
+        : new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0).getDate();
+      if (!Number.isInteger(dayNumber) || dayNumber < 1 || dayNumber > maxDay) {
+        throw new Error(`Day must be between 1 and ${maxDay} for the selected fiscal period.`);
+      }
+    }
+
+    setIsLoading(true);
+    try {
+      const apiData = await fetchCarmenReportData({
+        reportId: reportId || activeReport.id,
+        year,
+        period,
+        revision,
+        deptIds,
+        day,
+      });
+
+      setEngineData(apiData.actualRows || []);
+      setBudgetData(apiData.budgetRows || []);
+      setAlertMsg(null);
+      return apiData;
+    } catch (error) {
+      const message = error.message || `Unable to load Carmen ${source} data.`;
+      setAlertMsg(message);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (!isCarmenApiConfigured() || !/^\d{4}$/.test(String(globalYear))) return;
+    if (!apiConfigured || !/^\d{4}$/.test(String(globalYear))) return;
 
     let isCancelled = false;
     const loadCarmenMasterData = async () => {
@@ -108,16 +328,33 @@ export default function App({ onLogout = null }) {
         setMasterData(prev => ({
           ...prev,
           companyProfile: apiData.companyProfile || prev.companyProfile,
-          users: apiData.currentUser ? [apiData.currentUser] : prev.users,
+          users: Array.isArray(apiData.users) && apiData.users.length > 0
+            ? apiData.users
+            : apiData.currentUser
+              ? [apiData.currentUser]
+              : prev.users,
           depts: apiData.depts.length > 0 ? apiData.depts : prev.depts,
           accCodes: apiData.accCodes.length > 0 ? apiData.accCodes : prev.accCodes,
+          groups: {
+            L1: apiData.groups?.L1?.length > 0 ? apiData.groups.L1 : prev.groups.L1,
+            L2: apiData.groups?.L2?.length > 0 ? apiData.groups.L2 : prev.groups.L2,
+            L3: apiData.groups?.L3?.length > 0 ? apiData.groups.L3 : prev.groups.L3,
+            L4: apiData.groups?.L4?.length > 0 ? apiData.groups.L4 : prev.groups.L4,
+          },
         }));
         if (apiData.currentUser) setCurrentUser(apiData.currentUser);
+        else if (Array.isArray(apiData.users) && apiData.users.length > 0) setCurrentUser(apiData.users[0]);
         setPeriodOptions(apiData.periods || []);
         setBudgetRevisionOptions(apiData.budgetRevisions || []);
         setMasterDataError(null);
       } catch (error) {
-        if (!isCancelled) setMasterDataError(error.message || 'Unable to load Carmen master data.');
+        if (!isCancelled) {
+          if (isSessionExpiredError(error) && typeof onLogout === 'function') {
+            onLogout();
+            return;
+          }
+          setMasterDataError(error.message || 'Unable to load Carmen master data.');
+        }
       } finally {
         if (!isCancelled) setIsMasterDataLoading(false);
       }
@@ -127,7 +364,140 @@ export default function App({ onLogout = null }) {
     return () => {
       isCancelled = true;
     };
-  }, [globalYear, setMasterData]);
+  }, [globalYear, apiConfigured, setMasterData]);
+
+  useEffect(() => {
+    if (!apiConfigured) return;
+
+    let isCancelled = false;
+    const loadCarmenCatalog = async () => {
+      setIsReportCatalogLoading(true);
+      try {
+        const [optionsResult, reportsResult] = await Promise.allSettled([
+          fetchCarmenReportOptions(),
+          fetchCarmenReports(),
+        ]);
+        if (isCancelled) return;
+
+        if (optionsResult.status === 'fulfilled') {
+          setReportOptions(mergeReportOptions(DEFAULT_REPORT_OPTIONS, optionsResult.value));
+        }
+        if (reportsResult.status === 'fulfilled' && Array.isArray(reportsResult.value) && reportsResult.value.length > 0) {
+          setReports(reportsResult.value);
+          setReportsLoaded(true);
+        } else if (reportsResult.status === 'fulfilled') {
+          setReportsLoaded(true);
+        }
+        if (optionsResult.status === 'rejected' || reportsResult.status === 'rejected') {
+          const reason = optionsResult.status === 'rejected'
+            ? optionsResult.reason
+            : reportsResult.reason;
+          throw reason || new Error('Unable to load Carmen report catalog.');
+        }
+        setReportCatalogError(null);
+      } catch (error) {
+        if (!isCancelled) {
+          if (isSessionExpiredError(error) && typeof onLogout === 'function') {
+            onLogout();
+            return;
+          }
+          if (apiConfigured) {
+            setReports([]);
+          } else {
+            const fallbackReports = readStoredReports() || getDefaultReports();
+            setReports(fallbackReports);
+          }
+          setReportsLoaded(true);
+          setReportCatalogError(error.message || 'Unable to load Carmen report catalog.');
+        }
+      } finally {
+        if (!isCancelled) setIsReportCatalogLoading(false);
+      }
+    };
+
+    loadCarmenCatalog();
+    return () => {
+      isCancelled = true;
+    };
+  }, [apiConfigured]);
+
+  useEffect(() => {
+    if (!reportsLoaded) return;
+    writeStoredReports(reports);
+  }, [reports, reportsLoaded]);
+
+  useEffect(() => {
+    if (!apiConfigured || !/^\d{4}$/.test(String(appliedYear)) || !activeReport?.id) return;
+    if (activeReportUsesDayFilter && String(activeReportDay).trim() && periodOptions.length === 0) return;
+
+    let isCancelled = false;
+    const loadCarmenReportData = async () => {
+      if (reportDataFetchSkipRef.current) {
+        reportDataFetchSkipRef.current = false;
+        return;
+      }
+
+      try {
+        await loadReportDataFromApi({
+          reportId: activeReport.id,
+          year: appliedYear,
+          period: appliedPeriod,
+          revision: appliedBudgetRevision,
+          deptIds: appliedDepts,
+          day: activeReportDay,
+        });
+      } catch (error) {
+        if (!isCancelled) {
+          setAlertMsg(error.message || 'Unable to load Carmen report data.');
+        }
+      }
+    };
+
+    loadCarmenReportData();
+    return () => {
+      isCancelled = true;
+    };
+  }, [appliedYear, appliedPeriod, appliedBudgetRevision, appliedDepts, activeReport?.id, activeReportDay, activeReportUsesDayFilter, periodOptions, apiConfigured]);
+
+  useEffect(() => {
+    if (!apiConfigured || !activeReport?.id) return undefined;
+
+    const brokenReferences = findBrokenReferences(activeReport);
+    if (brokenReferences.length > 0) {
+      setReportCatalogError(`Report contains ${brokenReferences.length} unresolved reference(s). Resolve invalid row or column references before saving.`);
+      return undefined;
+    }
+
+    const mappingConflicts = findRowMappingConflicts(activeReport, masterData);
+    if (mappingConflicts.length > 0) {
+      setReportCatalogError(`Report contains ${mappingConflicts.length} conflicting row mapping(s). Resolve mapping conflicts before saving.`);
+      return undefined;
+    }
+
+    if (activeReportHasIncompatibleColumns) {
+      setReportCatalogError(
+        `${activeReport.reportType || 'Monthly'} reports should only use compatible column types. Update any mismatched columns before saving.`
+      );
+      return undefined;
+    }
+
+    if (reportSaveTimerRef.current) {
+      clearTimeout(reportSaveTimerRef.current);
+    }
+
+    setReportCatalogError(null);
+    reportSaveTimerRef.current = setTimeout(() => {
+      saveCarmenReport(activeReport).catch((error) => {
+        setReportCatalogError(error.message || 'Unable to save report definition.');
+      });
+    }, 350);
+
+    return () => {
+      if (reportSaveTimerRef.current) {
+        clearTimeout(reportSaveTimerRef.current);
+      }
+    };
+  }, [activeReport, apiConfigured, activeReportHasIncompatibleColumns, masterData]);
 
   // ============================================================================
   // 🚀 CSV PARSER
@@ -135,6 +505,10 @@ export default function App({ onLogout = null }) {
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    if (apiConfigured) {
+      e.target.value = null;
+      return;
+    }
     setIsLoading(true);
 
     const reader = new FileReader();
@@ -175,6 +549,10 @@ export default function App({ onLogout = null }) {
   const handleBudgetUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    if (apiConfigured) {
+      e.target.value = null;
+      return;
+    }
     setIsLoading(true);
 
     const reader = new FileReader();
@@ -197,22 +575,9 @@ export default function App({ onLogout = null }) {
     e.target.value = null; 
   };
 
-  // --- Report Configuration Data ---
-  const [reports, setReports] = usePersistentState('carmen_bi_reports_config_v5_16', getDefaultReports);
-
-  const [currentReportId, setCurrentReportId] = useState('rep-carmen-pnl');
-  const [editingRow, setEditingRow] = useState(null);
-  const [detailSelecting, setDetailSelecting] = useState(null); 
-  const [isAccessModalOpen, setIsAccessModalOpen] = useState(false); 
-  const [modalAccCategory, setModalAccCategory] = useState('ALL'); 
-
-  const canSetupReports = canSetupFinancialReports(currentUser);
-  const accessibleReports = useMemo(() => getAccessibleReports(reports, currentUser), [reports, currentUser]);
-
-  const activeReport = accessibleReports.find(r => r.id === currentReportId) || accessibleReports[0] || null;
   const updateActiveReport = (updates) => {
     if (!activeReport) return;
-    setReports(reports.map(r => r.id === activeReport.id ? { ...r, ...updates } : r));
+    setReports(prevReports => prevReports.map(r => r.id === activeReport.id ? { ...r, ...updates } : r));
   };
 
   useEffect(() => {
@@ -229,30 +594,99 @@ export default function App({ onLogout = null }) {
     setAppliedDepts([...globalDepts]);
     setAppliedYear(globalYear);
     setAppliedPeriod(globalPeriod);
-    setAppliedRevision(globalRevision);
+    const nextRevision = activeReportUsesBudget ? globalRevision : '0';
+    setGlobalRevision(nextRevision);
+    setAppliedRevision(nextRevision);
   };
 
-  const handleCloneReport = () => {
+  const handleSyncReportData = async (source) => {
+    if (!apiConfigured) {
+      if (source === 'gl') {
+        glUploadRef.current?.click();
+      } else {
+        budUploadRef.current?.click();
+      }
+      return;
+    }
+
+    const nextAppliedDepts = [...globalDepts];
+    const nextAppliedYear = globalYear;
+    const nextAppliedPeriod = globalPeriod;
+    const nextAppliedRevision = activeReportUsesBudget ? globalRevision : '0';
+
+    reportDataFetchSkipRef.current = true;
+    setAppliedDepts(nextAppliedDepts);
+    setAppliedYear(nextAppliedYear);
+    setAppliedPeriod(nextAppliedPeriod);
+    setGlobalRevision(nextAppliedRevision);
+    setAppliedRevision(nextAppliedRevision);
+
+    try {
+      await loadReportDataFromApi({
+        reportId: activeReport?.id,
+        year: nextAppliedYear,
+        period: nextAppliedPeriod,
+        revision: nextAppliedRevision,
+        deptIds: nextAppliedDepts,
+        day: activeReportDay,
+        source,
+      });
+      setAlertMsg(`${source.toUpperCase()} data synced from Carmen API.`);
+    } catch {
+      // Error already surfaced by loadReportDataFromApi.
+    }
+  };
+
+  const handleCloneReport = async () => {
+    if (!activeReport) return;
+    if (apiConfigured) {
+      try {
+        const apiClone = await cloneCarmenReport(activeReport.id);
+        if (apiClone) {
+          setReports(prev => [...prev, apiClone]);
+          setCurrentReportId(apiClone.id);
+          return;
+        }
+      } catch (error) {
+        setReportCatalogError(error.message || 'Unable to clone report in Carmen API.');
+      }
+    }
+
     const newId = 'rep-' + Date.now();
     const clonedReport = cloneReport(activeReport, newId);
-    setReports([...reports, clonedReport]);
+    setReports(prev => [...prev, clonedReport]);
     setCurrentReportId(newId);
   };
 
-  const handleCreateBlankReport = () => {
+  const handleCreateBlankReport = async () => {
     const newId = 'rep-' + Date.now();
-    const newReport = createBlankReport(masterData.companyProfile.name, masterData.users.map(u => u.id), newId);
-    setReports([...reports, newReport]);
+    const newReport = createBlankReport(masterData.companyProfile.name, reportUsers.map(u => u.id), newId, currentUser?.id || '');
+    setReports(prev => [...prev, newReport]);
     setCurrentReportId(newId);
+    if (apiConfigured) {
+      try {
+        await saveCarmenReport(newReport);
+      } catch (error) {
+        setReportCatalogError(error.message || 'Unable to save new report to Carmen API.');
+      }
+    }
   };
 
   const handleDeleteReport = () => {
     setConfirmAction({
       msg: 'Are you sure you want to completely delete this report?',
-      onConfirm: () => {
+      onConfirm: async () => {
+        const deletedReport = activeReport;
         const newReports = reports.filter(r => r.id !== currentReportId);
         setReports(newReports);
         setCurrentReportId(newReports.length > 0 ? newReports[0].id : null);
+        if (apiConfigured && deletedReport?.id) {
+          try {
+            await deleteCarmenReport(deletedReport.id);
+          } catch (error) {
+            setReportCatalogError(error.message || 'Unable to delete report from Carmen API.');
+          }
+        }
       }
     });
   };
@@ -263,8 +697,8 @@ export default function App({ onLogout = null }) {
     setIsLoading(true);
     setTimeout(() => {
         const newId = 'rep-ocr-' + Date.now();
-        const newReport = createOcrReport(file.name, masterData.companyProfile.name, masterData.users.map(u => u.id), newId);
-        setReports([...reports, newReport]);
+        const newReport = createOcrReport(file.name, masterData.companyProfile.name, reportUsers.map(u => u.id), newId, currentUser?.id || '');
+        setReports(prev => [...prev, newReport]);
         setCurrentReportId(newId);
         setIsLoading(false);
         setAlertMsg('ดำเนินการอ่านภาพ OCR และสร้างรายงานเรียบร้อยแล้ว!');
@@ -280,9 +714,11 @@ export default function App({ onLogout = null }) {
     appliedDepts,
     appliedYear,
     appliedPeriod,
-    appliedRevision,
+    appliedDay: activeReportDay,
+    appliedRevision: appliedBudgetRevision,
+    periodOptions,
     masterData,
-  }), [activeReport, engineData, budgetData, appliedDepts, appliedYear, appliedPeriod, appliedRevision, masterData]);
+  }), [activeReport, engineData, budgetData, appliedDepts, appliedYear, appliedPeriod, activeReportDay, appliedBudgetRevision, periodOptions, masterData]);
 
   // --- Handlers ---
   const handleUpdateRow = (id, field, val) => updateActiveReport({ rows: activeReport.rows.map(r => r.id === id ? { ...r, [field]: val } : r) });
@@ -291,12 +727,13 @@ export default function App({ onLogout = null }) {
 
   const handleAddCol = (type) => {
     const newColId = 'C' + (activeReport.columns.length + 1) + '-' + Date.now();
+    const defaultDataType = activeReport?.reportType === 'Daily' ? 'DAC' : 'AC';
     const newCol = {
       id: newColId,
       label: type === 'data' ? 'New Column' : type === 'percent' ? '% Mix' : 'Variance',
       isActive: true, isFormula: type === 'formula', isPercent: type === 'percent', formatAsPercent: false, 
       formula: type === 'formula' ? 'C1-C2' : '', targetCol: type === 'percent' ? 'C1' : undefined,
-      yearMode: type === 'data' ? 'current' : undefined, periodMode: type === 'data' ? 'current' : undefined, type: type === 'data' ? 'AC' : undefined,
+      yearMode: type === 'data' ? 'current' : undefined, periodMode: type === 'data' ? 'current' : undefined, type: type === 'data' ? defaultDataType : undefined,
       width: ''
     };
     updateActiveReport({ columns: [...activeReport.columns, newCol] });
@@ -318,6 +755,17 @@ export default function App({ onLogout = null }) {
 
   const handleDeleteCol = (colId) => {
     updateActiveReport(deleteColAndRewriteReferences(activeReport, colId));
+  };
+
+  const persistActiveReport = async (nextReport) => {
+    if (!apiConfigured || !nextReport) return;
+
+    try {
+      await saveCarmenReport(nextReport);
+      setReportCatalogError(null);
+    } catch (error) {
+      setReportCatalogError(error.message || 'Unable to save report definition.');
+    }
   };
 
   const moveCol = (idx, dir) => {
@@ -347,11 +795,11 @@ export default function App({ onLogout = null }) {
   const autoDateLabel = selectedAppliedPeriod?.dateLabel
     ? `As of ${selectedAppliedPeriod.dateLabel}`
     : `As of ${formatAutoPeriod(appliedYear, appliedPeriod, 'end_of_month')}`;
-  const displayDateLabel = activeReport?.customDateLabel || autoDateLabel;
+  const displayDateLabel = activeReport?.overrideDateDisplay || activeReport?.customDateLabel || autoDateLabel;
   const autoPeriodLabel = selectedAppliedPeriod?.dateLabel
     ? `Period : ${appliedYear}-${selectedPeriodCode}${selectedAppliedPeriod.status ? ` (${selectedAppliedPeriod.status})` : ''}`
     : (activeReport?.periodFormat !== 'standard' ? formatAutoPeriod(appliedYear, appliedPeriod, activeReport?.periodFormat) : formatAutoPeriod(appliedYear, appliedPeriod, 'standard'));
-  const displayPeriodLabel = activeReport?.customPeriodLabel || autoPeriodLabel;
+  const displayPeriodLabel = activeReport?.overridePeriodDisplay || activeReport?.customPeriodLabel || autoPeriodLabel;
   const activeCategories = Array.isArray(activeReport?.category) ? activeReport.category : ['ALL'];
   const activeCols = activeReport?.columns.filter(c => c.isActive) || [];
   const userSelectorLabel = hasFinancialReportPermission(currentUser) ? 'Signed In As:' : 'View As Role:';
@@ -425,7 +873,7 @@ export default function App({ onLogout = null }) {
         <div className={`p-4 mx-4 mt-4 bg-purple-50 rounded-xl border border-purple-100 ${!isSidebarOpen && 'hidden'}`}>
           <span className="text-[10px] font-black text-purple-500 uppercase tracking-widest flex items-center gap-1 mb-1.5"><ShieldCheck size={12}/> {userSelectorLabel}</span>
           <select value={currentUser?.id || ''} onChange={e => {
-              const selectedUser = masterData.users.find(u=>u.id===e.target.value);
+              const selectedUser = reportUsers.find(u=>u.id===e.target.value);
               if (!selectedUser) return;
               const selectedReports = getAccessibleReports(reports, selectedUser);
               setCurrentUser(selectedUser);
@@ -436,7 +884,7 @@ export default function App({ onLogout = null }) {
                 setActiveTab('report');
               }
             }} className="w-full bg-white text-xs font-bold text-purple-900 border border-purple-200 rounded-md px-2 py-1 outline-none cursor-pointer">
-            {masterData.users.map(u => <option key={u.id} value={u.id}>{u.name} ({canSetupFinancialReports(u) ? 'Admin' : 'User'})</option>)}
+            {reportUsers.map(u => <option key={u.id} value={u.id}>{u.name} ({canSetupFinancialReports(u) ? 'Admin' : 'User'})</option>)}
           </select>
         </div>
 
@@ -466,7 +914,9 @@ export default function App({ onLogout = null }) {
                 </div>
                 {activeTab === 'setup' && <h2 className="text-lg font-black text-slate-800 tracking-tight">Configuration Mode</h2>}
                 {isMasterDataLoading && <span className="text-[10px] font-black uppercase tracking-widest text-blue-500">Syncing Carmen</span>}
+                {isReportCatalogLoading && <span className="text-[10px] font-black uppercase tracking-widest text-blue-500">Loading report catalog</span>}
                 {masterDataError && <span className="text-[10px] font-black uppercase tracking-widest text-red-500" title={masterDataError}>Carmen API unavailable</span>}
+                {reportCatalogError && <span className="text-[10px] font-black uppercase tracking-widest text-red-500" title={reportCatalogError}>Report catalog error</span>}
               </div>
             {typeof onLogout === 'function' && (
               <button
@@ -518,14 +968,24 @@ export default function App({ onLogout = null }) {
 
                   <div className="flex-1 min-w-[20px]"></div>
 
-                  <label className="cursor-pointer flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-black rounded-lg hover:bg-emerald-100 transition-colors uppercase tracking-widest flex-shrink-0">
-                    <UploadCloud size={14}/> GL
-                    <input type="file" accept=".csv" onChange={(e) => handleFileUpload(e)} className="hidden" />
-                  </label>
-                  <label className="cursor-pointer flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-black rounded-lg hover:bg-blue-100 transition-colors uppercase tracking-widest flex-shrink-0">
-                    <UploadCloud size={14}/> BUD
-                    <input type="file" accept=".csv" onChange={(e) => handleBudgetUpload(e)} className="hidden" />
-                  </label>
+                  <button
+                    type="button"
+                    onClick={() => handleSyncReportData('gl')}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-black rounded-lg hover:bg-emerald-100 transition-colors uppercase tracking-widest flex-shrink-0"
+                    title={apiConfigured ? 'Refresh GL data from Carmen API' : 'Fallback to GL CSV import'}
+                  >
+                    <RefreshCw size={14}/> GL
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSyncReportData('bud')}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-black rounded-lg hover:bg-blue-100 transition-colors uppercase tracking-widest flex-shrink-0"
+                    title={apiConfigured ? 'Refresh budget data from Carmen API' : 'Fallback to budget CSV import'}
+                  >
+                    <RefreshCw size={14}/> BUD
+                  </button>
+                  <input ref={glUploadRef} type="file" accept=".csv" onChange={(e) => handleFileUpload(e)} className="hidden" />
+                  <input ref={budUploadRef} type="file" accept=".csv" onChange={(e) => handleBudgetUpload(e)} className="hidden" />
                   
                   <div className="h-4 w-px bg-purple-100 mx-1 flex-shrink-0"></div>
                   
@@ -539,8 +999,8 @@ export default function App({ onLogout = null }) {
 
         <div className="p-4 md:p-6 max-w-full mx-auto w-full print:p-0 flex flex-col flex-1 min-h-0 overflow-hidden">
           {activeTab === 'report' && activeReport && (
-            <ReportView
-              activeReport={activeReport}
+              <ReportView
+                activeReport={activeReport}
               displayCompanyLabel={displayCompanyLabel}
               displayDateLabel={displayDateLabel}
               displayPeriodLabel={displayPeriodLabel}
@@ -559,8 +1019,9 @@ export default function App({ onLogout = null }) {
           )}
 
           {activeTab === 'setup' && canSetupReports && activeReport && (
-            <ReportSetup
+              <ReportSetup
               masterData={masterData}
+              reportOptions={reportOptions}
               activeReport={activeReport}
               activeCategories={activeCategories}
               updateActiveReport={updateActiveReport}
@@ -599,18 +1060,33 @@ export default function App({ onLogout = null }) {
         editingRow={editingRow}
         setEditingRow={setEditingRow}
         masterData={masterData}
+        reportOptions={reportOptions}
         modalAccCategory={modalAccCategory}
         setModalAccCategory={setModalAccCategory}
         onOpenDetailSelector={({ field, title, subTitle, items }) => setDetailSelecting({ field, title, subTitle, items })}
-        onApply={() => {
+        onApply={async () => {
+          const nextRows = activeReport.rows.map((row) => (row.id === editingRow.id ? {
+            ...row,
+            desc: editingRow.desc,
+            dept: editingRow.dept,
+            accCodes: editingRow.accCodes,
+            groupLevel: editingRow.groupLevel,
+            groups: editingRow.groups,
+            dim1: editingRow.dim1,
+            dim2: editingRow.dim2,
+          } : row));
+          const nextReport = { ...activeReport, rows: nextRows };
           handleUpdateRowMulti(editingRow.id, {
             desc: editingRow.desc,
             dept: editingRow.dept,
             accCodes: editingRow.accCodes,
             groupLevel: editingRow.groupLevel,
-            groups: editingRow.groups
+            groups: editingRow.groups,
+            dim1: editingRow.dim1,
+            dim2: editingRow.dim2,
           });
           setEditingRow(null);
+          await persistActiveReport(nextReport);
         }}
         onClose={() => setEditingRow(null)}
       />

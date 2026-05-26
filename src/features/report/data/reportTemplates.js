@@ -1,4 +1,4 @@
-export const createBlankReport = (companyName, userIds, newId = `rep-${Date.now()}`) => ({
+export const createBlankReport = (companyName, userIds, newId = `rep-${Date.now()}`, owner = '') => ({
   id: newId,
   name: 'New Custom Report',
   companyName,
@@ -6,6 +6,11 @@ export const createBlankReport = (companyName, userIds, newId = `rep-${Date.now(
   assignedUsers: [...userIds],
   isActive: true,
   periodFormat: 'standard',
+  reportType: 'Monthly',
+  owner,
+  overrideDateDisplay: '',
+  overridePeriodDisplay: '',
+  day: '',
   theme: 'blue',
   columns: [
     { id: 'C1', label: 'Actual', isActive: true, isFormula: false, isPercent: false, formatAsPercent: false, yearMode: 'current', periodMode: 'current', type: 'AC', width: '' }
@@ -16,7 +21,7 @@ export const createBlankReport = (companyName, userIds, newId = `rep-${Date.now(
   ]
 });
 
-export const createOcrReport = (fileName, companyName, userIds, newId = `rep-ocr-${Date.now()}`) => ({
+export const createOcrReport = (fileName, companyName, userIds, newId = `rep-ocr-${Date.now()}`, owner = '') => ({
   id: newId,
   name: `Imported from ${fileName}`,
   companyName,
@@ -24,6 +29,11 @@ export const createOcrReport = (fileName, companyName, userIds, newId = `rep-ocr
   assignedUsers: [...userIds],
   isActive: true,
   periodFormat: 'standard',
+  reportType: 'Monthly',
+  owner,
+  overrideDateDisplay: '',
+  overridePeriodDisplay: '',
+  day: '',
   theme: 'blue',
   columns: [
     { id: 'C1', label: 'Extracted Value', isActive: true, isFormula: false, isPercent: false, formatAsPercent: false, yearMode: 'current', periodMode: 'current', type: 'AC', width: '' }
@@ -33,4 +43,3 @@ export const createOcrReport = (fileName, companyName, userIds, newId = `rep-ocr
     { id: 'r-2', desc: 'Cost (OCR)', isActive: true, isHeader: false, isTotal: false, dept: '', groupLevel: 'L4', groups: '', accCodes: '', percentBase: '', formula: '', indent: 0 }
   ]
 });
-

@@ -15,6 +15,9 @@ import {
   createOcrReport,
   cloneReport,
   buildReportData,
+  findBrokenReferences,
+  findRowMappingConflicts,
+  getRowMappingWarnings,
   deleteRowAndRewriteReferences,
   deleteColAndRewriteReferences,
   moveColumnsAndRewriteReferences,
@@ -97,6 +100,66 @@ describe('reportLogic helpers', () => {
     });
   });
 
+  it('resolves periods using fiscal metadata order when provided', () => {
+    const periods = [
+      { id: '10', periodNo: 10, dateLabel: 'Period 10' },
+      { id: '20', periodNo: 20, dateLabel: 'Period 20' },
+      { id: '30', periodNo: 30, dateLabel: 'Period 30' },
+    ];
+
+    expect(resolveTime({ yearMode: 'current', periodMode: 'current' }, '2026', '20', periods)).toEqual({
+      effYear: '2026',
+      targetMonths: [2],
+    });
+
+    expect(resolveTime({ yearMode: 'current', periodMode: '-1' }, '2026', '10', periods)).toEqual({
+      effYear: '2025',
+      targetMonths: [3],
+    });
+  });
+
+  it('builds report data using fiscal metadata order for relative periods', () => {
+    const result = buildReportData({
+      activeReport: {
+        category: ['ALL'],
+        rows: [
+          {
+            id: 'r1',
+            desc: 'Revenue',
+            isHeader: false,
+            isTotal: false,
+            dept: '101',
+            groupLevel: 'L4',
+            groups: 'FOO',
+            accCodes: '4001',
+            percentBase: '',
+            formula: '',
+            indent: 0,
+          },
+        ],
+        columns: [
+          { id: 'C1', label: 'Actual', isActive: true, isFormula: false, isPercent: false, yearMode: 'current', periodMode: '-1', type: 'AC', width: '' },
+        ],
+      },
+      engineData: [
+        { year: '2025', deptcode: '101', acccode: '4001', accnature: 'I', group4: 'FOO', amt3: '30' },
+      ],
+      budgetData: [],
+      appliedDepts: [],
+      appliedYear: '2026',
+      appliedPeriod: '10',
+      appliedRevision: '0',
+      periodOptions: [
+        { id: '10', periodNo: 10, dateLabel: 'Period 10' },
+        { id: '20', periodNo: 20, dateLabel: 'Period 20' },
+        { id: '30', periodNo: 30, dateLabel: 'Period 30' },
+      ],
+      masterData: INITIAL_MASTER_DATA,
+    });
+
+    expect(result[0].results.C1).toBe(30);
+  });
+
   it('creates clone, blank, and OCR starter reports', () => {
     const blank = createBlankReport('Carmen', ['u1'], 'rep-1');
     const cloned = cloneReport(blank, 'rep-2');
@@ -106,6 +169,46 @@ describe('reportLogic helpers', () => {
     expect(cloned.name).toBe('New Custom Report (Copy)');
     expect(ocr.name).toBe('Imported from scan.pdf');
     expect(blank.assignedUsers).toEqual(['u1']);
+  });
+
+  it('detects unresolved references before save', () => {
+    expect(findBrokenReferences({
+      rows: [{ id: 'r1', formula: 'R1+!REF!', percentBase: '' }],
+      columns: [{ id: 'C1', formula: '', targetCol: '!REF!' }],
+    })).toEqual([
+      expect.objectContaining({ scope: 'row', id: 'r1', field: 'formula' }),
+      expect.objectContaining({ scope: 'column', id: 'C1', field: 'targetCol' }),
+    ]);
+  });
+
+  it('flags conflicting and duplicate row mappings before save', () => {
+    const rows = [
+      { id: 'r1', desc: 'Revenue', dept: '101', groups: 'FOOD', groupLevel: 'L4', accCodes: '', dim1: 'A', dim2: 'X' },
+      { id: 'r2', desc: 'Duplicate Revenue', dept: '101', groups: 'FOOD', groupLevel: 'L4', accCodes: '', dim1: 'A', dim2: 'X' },
+      { id: 'r3', desc: 'Mixed Mapping', dept: '102', groups: '', groupLevel: 'L2', accCodes: '4001', dim1: '', dim2: '' },
+    ];
+
+    expect(getRowMappingWarnings(rows[0], rows, {
+      depts: [{ id: '101' }],
+      accCodes: [{ id: '4001' }],
+    })).toContain('This mapping duplicates another data row and may double count.');
+    expect(getRowMappingWarnings(rows[2], rows, {
+      depts: [{ id: '101' }, { id: '102' }],
+      accCodes: [{ id: '5001' }],
+    })).toEqual(expect.arrayContaining([
+      'Dept and account code are both set.',
+      'Grouped rows should not mix with explicit account codes.',
+      'Unknown account code(s): 4001.',
+    ]));
+
+    expect(findRowMappingConflicts({ rows }, {
+      depts: [{ id: '101' }, { id: '102' }],
+      accCodes: [{ id: '5001' }],
+    })).toEqual(expect.arrayContaining([
+      expect.objectContaining({ scope: 'row', id: 'r1', field: 'mapping' }),
+      expect.objectContaining({ scope: 'row', id: 'r2', field: 'mapping' }),
+      expect.objectContaining({ scope: 'row', id: 'r3', field: 'mapping' }),
+    ]));
   });
 
   it('creates an OCR starter report scaffold with the expected defaults', () => {
@@ -251,6 +354,108 @@ describe('buildReportData', () => {
 
     expect(paddedAccResult[0].results.C1).toBe(100);
     expect(paddedAccResult[1].results.C1).toBe(200);
+  });
+
+  it('recalculates when the applied department filter changes', () => {
+    const unrestricted = buildReportData({
+      activeReport: {
+        category: ['ALL'],
+        rows: [
+          { id: 'r1', desc: 'Revenue', isHeader: false, isTotal: false, dept: '', groupLevel: 'L4', groups: '', accCodes: '4001', percentBase: '', formula: '', indent: 0 },
+        ],
+        columns: [
+          { id: 'C1', label: 'Actual', isActive: true, isFormula: false, isPercent: false, yearMode: 'current', periodMode: 'current', type: 'AC', width: '' },
+        ],
+      },
+      engineData: [
+        { year: '2025', deptcode: '101', acccode: '4001', accnature: 'I', group4: 'FOO', amt2: '100', bfamt2: '0' },
+        { year: '2025', deptcode: '102', acccode: '4001', accnature: 'I', group4: 'FOO', amt2: '200', bfamt2: '0' },
+      ],
+      budgetData: [],
+      appliedDepts: [],
+      appliedYear: '2025',
+      appliedPeriod: '2',
+      appliedRevision: '0',
+      masterData,
+    });
+
+    const filtered = buildReportData({
+      activeReport: {
+        category: ['ALL'],
+        rows: [
+          { id: 'r1', desc: 'Revenue', isHeader: false, isTotal: false, dept: '', groupLevel: 'L4', groups: '', accCodes: '4001', percentBase: '', formula: '', indent: 0 },
+        ],
+        columns: [
+          { id: 'C1', label: 'Actual', isActive: true, isFormula: false, isPercent: false, yearMode: 'current', periodMode: 'current', type: 'AC', width: '' },
+        ],
+      },
+      engineData: [
+        { year: '2025', deptcode: '101', acccode: '4001', accnature: 'I', group4: 'FOO', amt2: '100', bfamt2: '0' },
+        { year: '2025', deptcode: '102', acccode: '4001', accnature: 'I', group4: 'FOO', amt2: '200', bfamt2: '0' },
+      ],
+      budgetData: [],
+      appliedDepts: ['101'],
+      appliedYear: '2025',
+      appliedPeriod: '2',
+      appliedRevision: '0',
+      masterData,
+    });
+
+    expect(unrestricted[0].results.C1).toBe(300);
+    expect(filtered[0].results.C1).toBe(100);
+  });
+
+  it('filters daily column types by day when provided', () => {
+    const dailyResult = buildReportData({
+      activeReport: {
+        category: ['ALL'],
+        rows: [
+          { id: 'r1', desc: 'Daily Revenue', isHeader: false, isTotal: false, dept: '101', groupLevel: 'L4', groups: 'FOO', accCodes: '4001', percentBase: '', formula: '', indent: 0 },
+        ],
+        columns: [
+          { id: 'C1', label: 'Daily Actual', isActive: true, isFormula: false, isPercent: false, yearMode: 'current', periodMode: 'current', type: 'DAC', width: '' },
+        ],
+      },
+      engineData: [
+        { year: '2025', day: '28', deptcode: '101', acccode: '4001', accnature: 'I', group4: 'FOO', amt2: '100', bfamt2: '50' },
+        { year: '2025', day: '27', deptcode: '101', acccode: '4001', accnature: 'I', group4: 'FOO', amt2: '999', bfamt2: '0' },
+      ],
+      budgetData: [],
+      appliedDepts: [],
+      appliedYear: '2025',
+      appliedPeriod: '2',
+      appliedDay: '28',
+      appliedRevision: '0',
+      masterData,
+    });
+
+    expect(dailyResult[0].results.C1).toBe(100);
+  });
+
+  it('requires all row dimensions to match when they are defined', () => {
+    const dimensionResult = buildReportData({
+      activeReport: {
+        category: ['ALL'],
+        rows: [
+          { id: 'r1', desc: 'Dim Revenue', isHeader: false, isTotal: false, dept: '101', groupLevel: 'L4', groups: 'FOO', accCodes: '4001', dim1: 'A', dim2: 'X', percentBase: '', formula: '', indent: 0 },
+        ],
+        columns: [
+          { id: 'C1', label: 'Actual', isActive: true, isFormula: false, isPercent: false, yearMode: 'current', periodMode: 'current', type: 'AC', width: '' },
+        ],
+      },
+      engineData: [
+        { year: '2025', deptcode: '101', acccode: '4001', accnature: 'I', group4: 'FOO', dim1: 'A', dim2: 'X', amt2: '100', bfamt2: '50' },
+        { year: '2025', deptcode: '101', acccode: '4001', accnature: 'I', group4: 'FOO', dim1: 'A', dim2: 'Y', amt2: '999', bfamt2: '0' },
+      ],
+      budgetData: [],
+      appliedDepts: [],
+      appliedYear: '2025',
+      appliedPeriod: '2',
+      appliedRevision: '0',
+      masterData,
+    });
+
+    expect(dimensionResult[0].results.C1).toBe(100);
   });
 
   it('rewrites row and column references when deleting or moving', () => {

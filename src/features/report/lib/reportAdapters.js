@@ -6,6 +6,15 @@ const toArray = (value) => {
   return [];
 };
 
+const toObjectArray = (value, keys) => {
+  if (Array.isArray(value)) return value;
+  if (!value || typeof value !== 'object') return [];
+  for (const key of keys) {
+    if (Array.isArray(value[key])) return value[key];
+  }
+  return [];
+};
+
 const toBooleanFlag = (value) => {
   if (typeof value === 'boolean') return value;
   if (typeof value === 'number') return value === 1;
@@ -17,7 +26,7 @@ const getFlag = (source, names) =>
   names.some((name) => toBooleanFlag(source?.[name]));
 
 export const adaptCarmenCompany = (company) => ({
-  name: company?.HotelName || company?.RegName || 'Carmen Hotel & Resorts',
+  name: company?.name || company?.HotelName || company?.RegName || 'Carmen Hotel & Resorts',
 });
 
 export const getCarmenFinancialReportPermission = (permissions) => {
@@ -75,22 +84,22 @@ const toAccountCategory = (type) => {
 
 export const adaptCarmenDepartments = (departments) =>
   toArray(departments)
-    .filter((dept) => dept?.DeptCode)
+    .filter((dept) => dept?.DeptCode || dept?.id)
     .map((dept) => ({
-      id: normalizeDeptLookupCode(dept.DeptCode),
-      name: dept.Description || `Dept ${dept.DeptCode}`,
+      id: normalizeDeptLookupCode(dept.DeptCode || dept.id),
+      name: dept.Description || dept.label || dept.name || `Dept ${dept.DeptCode || dept.id}`,
     }))
     .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' }));
 
 export const adaptCarmenAccountCodes = (accounts) =>
   toArray(accounts)
-    .filter((account) => account?.AccCode && account.Active !== false)
+    .filter((account) => (account?.AccCode || account?.id) && account.Active !== false)
     .map((account) => ({
-      id: normalizeAccLookupCode(account.AccCode),
-      name: account.Description || account.Description2 || account.AccCode,
-      type: toAccountCategory(account.Type),
-      sourceType: account.Type || '',
-      nature: account.Nature || '',
+      id: normalizeAccLookupCode(account.AccCode || account.id),
+      name: account.Description || account.Description2 || account.name || account.AccCode || account.id,
+      type: toAccountCategory(account.Type || account.type),
+      sourceType: account.Type || account.type || '',
+      nature: account.Nature || account.nature || '',
     }))
     .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' }));
 
@@ -106,19 +115,20 @@ const formatDateLabel = (dateValue) => {
 
 export const adaptCarmenGlPeriods = (periods) =>
   toArray(periods)
-    .filter((period) => period?.GlpNo)
+    .filter((period) => period?.GlpNo || period?.month || period?.id)
     .map((period) => {
-      const id = String(period.GlpNo);
-      const dateLabel = formatDateLabel(period.GlpDate);
-      const statusLabel = period.GlpStatus ? ` (${period.GlpStatus})` : '';
+      const id = String(period.GlpNo || period.month || period.id);
+      const rawDate = period.GlpDate || period.date;
+      const dateLabel = formatDateLabel(rawDate);
+      const statusLabel = period.GlpStatus || period.status ? ` (${period.GlpStatus || period.status})` : '';
       return {
         id,
-        label: dateLabel ? `P${id} - ${dateLabel}${statusLabel}` : `P${id}${statusLabel}`,
-        periodNo: Number(period.GlpNo),
-        date: period.GlpDate || '',
+        label: period.label || (dateLabel ? `P${id} - ${dateLabel}${statusLabel}` : `P${id}${statusLabel}`),
+        periodNo: Number(period.GlpNo || period.month || period.id),
+        date: rawDate || '',
         dateLabel,
-        status: period.GlpStatus || '',
-        sourceYear: period.GlpYear,
+        status: period.GlpStatus || period.status || '',
+        sourceYear: period.GlpYear || period.sourceYear,
       };
     })
     .sort((a, b) => a.periodNo - b.periodNo);
@@ -126,6 +136,13 @@ export const adaptCarmenGlPeriods = (periods) =>
 export const adaptCarmenBudgetRevisions = (budgets) => {
   const revisions = new Map();
   toArray(budgets).forEach((budget) => {
+    if (budget?.id && budget?.label) {
+      const id = String(budget.id).trim();
+      if (!id || revisions.has(id)) return;
+      revisions.set(id, { id, label: budget.label || `Revision ${id}` });
+      return;
+    }
+
     toArray(budget?.Revisions).forEach((revision) => {
       const id = String(revision.Revision ?? '').trim();
       if (!id || revisions.has(id)) return;
@@ -140,3 +157,162 @@ export const adaptCarmenBudgetRevisions = (budgets) => {
     a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' })
   );
 };
+
+const toStringArray = (value) => {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => String(item ?? '').trim()).filter(Boolean);
+};
+
+const toCategoryArray = (value) => {
+  if (Array.isArray(value)) {
+    const items = value.map((item) => String(item ?? '').trim()).filter(Boolean);
+    return items.length > 0 ? items : ['ALL'];
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return ['ALL'];
+    if (trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((item) => String(item ?? '').trim()).filter(Boolean);
+        }
+      } catch {
+        // fall through to comma split
+      }
+    }
+
+    const items = trimmed.split(',').map((item) => String(item).trim()).filter(Boolean);
+    return items.length > 0 ? items : ['ALL'];
+  }
+
+  return ['ALL'];
+};
+
+const normalizeReportRowDimensions = (row) => {
+  const dimensions = [];
+  const seen = new Set();
+
+  const pushDimension = (key, value) => {
+    const normalizedKey = String(key || '').trim().toLowerCase();
+    const normalizedValue = String(value ?? '').trim();
+    if (!normalizedKey || !normalizedValue) return;
+    const signature = `${normalizedKey}:${normalizedValue}`;
+    if (seen.has(signature)) return;
+    seen.add(signature);
+    dimensions.push({ key: normalizedKey, value: normalizedValue });
+  };
+
+  toArray(row?.dimensions || row?.Dimensions).forEach((dimension) => {
+    if (!dimension) return;
+    pushDimension(dimension.key || dimension.name || dimension.field || dimension.Key || dimension.Field, dimension.value || dimension.id || dimension.code || dimension.Value || dimension.Code);
+  });
+
+  ['dim1', 'dim2', 'dim3', 'dim4'].forEach((field) => {
+    pushDimension(field, row?.[field] ?? row?.[field.toUpperCase()]);
+  });
+
+  return dimensions;
+};
+
+const normalizeRowStringList = (value) => {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item ?? '').trim()).filter(Boolean).join(',');
+  }
+  return String(value ?? '').trim();
+};
+
+const normalizeRowTypeFlags = (value, currentRow = {}) => {
+  const normalizedType = String(value ?? '').trim().toUpperCase();
+  if (!normalizedType) {
+    return {
+      isHeader: Boolean(currentRow.isHeader),
+      isTotal: Boolean(currentRow.isTotal),
+    };
+  }
+
+  if (['H', 'HEADER'].includes(normalizedType)) {
+    return { isHeader: true, isTotal: false };
+  }
+
+  if (['F', 'FORMULA', 'TOTAL'].includes(normalizedType)) {
+    return { isHeader: false, isTotal: true };
+  }
+
+  if (['D', 'DATA', 'DETAIL'].includes(normalizedType)) {
+    return { isHeader: false, isTotal: false };
+  }
+
+  return {
+    isHeader: Boolean(currentRow.isHeader),
+    isTotal: Boolean(currentRow.isTotal),
+  };
+};
+
+const normalizeReportRow = (row) => {
+  if (!row || typeof row !== 'object') return row;
+
+  const dimensions = normalizeReportRowDimensions(row);
+  const rowTypeValue = row.Type ?? row.type ?? '';
+  const rowTypeFlags = normalizeRowTypeFlags(rowTypeValue, row);
+  const normalizedRow = {
+    ...row,
+    desc: row.desc || row.Description || row.Desc || row.description || row.name || '',
+    dept: normalizeRowStringList(row.dept || row.DeptCode || row.Department || row.department),
+    accCodes: normalizeRowStringList(row.accCodes || row.AccCode || row.AccCodes || row.AccountCode || row.AccountCodes),
+    groupLevel: String(row.groupLevel || row.GroupLevel || 'L4').trim().toUpperCase() || 'L4',
+    groups: normalizeRowStringList(row.groups || row.Groups || row.Group || row.group),
+    percentBase: String(row.percentBase || row.PercentBase || '').trim().toUpperCase(),
+    formula: String(row.formula || row.Formula || '').trim().toUpperCase(),
+    indent: Number.isFinite(Number(row.indent ?? row.Indent)) ? Number(row.indent ?? row.Indent) : 0,
+    type: String(row.type || row.Type || '').trim().toUpperCase(),
+    ...rowTypeFlags,
+    dimensions,
+  };
+
+  dimensions.forEach(({ key, value }) => {
+    if (['dim1', 'dim2', 'dim3', 'dim4'].includes(key)) {
+      normalizedRow[key] = value;
+    }
+  });
+
+  return normalizedRow;
+};
+
+export const adaptCarmenReportDefinition = (report) => {
+  if (!report) return null;
+
+  const access = toArray(report.access || report.Access);
+  const assignedUsers = toStringArray(report.assignedUsers || report.AssignedUsers);
+
+  return {
+    id: String(report.id || report.Id || '').trim(),
+    name: report.name || report.Name || '',
+    companyName: report.companyName || report.CompanyName || '',
+    category: toCategoryArray(report.category || report.Category || report.CategoryJson),
+    assignedUsers: assignedUsers.length > 0
+      ? assignedUsers
+      : access
+          .map((item) => String(item?.userId || item?.UserId || '').trim())
+          .filter(Boolean),
+    isActive: report.isActive !== false && report.IsActive !== false,
+    periodFormat: report.periodFormat || report.PeriodFormat || 'standard',
+    customDateLabel: report.customDateLabel || report.CustomDateLabel || '',
+    customPeriodLabel: report.customPeriodLabel || report.CustomPeriodLabel || '',
+    overrideDateDisplay: report.overrideDateDisplay || report.OverrideDateDisplay || '',
+    overridePeriodDisplay: report.overridePeriodDisplay || report.OverridePeriodDisplay || '',
+    owner: report.owner || report.Owner || report.createdBy || report.CreatedBy || '',
+    reportType: report.reportType || report.ReportType || 'Monthly',
+    day: report.day || report.Day || '',
+    theme: report.theme || report.Theme || 'blue',
+    columns: toArray(report.columns || report.Columns),
+    rows: toArray(report.rows || report.Rows).map(normalizeReportRow),
+    access,
+  };
+};
+
+export const adaptCarmenReportDefinitions = (reports) =>
+  toObjectArray(reports, ['reports', 'Reports', 'Data', 'value', 'Value'])
+    .map(adaptCarmenReportDefinition)
+    .filter(Boolean);

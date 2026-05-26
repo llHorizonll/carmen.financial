@@ -1,16 +1,11 @@
 /* eslint-disable no-unused-vars */
 
 const arrCompany = [
-  // {
-  //   name: "testpermission (localhost)",
-  //   apiUrl: `http://localhost/Carmen.WebApi`,
-  //   adminToken: "51614ffca811f10b864671a3bd59a9b2",
-  // },
-  // {
-  //   name: "Carmen.dev (localhost)",
-  //   apiUrl: `http://localhost/carmen.WebApi`,
-  //   adminToken: "f9ebce3d77f2f445dee52ba252cc53ee",
-  // },
+  {
+    name: "Carmen.dev (localhost)",
+    apiUrl: `http://localhost/Carmen.WebApi`,
+    adminToken: "f9ebce3d77f2f445dee52ba252cc53ee",
+  },
   {
     name: "Carmen.dev (Server)",
     apiUrl: `https://dev.carmen4.com/carmen.api`,

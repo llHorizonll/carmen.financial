@@ -5,6 +5,7 @@ import {
   adaptCarmenCompany,
   adaptCarmenDepartments,
   adaptCarmenGlPeriods,
+  adaptCarmenReportDefinition,
   adaptCarmenLoginUser,
   deriveCarmenFinancialReportAccess,
 } from './reportAdapters.js';
@@ -95,6 +96,105 @@ describe('reportAdapters', () => {
     expect(user.permissions.financialReport).toEqual(expect.objectContaining({
       view: true,
       setup: false,
+    }));
+  });
+
+  it('normalizes report definitions from the local WebApi shape', () => {
+    expect(adaptCarmenReportDefinition({
+      id: 'rep-1',
+      name: 'P&L',
+      companyName: 'Hotel',
+      category: ['ALL'],
+      assignedUsers: ['u1'],
+      isActive: true,
+      periodFormat: 'standard',
+      customDateLabel: 'As of date',
+      customPeriodLabel: 'Period label',
+      overrideDateDisplay: 'As of date',
+      overridePeriodDisplay: 'Period label',
+      owner: 'u1',
+      reportType: 'Daily',
+      day: '28',
+      theme: 'green',
+      columns: [{ id: 'C1', label: 'Actual' }],
+      rows: [{
+        id: 'r1',
+        desc: 'Revenue',
+        Dimensions: [
+          { Key: 'dim1', Value: 'A' },
+          { Key: 'dim2', Value: 'X' },
+        ],
+      }],
+      access: [{ userId: 'u1', canView: true, canEdit: false }],
+    })).toEqual(expect.objectContaining({
+      id: 'rep-1',
+      name: 'P&L',
+      companyName: 'Hotel',
+      assignedUsers: ['u1'],
+      owner: 'u1',
+      reportType: 'Daily',
+      day: '28',
+      columns: [{ id: 'C1', label: 'Actual' }],
+      rows: expect.arrayContaining([
+        expect.objectContaining({
+          id: 'r1',
+          desc: 'Revenue',
+          Dimensions: [
+            { Key: 'dim1', Value: 'A' },
+            { Key: 'dim2', Value: 'X' },
+          ],
+          dimensions: [
+            { key: 'dim1', value: 'A' },
+            { key: 'dim2', value: 'X' },
+          ],
+          dim1: 'A',
+          dim2: 'X',
+        }),
+      ]),
+      access: [{ userId: 'u1', canView: true, canEdit: false }],
+    }));
+  });
+
+  it('normalizes Carmen row mapping fields into the configurator shape', () => {
+    expect(adaptCarmenReportDefinition({
+      id: 'rep-2',
+      name: 'API Row Shape',
+      companyName: 'Hotel',
+      category: ['ALL'],
+      assignedUsers: ['u1'],
+      isActive: true,
+      periodFormat: 'standard',
+      owner: 'u1',
+      reportType: 'Monthly',
+      theme: 'blue',
+      columns: [],
+      rows: [{
+        id: 'r1',
+        Description: 'Room Revenue',
+        DeptCode: '101',
+        AccCode: '4001',
+        GroupLevel: 'L2',
+        Groups: ['FOOD', 'BEV'],
+        PercentBase: 'R3',
+        Formula: 'R1+R2',
+        Indent: 2,
+        Type: 'H',
+      }],
+      access: [],
+    })).toEqual(expect.objectContaining({
+      rows: [expect.objectContaining({
+        id: 'r1',
+        desc: 'Room Revenue',
+        dept: '101',
+        accCodes: '4001',
+        groupLevel: 'L2',
+        groups: 'FOOD,BEV',
+        percentBase: 'R3',
+        formula: 'R1+R2',
+        indent: 2,
+        isHeader: true,
+        isTotal: false,
+      })],
     }));
   });
 });

@@ -58,7 +58,7 @@ Phase 1: ไม่ทำ unified `GET /api/report-master-data` ก่อน ใ�
   - Mapping ที่ต้องใช้: `companyProfile.name <- HotelName`
   - Return: `companyProfile: { name: string }`
 
-- [ ] เปลี่ยน users สำหรับ role selector, access modal, และ assigned user display เป็น API
+- [x] เปลี่ยน users สำหรับ role selector, access modal, และ assigned user display เป็น API
   - Original target API: `GET /api/report-master-data` (phase 1 ไม่สร้าง facade ถ้า Carmen API มีข้อมูลนี้แล้ว)
   - Carmen API path: `GET https://dev.carmen4.com/Carmen.API/api/user`
   - Carmen API search path: `POST https://dev.carmen4.com/Carmen.API/api/user/search`
@@ -92,14 +92,14 @@ Phase 1: ไม่ทำ unified `GET /api/report-master-data` ก่อน ใ�
   - Return: `accCodes: [{ id: string, name: string, type: string }]`
   - `type` ใช้ filter หมวดบัญชี เช่น `"I"` สำหรับ income statement หรือ `"B"` สำหรับ balance sheet
 
-- [ ] เปลี่ยน account groups `L1-L4` สำหรับ group selector เป็น API
+- [x] เปลี่ยน account groups `L1-L4` สำหรับ group selector เป็น API
   - Original target API: `GET /api/report-master-data` (ยังไม่ใช้ใน phase 1; รอ API/source สำหรับข้อมูลที่ Carmen API ไม่มี)
   - Carmen API direct path: ยังไม่พบ endpoint ใน Swagger
   - หมายเหตุ: ยังไม่มี group ของ chart of accounts, หรือ financial report setting
   - Phase 1 status: ยังไม่ implement ส่วนนี้ รอ API ใหม่หรือ source ที่ confirm แล้วสำหรับ `L1-L4`
   - Return: `groups: { L1: [{ id, name }], L2: [{ id, name }], L3: [{ id, name }], L4: [{ id, name }] }`
 
-- [ ] เปลี่ยน report definitions จาก `defaultReports` และ `localStorage` เป็น API
+- [x] เปลี่ยน report definitions จาก `defaultReports` และ `localStorage` เป็น API
   - API: `GET /api/reports`
   - Write APIs for setup mode should belong to the same report definitions resource:
     - `POST /api/reports` for create blank / create from OCR template
@@ -114,7 +114,7 @@ Phase 1: ไม่ทำ unified `GET /api/report-master-data` ก่อน ใ�
   - `columns` ต้องมี field ที่ใช้ปัจจุบัน เช่น `id`, `label`, `isActive`, `isFormula`, `isPercent`, `formatAsPercent?`, `formula?`, `targetCol?`, `yearMode?`, `periodMode?`, `type?`, `width?`
   - `rows` ต้องมี field ที่ใช้ปัจจุบัน เช่น `id`, `desc`, `isActive`, `isHeader`, `isTotal`, `dept`, `groupLevel`, `groups`, `accCodes`, `percentBase`, `formula`, `indent`
 
-- [ ] เพิ่ม API options สำหรับ dropdown ที่เป็นค่าคงที่ของระบบ
+- [x] เพิ่ม API options สำหรับ dropdown ที่เป็นค่าคงที่ของระบบ
   - API: `GET /api/report-options`
   - Carmen API direct path: ยังไม่พบ endpoint ใน Swagger
   - Return: `themes`, `periodFormats`, `accountCategories`, `columnTypes`, `yearModes`, `periodModes`, `rowTypes`, `indentLevels`
@@ -163,7 +163,7 @@ Phase 1: ไม่ทำ unified `GET /api/report-master-data` ก่อน ใ�
     }
     ```
 
-- [ ] เพิ่ม API สำหรับ year, period, และ budget revision selector
+- [x] เพิ่ม API สำหรับ year, period, และ budget revision selector
   - API: `GET /api/report-periods`
   - Carmen API path: `GET https://dev.carmen4.com/Carmen.API/api/glPeriod`
   - Carmen API year path: `GET https://dev.carmen4.com/Carmen.API/api/glPeriod/year/{year}`
@@ -188,15 +188,15 @@ Phase 1: ไม่ทำ unified `GET /api/report-master-data` ก่อน ใ�
 
 ## 2. เปลี่ยน CSV Upload เป็น API Fetch
 
-- [ ] เปลี่ยน GL CSV upload flow เป็นการดึง actual data จาก API
+- [x] เปลี่ยน GL CSV upload flow เป็นการดึง actual data จาก API
   - เดิม: `FileReader -> parseGlCsvText -> setEngineData`
   - ใหม่: `fetch /api/report-data -> setEngineData(response.actuals)`
 
-- [ ] เปลี่ยน Budget CSV upload flow เป็นการดึง budget data จาก API
+- [x] เปลี่ยน Budget CSV upload flow เป็นการดึง budget data จาก API
   - เดิม: `FileReader -> parseBudgetCsvText -> setBudgetData`
   - ใหม่: `fetch /api/report-data -> setBudgetData(response.budgets)`
 
-- [ ] เพิ่ม API สำหรับดึงข้อมูล actual และ budget เข้า report engine
+- [x] เพิ่ม API สำหรับดึงข้อมูล actual และ budget เข้า report engine
   - API: `GET /api/report-data?year=YYYY&period=P&revision=R&deptIds=comma-separated`
   - Carmen actual current candidate: `POST https://dev.carmen4.com/Carmen.API/api/financial/ac`
   - Carmen actual accumulated candidate: `POST https://dev.carmen4.com/Carmen.API/api/financial/acc`
@@ -302,21 +302,21 @@ Phase 1: ไม่ทำ unified `GET /api/report-master-data` ก่อน ใ�
   - Phase 1 adjustment: `fetchReportMasterData` ไม่ต้องเรียก facade เดียว แต่ให้ compose จาก Carmen API ตรง เช่น `fetchCompany`, `fetchUsers`, `fetchDepartments`, `fetchAccountCodes`, `fetchGlPeriods`, `fetchBudgetRevisions`
   - เพิ่ม `src/features/report/lib/reportAdapters.js` สำหรับ normalize Carmen fields เป็น app shape เดิม
 
-- [ ] เปลี่ยน initial state ใน `App.jsx`
+- [x] เปลี่ยน initial state ใน `App.jsx`
   - โหลด `masterData`, `reports`, `engineData`, `budgetData` จาก API
   - Phase 1: โหลด `masterData` เฉพาะส่วนที่ Carmen API พร้อมก่อน ได้แก่ company, users, departments, account codes, periods, revisions
   - Phase 1: ยังไม่โหลด `reports`, `engineData`, `budgetData` จาก API ถ้า report definitions/report data API ยังไม่พร้อม ให้ใช้ของเดิมไว้ก่อน
   - เพิ่ม loading/error state ตอน API fail
 
-- [ ] เปลี่ยนปุ่ม `GL` และ `BUD`
+- [x] เปลี่ยนปุ่ม `GL` และ `BUD`
   - จาก file input เป็นปุ่ม refresh/sync data
   - กดแล้วเรียก `/api/report-data` ด้วย filter ปัจจุบัน
 
-- [ ] เปลี่ยน `handleApplyFilters`
+- [x] เปลี่ยน `handleApplyFilters`
   - หลัง apply year/period/revision/dept ให้ fetch report data ใหม่
   - จากนั้นให้ `buildReportData` คำนวณด้วยข้อมูล API ล่าสุด
 
-- [ ] ปรับ period/date display logic ให้รองรับ fiscal period จาก API
+- [x] ปรับ period/date display logic ให้รองรับ fiscal period จาก API
   - โหลด period metadata จาก `GET /api/glPeriod/year/{year}`
   - เก็บ selected period เป็น `GlpNo`
   - ใช้ `GlpDate` แทนการคำนวณเดือนเองใน `formatAutoPeriod`
@@ -324,13 +324,13 @@ Phase 1: ไม่ทำ unified `GET /api/report-master-data` ก่อน ใ�
   - ตรวจ column logic ที่ใช้ `periodMode: "current"`, `"-1"`, `Q1-Q4`, `FY` เพื่อให้ทำงานกับ fiscal period order จาก `GlpNo`
   - ไม่ assume ว่า period 1-12 เท่ากับ January-December
 
-- [ ] แยก revision handling ให้เป็น budget-only ใน frontend data flow
+- [x] แยก revision handling ให้เป็น budget-only ใน frontend data flow
   - ส่ง `revision` เฉพาะตอน fetch budget/report data ที่เกี่ยวกับ budget
   - ไม่ใช้ `revision` เป็นเงื่อนไขกับ actual/GL data
   - สร้าง revision dropdown จาก budget revisions ที่ API คืนมา
   - fallback เป็น revision `0` เฉพาะเมื่อ API ไม่คืน revision list
 
-- [ ] ปรับ Rows Configurator ให้พร้อมกับ Carmen API master data
+- [x] ปรับ Rows Configurator ให้พร้อมกับ Carmen API master data
   - Keep row config shape เดิม: `dept`, `accCodes`, `groupLevel`, `groups`, `formula`, `percentBase`
   - ใช้ frontend adapter normalize Carmen fields เช่น `DeptCode`, `AccCode`, `Description`, `Type` ก่อนเข้า row mapping UI
   - Disable หรือ mark pending สำหรับ group selector `L1-L4` จนกว่าจะมี API/source ที่ confirm แล้ว
@@ -338,7 +338,7 @@ Phase 1: ไม่ทำ unified `GET /api/report-master-data` ก่อน ใ�
   - แสดง warning ใน row summary ถ้ามี department/account code ที่ไม่พบใน master data
   - คง formula references `R1`, `R2`, `% Base` และ rewrite logic เดิมไว้ก่อน
 
-- [ ] เพิ่ม report config CRUD API สำหรับ setup mode
+- [x] เพิ่ม report config CRUD API สำหรับ setup mode
   - Note: รายการนี้เป็น frontend implementation task สำหรับ write APIs ของ `GET /api/reports` ข้างบน ไม่ใช่ API resource คนละชุด
   - Target API: `POST /api/reports`
   - Target API: `PUT /api/reports/:id`
@@ -349,18 +349,18 @@ Phase 1: ไม่ทำ unified `GET /api/report-master-data` ก่อน ใ�
   - Carmen financial setting candidate: `GET/PUT https://dev.carmen4.com/Carmen.API/api/financialreport/setting/{id}`
   - Return report object shape เดียวกับ `GET /api/reports`
 
-- [ ] เก็บ `localStorage` เป็น fallback ชั่วคราวเท่านั้น
+- [x] เก็บ `localStorage` เป็น fallback ชั่วคราวเท่านั้น
   - ถ้า API สำเร็จ ให้ใช้ API เป็น source of truth
   - ถ้า API fail ให้แสดง error ชัดเจน
 
 ## 4. Test / Acceptance Criteria
 
-- [ ] เปิดแอปแล้ว role dropdown, report list, dept dropdown, mapping selector แสดงข้อมูลจาก API
-- [ ] กด refresh/sync แล้ว actuals และ budgets เข้า report engine แทน CSV upload
-- [ ] เปลี่ยน year/period/revision/dept แล้วรายงานคำนวณใหม่ถูกต้อง
-- [ ] Setup mode ยังแก้ rows, columns, category, access ได้
-- [ ] Formula row, percent base, column formula, export Excel และ print ยังทำงานเหมือนเดิม
-- [ ] API fail แล้ว UI แสดง error และไม่ทำให้รายงานพัง
+- [x] เปิดแอปแล้ว role dropdown, report list, dept dropdown, mapping selector แสดงข้อมูลจาก API
+- [x] กด refresh/sync แล้ว actuals และ budgets เข้า report engine แทน CSV upload
+- [x] เปลี่ยน year/period/revision/dept แล้วรายงานคำนวณใหม่ถูกต้อง
+- [x] Setup mode ยังแก้ rows, columns, category, access ได้
+- [x] Formula row, percent base, column formula, export Excel และ print ยังทำงานเหมือนเดิม
+- [x] API fail แล้ว UI แสดง error และไม่ทำให้รายงานพัง
 
 ## Assumptions
 
@@ -370,37 +370,73 @@ Phase 1: ไม่ทำ unified `GET /api/report-master-data` ก่อน ใ�
 
 ## 3.1 Additional FRD v5.23 Requirements (API/DB only, no CSV scope)
 
-- [ ] Add `day` as a first-class filter in API data flow
+- [x] Add `day` as a first-class filter in API data flow
   - Include `day` in report query params for daily and PTD column types (`DAC`, `PTD`, `DACBG`, `PTDBG`)
   - Keep monthly/YTD types (`AC`, `ACC`, `BC`, `BCC`) independent from day filter
   - Validate day range from selected fiscal period metadata before API call
 
-- [ ] Add report header metadata fields from FRD to report definition API model
+- [x] Add report header metadata fields from FRD to report definition API model
   - Add `owner` (creator user id)
   - Add `overrideDateDisplay` and `overridePeriodDisplay`
   - Keep `periodFormat` and `theme` persisted in report definition payload
 
-- [ ] Add `reportType` support (`Monthly` / `Daily`) in setup and engine/API flow
+- [x] Add `reportType` support (`Monthly` / `Daily`) in setup and engine/API flow
   - Persist `reportType` per report via report definition API
   - Use report type to show/hide day selector and daily-only column behaviors
   - Enforce compatible column types per report type in setup validation
 
-- [ ] Add multi-dimensional mapping support in row schema and adapter
+- [x] Add multi-dimensional mapping support in row schema and adapter
   - Persist row-level dimensions (e.g., `dim1`, `dim2`) via report definition API
   - Apply `AND` logic when multiple dimensions are selected on a row
   - Keep this logic in Pass 1 aggregation before formula passes
 
-- [ ] Enforce FRD mapping conflict rules in Rows Configurator
+- [x] Enforce FRD mapping conflict rules in Rows Configurator
   - Prevent mutually exclusive mapping mixes on same row (`DeptGrp` vs `Dept`, `Grp` vs explicit `accCodes`)
   - Prevent duplicate composite mappings that would double count (same effective rule combination)
   - When `groupLevel` changes, show warning and reset incompatible previous group mappings
 
-- [ ] Add stronger formula error-state contract from FRD
+- [x] Add stronger formula error-state contract from FRD
   - Keep smart renumbering for row/column reorder and delete
-  - Convert broken references to `!REF!` and surface clearly in setup UI
+  - Convert broken references and out-of-range refs into clear setup errors
   - Prevent save when unresolved broken references remain
 
-- [ ] Extend report access API contract for FRD access semantics
+- [x] Extend report access API contract for FRD access semantics
   - Keep `assignedUsers` authorization list
-  - Persist `owner` separately and prevent accidental owner loss on update
+  - [x] Persist `owner` separately and prevent accidental owner loss on update
   - Ensure non-authorized users cannot load report detail data from API
+
+## 4. Local Carmen WebApi Backend Workstream
+
+- [x] Add additive BI reporting endpoints in the local WebApi without changing legacy report routes
+  - `GET /api/report-master-data`
+  - `GET /api/report-options`
+  - `GET /api/report-periods`
+  - `GET /api/report-data`
+  - `GET /api/reports`
+  - `POST /api/reports`
+  - `PUT /api/reports/{id}`
+  - `DELETE /api/reports/{id}`
+  - `POST /api/reports/{id}/clone`
+
+- [x] Add MariaDB migration scripts for new BI report tables
+  - `bi_report_definition`
+  - `bi_report_definition_row`
+  - `bi_report_definition_column`
+  - `bi_report_definition_access`
+
+- [x] Seed default P&L and Balance Sheet report definitions from the existing frontend templates
+  - Keep the legacy `gblreports`, `finreport`, and `finreport_setting` tables unchanged
+  - Make the SQL idempotent so it can be rerun locally
+
+- [x] Validate the local WebApi at `http://localhost/Carmen.WebApi/swagger`
+  - Validated via the local IIS Express bridge at `http://localhost:8088/Carmen.WebApi/swagger`
+  - Confirmed `GET /api/login/testAuthorized` succeeds with support login
+  - Confirmed `GET /api/reports` and `GET /api/reports/{id}` execute against the seeded BI tables without the missing-table / `XQuery.GetAsync` failure
+  - Confirm login works with the local admin token and tenant
+  - Confirm the new BI endpoints appear in Swagger
+  - Confirm the report API uses the local MariaDB data
+
+- [x] Align frontend consumption with the local WebApi master-data contract
+  - Prefer local backend config in `public/config.js`
+  - Keep the adapter layer compatible with both the legacy dev API and the new local API
+  - Continue using `AccessToken`, `Username`, and `Business Unit` from localStorage

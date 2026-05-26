@@ -5,6 +5,7 @@ export default function ReportDetailsPanel({
   activeReport,
   activeCategories,
   masterData,
+  reportOptions = {},
   updateActiveReport,
   handleCloneReport,
   handleCreateBlankReport,
@@ -12,6 +13,41 @@ export default function ReportDetailsPanel({
   handleOCRUpload,
   setIsAccessModalOpen,
 }) {
+  const themeOptions = reportOptions.themes?.length > 0
+    ? reportOptions.themes
+    : [
+        { id: 'blue', label: 'Classic Blue' },
+        { id: 'green', label: 'Emerald Green' },
+        { id: 'gray', label: 'Slate Gray' },
+      ];
+  const periodFormatOptions = reportOptions.periodFormats?.length > 0
+    ? reportOptions.periodFormats
+    : [
+        { id: 'standard', label: 'Standard (Period : YYYY-MM)' },
+        { id: 'year_month', label: 'Year-Month (YYYY-MM)' },
+        { id: 'numeric', label: 'Numeric Full (MM/YYYY)' },
+        { id: 'numeric_short', label: 'Numeric Short (MM/YY)' },
+        { id: 'short', label: 'Short Month + YYYY (Feb 2025)' },
+        { id: 'short_yy', label: "Short Month + YY (Feb '25)" },
+        { id: 'long', label: 'Long Month + YYYY (February 2025)' },
+        { id: 'month_only', label: 'Month Only (February)' },
+        { id: 'day_month_year', label: 'Day Month Year (28 Feb 2025)' },
+        { id: 'end_of_month', label: 'End of Month (February 28, 2025)' },
+      ];
+  const accountCategoryOptions = reportOptions.accountCategories?.length > 0
+    ? reportOptions.accountCategories
+    : [
+        { id: 'ALL', label: 'All Categories' },
+        { id: 'I', label: 'Income Statement (I)' },
+        { id: 'B', label: 'Balance Sheet (B)' },
+      ];
+  const reportTypeOptions = [
+    { id: 'Monthly', label: 'Monthly' },
+    { id: 'Daily', label: 'Daily' },
+  ];
+  const dateDisplayValue = activeReport.overrideDateDisplay ?? activeReport.customDateLabel ?? '';
+  const periodDisplayValue = activeReport.overridePeriodDisplay ?? activeReport.customPeriodLabel ?? '';
+
   return (
     <div className="bg-white p-5 rounded-2xl shadow-sm border border-purple-100 flex flex-col xl:flex-row gap-6 flex-shrink-0">
       <div className="flex-1 space-y-3">
@@ -31,35 +67,67 @@ export default function ReportDetailsPanel({
           <div>
             <label className="block text-[10px] font-bold text-slate-600 mb-1 flex items-center gap-1"><Palette size={10} /> Report Color Theme</label>
             <select value={activeReport.theme || 'blue'} onChange={e => updateActiveReport({ theme: e.target.value })} className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500 bg-white">
-              <option value="blue">Classic Blue</option>
-              <option value="green">Emerald Green</option>
-              <option value="gray">Slate Gray</option>
+              {themeOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-[10px] font-bold text-slate-600 mb-1">Auto Period Format</label>
             <select value={activeReport.periodFormat || 'standard'} onChange={e => updateActiveReport({ periodFormat: e.target.value })} className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500 bg-white">
-              <option value="standard">Standard (Period : YYYY-MM)</option>
-              <option value="year_month">Year-Month (YYYY-MM)</option>
-              <option value="numeric">Numeric Full (MM/YYYY)</option>
-              <option value="numeric_short">Numeric Short (MM/YY)</option>
-              <option value="short">Short Month + YYYY (Feb 2025)</option>
-              <option value="short_yy">Short Month + YY (Feb '25)</option>
-              <option value="long">Long Month + YYYY (February 2025)</option>
-              <option value="month_only">Month Only (February)</option>
-              <option value="day_month_year">Day Month Year (28 Feb 2025)</option>
-              <option value="end_of_month">End of Month (February 28, 2025)</option>
+              {periodFormatOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-600 mb-1">Report Type</label>
+            <select
+              value={activeReport.reportType || 'Monthly'}
+              onChange={e => updateActiveReport({
+                reportType: e.target.value,
+                day: e.target.value === 'Daily' ? (activeReport.day || '') : '',
+              })}
+              className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500 bg-white"
+            >
+              {reportTypeOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-[10px] font-bold text-slate-600 mb-1">Override Date Display</label>
-            <input value={activeReport.customDateLabel || ''} onChange={e => updateActiveReport({ customDateLabel: e.target.value })} className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500" placeholder="Auto (Based on format)" />
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold text-slate-600 mb-1">Override Period Display</label>
-            <input value={activeReport.customPeriodLabel || ''} onChange={e => updateActiveReport({ customPeriodLabel: e.target.value })} className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500" placeholder="Auto (Based on format)" />
+            <input
+              value={dateDisplayValue}
+              onChange={e => updateActiveReport({ customDateLabel: e.target.value, overrideDateDisplay: e.target.value })}
+              className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500"
+              placeholder="Auto (Based on format)"
+            />
           </div>
 
+          <div>
+            <label className="block text-[10px] font-bold text-slate-600 mb-1">Override Period Display</label>
+            <input
+              value={periodDisplayValue}
+              onChange={e => updateActiveReport({ customPeriodLabel: e.target.value, overridePeriodDisplay: e.target.value })}
+              className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500"
+              placeholder="Auto (Based on format)"
+            />
+          </div>
+          {activeReport.reportType === 'Daily' && (
+            <div>
+              <label className="block text-[10px] font-bold text-slate-600 mb-1">Day</label>
+              <input
+                value={activeReport.day || ''}
+                onChange={e => updateActiveReport({ day: e.target.value })}
+                className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500"
+                placeholder="Daily reports only"
+              />
+            </div>
+          )}
+          <div>
+            <label className="block text-[10px] font-bold text-slate-600 mb-1">Owner</label>
+            <input
+              value={activeReport.owner || ''}
+              onChange={e => updateActiveReport({ owner: e.target.value })}
+              className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500"
+              placeholder={masterData?.users?.[0]?.id || 'Creator user id'}
+            />
+          </div>
           <div className="col-span-1 md:col-span-3 flex flex-col md:flex-row items-start gap-3 mt-1">
             <div className="w-full md:w-1/3">
               <label className="block text-[10px] font-bold text-slate-600 mb-1">Account Category (AccType from DB)</label>
@@ -80,9 +148,7 @@ export default function ReportDetailsPanel({
                 className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500 cursor-pointer text-purple-700 font-bold bg-purple-50"
               >
                 <option value="" disabled>+ Add Category...</option>
-                <option value="ALL">All Categories</option>
-                <option value="I">Income Statement (I)</option>
-                <option value="B">Balance Sheet (B)</option>
+                {accountCategoryOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
               </select>
             </div>
 

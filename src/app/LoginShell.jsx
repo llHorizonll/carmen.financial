@@ -39,6 +39,16 @@ export default function LoginShell() {
   const [error, setError] = useState('');
   const [usernameUsedForBusinessUnits, setUsernameUsedForBusinessUnits] = useState('');
 
+  React.useEffect(() => {
+    const syncSessionState = () => setIsAuthenticated(hasSession());
+    window.addEventListener('storage', syncSessionState);
+    window.addEventListener('carmen-session-changed', syncSessionState);
+    return () => {
+      window.removeEventListener('storage', syncSessionState);
+      window.removeEventListener('carmen-session-changed', syncSessionState);
+    };
+  }, []);
+
   const selectedBusinessUnit = useMemo(
     () => businessUnits.find((item) => getBusinessUnitTenant(item) === selectedTenant) || null,
     [businessUnits, selectedTenant],
@@ -101,6 +111,7 @@ export default function LoginShell() {
             : selectedTenant,
           tenant: selectedTenant,
         },
+        user: loginResult.user,
       });
       setIsAuthenticated(true);
     } catch (loginError) {
