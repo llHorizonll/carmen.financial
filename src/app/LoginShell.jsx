@@ -1,5 +1,4 @@
-import React, { useMemo, useState } from 'react';
-import App from './App.jsx';
+import React, { Suspense, lazy, useMemo, useState } from 'react';
 import {
   clearCarmenSession,
   fetchBusinessUnitsByUsername,
@@ -24,6 +23,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator.jsx';
 import { initializeTheme } from '../lib/theme.js';
 import { AlertTriangle, FileText, ShieldCheck, SlidersHorizontal, Sparkles } from 'lucide-react';
+
+const App = lazy(() => import('./App.jsx'));
 
 const languageList = [
   { value: 'en-US', label: 'English (United States)' },
@@ -183,13 +184,21 @@ export default function LoginShell() {
 
   if (isAuthenticated) {
     return (
-      <App
-        onLogout={() => {
-          clearCarmenSession();
-          setIsAuthenticated(false);
-          setPassword('');
-        }}
-      />
+      <Suspense
+        fallback={
+          <div className="flex min-h-screen items-center justify-center bg-muted/20 text-sm text-muted-foreground">
+            Loading Carmen Financial BI...
+          </div>
+        }
+      >
+        <App
+          onLogout={() => {
+            clearCarmenSession();
+            setIsAuthenticated(false);
+            setPassword('');
+          }}
+        />
+      </Suspense>
     );
   }
 

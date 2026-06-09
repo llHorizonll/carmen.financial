@@ -42,12 +42,7 @@ import {
 } from '@/components/ui/alert-dialog.jsx';
 import { applyShellTemplate, DEFAULT_SHELL_TEMPLATE, getStoredTheme, setStoredTheme } from '../lib/theme.js';
 
-import DetailSelectorModal from '../features/report/components/DetailSelectorModal.jsx';
 import MultiSelectDropdown from '../features/report/components/MultiSelectDropdown.jsx';
-import ReportView from '../features/report/components/ReportView.jsx';
-import ReportSetup from '../features/report/components/ReportSetup.jsx';
-import AccessModal from '../features/report/components/AccessModal.jsx';
-import EditMappingModal from '../features/report/components/EditMappingModal.jsx';
 import usePersistentState from '../hooks/usePersistentState.js';
 import { getDefaultReports } from '../features/report/data/defaultReports.js';
 import { createBlankReport, createOcrReport } from '../features/report/data/reportTemplates.js';
@@ -80,6 +75,12 @@ import {
   findBrokenReferences,
   findRowMappingConflicts,
 } from '../features/report/lib/reportLogic.js';
+
+const ReportView = React.lazy(() => import('../features/report/components/ReportView.jsx'));
+const ReportSetup = React.lazy(() => import('../features/report/components/ReportSetup.jsx'));
+const AccessModal = React.lazy(() => import('../features/report/components/AccessModal.jsx'));
+const EditMappingModal = React.lazy(() => import('../features/report/components/EditMappingModal.jsx'));
+const DetailSelectorModal = React.lazy(() => import('../features/report/components/DetailSelectorModal.jsx'));
 
 const hasFinancialReportPermission = (user) => Boolean(user?.permissions?.financialReport);
 
@@ -1315,17 +1316,27 @@ export default function App({ onLogout = null }) {
         <div className="min-h-0 flex-1 overflow-hidden p-4 lg:p-6">
           <div className="mx-auto flex h-full max-w-[1800px] min-h-0 flex-col gap-4">
             {activeTab === 'report' && activeReport && (
-              <ReportView
-                activeReport={activeReport}
-                displayCompanyLabel={displayCompanyLabel}
-                displayDateLabel={displayDateLabel}
-                displayPeriodLabel={displayPeriodLabel}
-                reportData={reportData}
-                activeCols={activeCols}
-                currentTheme={currentTheme}
-                tableZoom={tableZoom}
-                getIndentClass={getIndentClass}
-              />
+              <React.Suspense
+                fallback={
+                  <Card className="flex h-full min-h-0 items-center justify-center border border-border shadow-none ring-0">
+                    <CardContent className="py-16 text-center text-sm text-muted-foreground">
+                      Loading report view...
+                    </CardContent>
+                  </Card>
+                }
+              >
+                <ReportView
+                  activeReport={activeReport}
+                  displayCompanyLabel={displayCompanyLabel}
+                  displayDateLabel={displayDateLabel}
+                  displayPeriodLabel={displayPeriodLabel}
+                  reportData={reportData}
+                  activeCols={activeCols}
+                  currentTheme={currentTheme}
+                  tableZoom={tableZoom}
+                  getIndentClass={getIndentClass}
+                />
+              </React.Suspense>
             )}
 
             {activeTab === 'report' && !activeReport && (
@@ -1337,93 +1348,109 @@ export default function App({ onLogout = null }) {
             )}
 
             {activeTab === 'setup' && canSetupReports && activeReport && (
-              <ReportSetup
-                themeMode={themeMode}
-                masterData={masterData}
-                reportOptions={reportOptions}
-                activeReport={activeReport}
-                activeCategories={activeCategories}
-                updateActiveReport={updateActiveReport}
-                onBusyTransition={triggerPageTransition}
-                handleCloneReport={handleCloneReport}
-                handleCreateBlankReport={handleCreateBlankReport}
-                handleDeleteReport={handleDeleteReport}
-                handleOCRUpload={handleOCRUpload}
-                setIsAccessModalOpen={setIsAccessModalOpen}
-                handleAddCol={handleAddCol}
-                handleUpdateCol={handleUpdateCol}
-                moveCol={moveCol}
-                handleDeleteCol={handleDeleteCol}
-                handleAddRow={handleAddRow}
-                handleUpdateRow={handleUpdateRow}
-                handleUpdateRowMulti={handleUpdateRowMulti}
-                moveRow={moveRow}
-                handleDeleteRow={handleDeleteRow}
-                setEditingRow={setEditingRow}
-                setConfirmAction={setConfirmAction}
-              />
+              <React.Suspense
+                fallback={
+                  <Card className="flex h-full min-h-0 items-center justify-center border border-border shadow-none ring-0">
+                    <CardContent className="py-16 text-center text-sm text-muted-foreground">
+                      Loading setup tools...
+                    </CardContent>
+                  </Card>
+                }
+              >
+                <ReportSetup
+                  themeMode={themeMode}
+                  masterData={masterData}
+                  reportOptions={reportOptions}
+                  activeReport={activeReport}
+                  activeCategories={activeCategories}
+                  updateActiveReport={updateActiveReport}
+                  onBusyTransition={triggerPageTransition}
+                  handleCloneReport={handleCloneReport}
+                  handleCreateBlankReport={handleCreateBlankReport}
+                  handleDeleteReport={handleDeleteReport}
+                  handleOCRUpload={handleOCRUpload}
+                  setIsAccessModalOpen={setIsAccessModalOpen}
+                  handleAddCol={handleAddCol}
+                  handleUpdateCol={handleUpdateCol}
+                  moveCol={moveCol}
+                  handleDeleteCol={handleDeleteCol}
+                  handleAddRow={handleAddRow}
+                  handleUpdateRow={handleUpdateRow}
+                  handleUpdateRowMulti={handleUpdateRowMulti}
+                  moveRow={moveRow}
+                  handleDeleteRow={handleDeleteRow}
+                  setEditingRow={setEditingRow}
+                  setConfirmAction={setConfirmAction}
+                />
+              </React.Suspense>
             )}
           </div>
         </div>
       </main>
 
-      <AccessModal
-        isOpen={isAccessModalOpen}
-        masterData={masterData}
-        activeReport={activeReport}
-        onClose={() => setIsAccessModalOpen(false)}
-        onUpdateUsers={(newUsers) => updateActiveReport({ assignedUsers: newUsers })}
-      />
+      <React.Suspense fallback={null}>
+        <AccessModal
+          isOpen={isAccessModalOpen}
+          masterData={masterData}
+          activeReport={activeReport}
+          onClose={() => setIsAccessModalOpen(false)}
+          onUpdateUsers={(newUsers) => updateActiveReport({ assignedUsers: newUsers })}
+        />
+      </React.Suspense>
 
-      <EditMappingModal
-        isOpen={!!editingRow}
-        editingRow={editingRow}
-        setEditingRow={setEditingRow}
-        masterData={masterData}
-        reportOptions={reportOptions}
-        modalAccCategory={modalAccCategory}
-        setModalAccCategory={setModalAccCategory}
-        onOpenDetailSelector={({ field, title, subTitle, items }) => setDetailSelecting({ field, title, subTitle, items })}
-        onApply={async () => {
-          const nextRows = activeReport.rows.map((row) => (row.id === editingRow.id ? {
-            ...row,
-            desc: editingRow.desc,
-            dept: editingRow.dept,
-            accCodes: editingRow.accCodes,
-            groupLevel: editingRow.groupLevel,
-            groups: editingRow.groups,
-            dim1: editingRow.dim1,
-            dim2: editingRow.dim2,
-          } : row));
-          const nextReport = { ...activeReport, rows: nextRows };
-          handleUpdateRowMulti(editingRow.id, {
-            desc: editingRow.desc,
-            dept: editingRow.dept,
-            accCodes: editingRow.accCodes,
-            groupLevel: editingRow.groupLevel,
-            groups: editingRow.groups,
-            dim1: editingRow.dim1,
-            dim2: editingRow.dim2,
-          });
-          setEditingRow(null);
-          await persistActiveReport(nextReport);
-        }}
-        onClose={() => setEditingRow(null)}
-      />
+      <React.Suspense fallback={null}>
+        <EditMappingModal
+          isOpen={!!editingRow}
+          editingRow={editingRow}
+          setEditingRow={setEditingRow}
+          masterData={masterData}
+          reportOptions={reportOptions}
+          modalAccCategory={modalAccCategory}
+          setModalAccCategory={setModalAccCategory}
+          onOpenDetailSelector={({ field, title, subTitle, items }) => setDetailSelecting({ field, title, subTitle, items })}
+          onApply={async () => {
+            const nextRows = activeReport.rows.map((row) => (row.id === editingRow.id ? {
+              ...row,
+              desc: editingRow.desc,
+              dept: editingRow.dept,
+              accCodes: editingRow.accCodes,
+              groupLevel: editingRow.groupLevel,
+              groups: editingRow.groups,
+              dim1: editingRow.dim1,
+              dim2: editingRow.dim2,
+            } : row));
+            const nextReport = { ...activeReport, rows: nextRows };
+            handleUpdateRowMulti(editingRow.id, {
+              desc: editingRow.desc,
+              dept: editingRow.dept,
+              accCodes: editingRow.accCodes,
+              groupLevel: editingRow.groupLevel,
+              groups: editingRow.groups,
+              dim1: editingRow.dim1,
+              dim2: editingRow.dim2,
+            });
+            setEditingRow(null);
+            await persistActiveReport(nextReport);
+          }}
+          onClose={() => setEditingRow(null)}
+        />
+      </React.Suspense>
 
       {detailSelecting && (
-        <DetailSelectorModal
-          masterData={masterData}
-          title={detailSelecting.title}
-          subTitle={detailSelecting.subTitle || 'Select Items'}
-          availableItems={detailSelecting.items}
-          selectedItems={editingRow[detailSelecting.field]?.split(',').map((item) => item.trim()).filter(Boolean) || []}
-          onCancel={() => setDetailSelecting(null)}
-          onSave={(newSelection) => {
-            setEditingRow({ ...editingRow, [detailSelecting.field]: newSelection.join(', ') });
-            setDetailSelecting(null);
-          }}
-        />
+        <React.Suspense fallback={null}>
+          <DetailSelectorModal
+            masterData={masterData}
+            title={detailSelecting.title}
+            subTitle={detailSelecting.subTitle || 'Select Items'}
+            availableItems={detailSelecting.items}
+            selectedItems={editingRow[detailSelecting.field]?.split(',').map((item) => item.trim()).filter(Boolean) || []}
+            onCancel={() => setDetailSelecting(null)}
+            onSave={(newSelection) => {
+              setEditingRow({ ...editingRow, [detailSelecting.field]: newSelection.join(', ') });
+              setDetailSelecting(null);
+            }}
+          />
+        </React.Suspense>
       )}
     </div>
   );
