@@ -1,5 +1,29 @@
 import React from 'react';
-import { Copy, Eye, EyeOff, FilePlus, Palette, ScanText, Settings2, ShieldCheck, Trash2, UserCheck } from 'lucide-react';
+import {
+  Copy,
+  Eye,
+  EyeOff,
+  FilePlus,
+  Palette,
+  ScanText,
+  Settings2,
+  ShieldCheck,
+  Trash2,
+  UserCheck,
+} from 'lucide-react';
+import { Badge } from '@/components/ui/badge.jsx';
+import { Button } from '@/components/ui/button.jsx';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card.jsx';
+import { Input } from '@/components/ui/input.jsx';
+import { Label } from '@/components/ui/label.jsx';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select.jsx';
+import { Separator } from '@/components/ui/separator.jsx';
 
 export default function ReportDetailsPanel({
   activeReport,
@@ -12,6 +36,7 @@ export default function ReportDetailsPanel({
   handleDeleteReport,
   handleOCRUpload,
   setIsAccessModalOpen,
+  onBusyTransition,
 }) {
   const themeOptions = reportOptions.themes?.length > 0
     ? reportOptions.themes
@@ -45,158 +70,258 @@ export default function ReportDetailsPanel({
     { id: 'Monthly', label: 'Monthly' },
     { id: 'Daily', label: 'Daily' },
   ];
+  const accountCategoryLabelMap = new Map(accountCategoryOptions.map((option) => [option.id, option.label]));
   const dateDisplayValue = activeReport.overrideDateDisplay ?? activeReport.customDateLabel ?? '';
   const periodDisplayValue = activeReport.overridePeriodDisplay ?? activeReport.customPeriodLabel ?? '';
 
   return (
-    <div className="bg-white p-5 rounded-2xl shadow-sm border border-purple-100 flex flex-col xl:flex-row gap-6 flex-shrink-0">
-      <div className="flex-1 space-y-3">
-        <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-          <Settings2 size={14} className="text-purple-500" /> Report Details
-        </h3>
+    <Card className="border border-border shadow-none ring-0">
+      <CardHeader className="border-b pb-5">
+        <CardTitle className="flex items-center gap-2 text-base font-semibold tracking-tight text-foreground">
+          <Settings2 className="size-4 text-muted-foreground" />
+          Report Details
+        </CardTitle>
+        <CardDescription className="text-sm text-muted-foreground">Configure the report, its access, and display labels.</CardDescription>
+      </CardHeader>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div>
-            <label className="block text-[10px] font-bold text-slate-600 mb-1">Report Name</label>
-            <input value={activeReport.name} onChange={e => updateActiveReport({ name: e.target.value })} className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500" />
+      <CardContent className="space-y-5 pt-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div className="space-y-2">
+            <Label className="text-foreground">Report Name</Label>
+            <Input value={activeReport.name} onChange={(e) => updateActiveReport({ name: e.target.value })} />
           </div>
-          <div>
-            <label className="block text-[10px] font-bold text-slate-600 mb-1">Company Name</label>
-            <input value={activeReport.companyName || ''} onChange={e => updateActiveReport({ companyName: e.target.value })} className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500" placeholder="Auto Mode" />
+          <div className="space-y-2">
+            <Label className="text-foreground">Company Name</Label>
+            <Input
+              value={activeReport.companyName || ''}
+              onChange={(e) => updateActiveReport({ companyName: e.target.value })}
+              placeholder="Auto mode"
+            />
           </div>
-          <div>
-            <label className="block text-[10px] font-bold text-slate-600 mb-1 flex items-center gap-1"><Palette size={10} /> Report Color Theme</label>
-            <select value={activeReport.theme || 'blue'} onChange={e => updateActiveReport({ theme: e.target.value })} className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500 bg-white">
-              {themeOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold text-slate-600 mb-1">Auto Period Format</label>
-            <select value={activeReport.periodFormat || 'standard'} onChange={e => updateActiveReport({ periodFormat: e.target.value })} className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500 bg-white">
-              {periodFormatOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold text-slate-600 mb-1">Report Type</label>
-            <select
-              value={activeReport.reportType || 'Monthly'}
-              onChange={e => updateActiveReport({
-                reportType: e.target.value,
-                day: e.target.value === 'Daily' ? (activeReport.day || '') : '',
-              })}
-              className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500 bg-white"
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2 text-foreground">
+              <Palette className="size-4 text-muted-foreground" />
+              Report Theme
+            </Label>
+            <Select
+              value={activeReport.theme || 'blue'}
+              onValueChange={(value) => {
+                onBusyTransition?.();
+                updateActiveReport({ theme: value });
+              }}
             >
-              {reportTypeOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
-            </select>
+              <SelectTrigger className="h-10 w-full rounded-xl">
+                <SelectValue placeholder="Select theme" />
+              </SelectTrigger>
+              <SelectContent position="popper">
+                {themeOptions.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <div>
-            <label className="block text-[10px] font-bold text-slate-600 mb-1">Override Date Display</label>
-            <input
+          <div className="space-y-2">
+            <Label className="text-foreground">Auto Period Format</Label>
+            <Select
+              value={activeReport.periodFormat || 'standard'}
+              onValueChange={(value) => {
+                onBusyTransition?.();
+                updateActiveReport({ periodFormat: value });
+              }}
+            >
+              <SelectTrigger className="h-10 w-full rounded-xl">
+                <SelectValue placeholder="Select format" />
+              </SelectTrigger>
+              <SelectContent position="popper">
+                {periodFormatOptions.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-foreground">Report Type</Label>
+            <Select
+              value={activeReport.reportType || 'Monthly'}
+              onValueChange={(value) => {
+                onBusyTransition?.();
+                updateActiveReport({
+                  reportType: value,
+                  day: value === 'Daily' ? (activeReport.day || '') : '',
+                });
+              }}
+            >
+              <SelectTrigger className="h-10 w-full rounded-xl">
+                <SelectValue placeholder="Select type" />
+              </SelectTrigger>
+              <SelectContent position="popper">
+                {reportTypeOptions.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-foreground">Override Date Display</Label>
+            <Input
               value={dateDisplayValue}
-              onChange={e => updateActiveReport({ customDateLabel: e.target.value, overrideDateDisplay: e.target.value })}
-              className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500"
+              onChange={(e) => updateActiveReport({ customDateLabel: e.target.value, overrideDateDisplay: e.target.value })}
               placeholder="Auto (Based on format)"
             />
           </div>
-
-          <div>
-            <label className="block text-[10px] font-bold text-slate-600 mb-1">Override Period Display</label>
-            <input
+          <div className="space-y-2">
+            <Label className="text-foreground">Override Period Display</Label>
+            <Input
               value={periodDisplayValue}
-              onChange={e => updateActiveReport({ customPeriodLabel: e.target.value, overridePeriodDisplay: e.target.value })}
-              className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500"
+              onChange={(e) => updateActiveReport({ customPeriodLabel: e.target.value, overridePeriodDisplay: e.target.value })}
               placeholder="Auto (Based on format)"
             />
           </div>
           {activeReport.reportType === 'Daily' && (
-            <div>
-              <label className="block text-[10px] font-bold text-slate-600 mb-1">Day</label>
-              <input
+            <div className="space-y-2">
+              <Label className="text-foreground">Day</Label>
+              <Input
                 value={activeReport.day || ''}
-                onChange={e => updateActiveReport({ day: e.target.value })}
-                className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500"
+                onChange={(e) => updateActiveReport({ day: e.target.value })}
                 placeholder="Daily reports only"
               />
             </div>
           )}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-600 mb-1">Owner</label>
-            <input
+          <div className="space-y-2">
+            <Label className="text-foreground">Owner</Label>
+            <Input
               value={activeReport.owner || ''}
-              onChange={e => updateActiveReport({ owner: e.target.value })}
-              className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500"
+              onChange={(e) => updateActiveReport({ owner: e.target.value })}
               placeholder={masterData?.users?.[0]?.id || 'Creator user id'}
             />
           </div>
-          <div className="col-span-1 md:col-span-3 flex flex-col md:flex-row items-start gap-3 mt-1">
-            <div className="w-full md:w-1/3">
-              <label className="block text-[10px] font-bold text-slate-600 mb-1">Account Category (AccType from DB)</label>
-              <select
-                value=""
-                onChange={e => {
-                  const val = e.target.value;
-                  if (!val) return;
-                  let currentCats = [...activeCategories];
-                  if (val === 'ALL') {
-                    updateActiveReport({ category: ['ALL'] });
-                  } else {
-                    currentCats = currentCats.filter(c => c !== 'ALL');
-                    if (!currentCats.includes(val)) currentCats.push(val);
-                    updateActiveReport({ category: currentCats });
-                  }
-                }}
-                className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500 cursor-pointer text-purple-700 font-bold bg-purple-50"
-              >
-                <option value="" disabled>+ Add Category...</option>
-                {accountCategoryOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
-              </select>
-            </div>
+        </div>
 
-            <div className="flex-1 p-3 bg-slate-50 rounded-xl border border-slate-100 flex flex-wrap items-center gap-2">
-              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mr-2">Categories:</div>
-              {activeCategories.map(cat => (
-                <span key={cat} className="px-2 py-1 rounded-md bg-white border border-slate-200 text-[10px] font-bold text-slate-600">{cat}</span>
+        <div className="space-y-2">
+          <Label className="text-foreground">Account Category</Label>
+          <div className="flex flex-col gap-2 lg:flex-row">
+            <Select
+              value=""
+              onValueChange={(value) => {
+                if (!value) return;
+                let currentCats = [...activeCategories];
+                if (value === 'ALL') {
+                  updateActiveReport({ category: ['ALL'] });
+                } else {
+                  currentCats = currentCats.filter((cat) => cat !== 'ALL');
+                  if (!currentCats.includes(value)) currentCats.push(value);
+                  updateActiveReport({ category: currentCats });
+                }
+              }}
+            >
+              <SelectTrigger className="h-10 w-full rounded-xl lg:w-[260px]">
+                <SelectValue placeholder="+ Add Category" />
+              </SelectTrigger>
+              <SelectContent position="popper">
+                {accountCategoryOptions.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex min-w-0 flex-1 flex-wrap gap-2 rounded-xl border border-border bg-muted/30 p-3">
+              {activeCategories.map((cat) => (
+                <Badge key={cat} variant="secondary" className="rounded-full px-2.5 py-1">
+                  {accountCategoryLabelMap.get(cat) || cat}
+                </Badge>
               ))}
             </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2 pt-2">
-          <button onClick={handleCloneReport} className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-[9px] font-bold hover:bg-slate-50 shadow-sm"><Copy size={12} /> Clone</button>
-          <button onClick={handleCreateBlankReport} className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-[9px] font-bold hover:bg-slate-50 shadow-sm"><FilePlus size={12} /> Blank</button>
-          <label className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-[9px] font-bold hover:bg-slate-50 shadow-sm cursor-pointer">
-            <ScanText size={12} /> OCR
-            <input type="file" accept="image/*,.pdf" onChange={handleOCRUpload} className="hidden" />
-          </label>
-          <button onClick={() => setIsAccessModalOpen(true)} className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-[9px] font-bold hover:bg-slate-50 shadow-sm"><UserCheck size={12} /> Access</button>
-          <button onClick={handleDeleteReport} className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-red-200 text-red-500 rounded-lg text-[9px] font-bold hover:bg-red-50 shadow-sm"><Trash2 size={12} /> Delete</button>
+        <Separator />
+
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+          <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleCloneReport}>
+            <Copy />
+            Clone
+          </Button>
+          <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleCreateBlankReport}>
+            <FilePlus />
+            Blank
+          </Button>
+          <Button variant="outline" className="w-full sm:w-auto" type="button" onClick={() => document.getElementById('report-ocr-upload')?.click()}>
+            <ScanText />
+            OCR
+          </Button>
+          <input
+            id="report-ocr-upload"
+            aria-label="OCR"
+            type="file"
+            accept="image/*,.pdf"
+            onChange={handleOCRUpload}
+            className="hidden"
+          />
+          <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setIsAccessModalOpen(true)}>
+            <UserCheck />
+            Access
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            className="w-full sm:w-auto border-destructive/30 bg-destructive/10 text-destructive hover:border-destructive/40 hover:bg-destructive/20"
+            onClick={handleDeleteReport}
+          >
+            <Trash2 className="text-destructive" />
+            Delete
+          </Button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3">
-          <div className="bg-purple-50/40 p-4 rounded-xl border border-purple-100 space-y-2">
-            <div className="flex items-center justify-between">
-              <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest flex items-center gap-2"><ShieldCheck size={12} className="text-purple-500" /> Access Summary</h4>
-              <button onClick={() => setIsAccessModalOpen(true)} className="text-[10px] font-bold text-purple-700 hover:underline">Manage</button>
+        <div className="grid gap-3 lg:grid-cols-2">
+          <div className="space-y-3 rounded-xl border border-border bg-muted/10 p-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
+                <ShieldCheck className="size-4 text-muted-foreground" />
+                Access Summary
+              </div>
+              <p className="text-sm text-muted-foreground">Assigned users and visibility control.</p>
             </div>
-            <p className="text-[10px] text-slate-500">Assigned Users</p>
-            <div className="bg-white rounded-lg border border-purple-100 p-3 text-xs font-medium text-slate-600 min-h-[62px] overflow-y-auto custom-scrollbar">
-              {activeReport.assignedUsers.length > 0
-                ? activeReport.assignedUsers.map(uid => masterData?.users?.find(u => u.id === uid)?.name || uid).join(', ')
-                : 'None'}
+            <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
+              <Button type="button" variant="outline" className="shrink-0" onClick={() => setIsAccessModalOpen(true)}>
+                Manage access
+              </Button>
+              <div className="flex min-w-0 items-center rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm text-foreground h-8 dark:bg-input/30">
+                {activeReport.assignedUsers.length > 0
+                  ? activeReport.assignedUsers.map((uid) => masterData?.users?.find((user) => user.id === uid)?.name || uid).join(', ')
+                  : 'None'}
+              </div>
             </div>
           </div>
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-2">
-            <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest flex items-center gap-2"><Eye size={12} className="text-slate-500" /> Status</h4>
-            <button
+
+          <div className="space-y-3 rounded-xl border border-border bg-muted/10 p-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
+                <Eye className="size-4 text-muted-foreground" />
+                Status
+              </div>
+              <p className="text-sm text-muted-foreground">Toggle whether this report is visible.</p>
+            </div>
+            <Button
+              variant="outline"
+              className={`w-full justify-center border ${activeReport.isActive !== false
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/15'
+                : 'border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15'
+              }`}
               onClick={() => updateActiveReport({ isActive: activeReport.isActive === false ? true : false })}
-              className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[10px] font-bold border transition-colors ${activeReport.isActive !== false ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100' : 'bg-slate-100 border-slate-300 text-slate-500 hover:bg-slate-200'}`}
             >
-              {activeReport.isActive !== false ? <Eye size={12} /> : <EyeOff size={12} />}
+              {activeReport.isActive !== false ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
               {activeReport.isActive !== false ? 'Active' : 'Inactive'}
-            </button>
+            </Button>
           </div>
         </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }

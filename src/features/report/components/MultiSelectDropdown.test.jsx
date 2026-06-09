@@ -20,9 +20,9 @@ describe('MultiSelectDropdown', () => {
       />
     );
 
-    expect(screen.getByTestId('selected-value-dept')).toHaveTextContent('101');
-    fireEvent.click(screen.getByText('DEPT:'));
-    fireEvent.click(screen.getByLabelText('102 - Food & Beverage'));
+    expect(screen.getByTestId('selected-value-dept')).toHaveTextContent('101 - Front Office');
+    fireEvent.click(screen.getByRole('button', { name: /DEPT/i }));
+    fireEvent.click(screen.getByRole('button', { name: '102 - Food & Beverage' }));
     expect(onChange).toHaveBeenCalledWith(['101', '102']);
   });
 
@@ -37,7 +37,7 @@ describe('MultiSelectDropdown', () => {
       />
     );
 
-    expect(within(container).getByTestId('selected-value-dept')).toHaveTextContent('ALL');
+    expect(within(container).getByTestId('selected-value-dept')).toHaveTextContent('All');
   });
 
   it('matches department codes even when the selected value is not zero-padded', () => {
@@ -55,9 +55,9 @@ describe('MultiSelectDropdown', () => {
       />
     );
 
-    fireEvent.click(screen.getByText('DEPT:'));
-    expect(screen.getByLabelText('0101 - Front Office')).toBeChecked();
-    fireEvent.click(screen.getByLabelText('0101 - Front Office'));
+    fireEvent.click(screen.getByRole('button', { name: /DEPT/i }));
+    expect(screen.getByRole('button', { name: '0101 - Front Office' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: '0101 - Front Office' }));
     expect(onChange).toHaveBeenCalledWith([]);
   });
 });

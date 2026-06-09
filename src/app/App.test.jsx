@@ -28,6 +28,18 @@ describe('App shell', () => {
     reportApiMocks.saveCarmenReport.mockClear();
     reportApiMocks.cloneCarmenReport.mockClear();
     reportApiMocks.deleteCarmenReport.mockClear();
+    delete document.documentElement.dataset.shellTemplate;
+  });
+
+  it('keeps the default shell template applied without showing template compare controls', () => {
+    render(<App />);
+
+    expect(document.documentElement.dataset.shellTemplate).toBe('classic-calm');
+    expect(screen.queryByText('Compare')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
+    expect(screen.queryByText('Compare')).not.toBeInTheDocument();
+    expect(screen.getByText('Report Details')).toBeInTheDocument();
   });
 
   it('switches from VIEW to SETUP for the admin user', () => {
@@ -42,11 +54,28 @@ describe('App shell', () => {
     expect(screen.getByText('Report Details')).toBeInTheDocument();
   });
 
+  it('updates the setup theme badge when the report theme changes', async () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
+
+    const themeSelect = screen.getAllByRole('combobox').find((select) =>
+      select.textContent?.includes('Classic Blue')
+    );
+    expect(themeSelect).toBeTruthy();
+
+    fireEvent.click(themeSelect);
+    fireEvent.click(await screen.findByRole('option', { name: 'Emerald Green' }));
+
+    await waitFor(() => expect(screen.getByText('Emerald Green theme')).toBeInTheDocument());
+  });
+
   it('hides the setup tab when the role changes to a non-admin user', () => {
     const { container } = render(<App />);
 
     const roleSelector = screen.getAllByRole('combobox')[0];
-    fireEvent.change(roleSelector, { target: { value: 'u2' } });
+    fireEvent.click(roleSelector);
+    fireEvent.click(screen.getByRole('option', { name: /General Manager \(User\)/i }));
 
     expect(screen.getByRole('button', { name: 'VIEW' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'SETUP' })).not.toBeInTheDocument();
@@ -306,7 +335,7 @@ describe('App shell', () => {
     await waitFor(() => expect(screen.queryByText('Report catalog error')).not.toBeInTheDocument());
   });
 
-  it('does not fall back to localStorage report definitions when the API catalog load fails', async () => {
+  it('falls back to localStorage report definitions when the API catalog load fails', async () => {
     const storedReports = [
       {
         id: 'rep-local-storage',
@@ -382,7 +411,7 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getByText('No Reports Available')).toBeInTheDocument());
-    expect(screen.queryByText('Local Storage Report')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Local Storage Report').length).toBeGreaterThan(0);
   });
 
   it('ignores the revision selector for reports without budget columns', async () => {
@@ -456,8 +485,11 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Actual Only').length).toBeGreaterThan(0));
-    const revisionSelect = container.querySelectorAll('select')[2];
-    fireEvent.change(revisionSelect, { target: { value: '9' } });
+    const revisionSelect = screen.getAllByRole('combobox').find((select) =>
+      select.textContent?.includes('Rev 0')
+    );
+    fireEvent.click(revisionSelect);
+    fireEvent.click(screen.getByRole('option', { name: 'Rev 9' }));
     fireEvent.click(screen.getByRole('button', { name: 'OK' }));
 
     await waitFor(() => {
@@ -999,18 +1031,19 @@ describe('App shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument());
 
-    const categorySelect = Array.from(container.querySelectorAll('select')).find((select) =>
-      Array.from(select.options).some((option) => option.textContent?.includes('+ Add Category'))
+    const categorySelect = screen.getAllByRole('combobox').find((select) =>
+      select.textContent?.includes('+ Add Category')
     );
     expect(categorySelect).toBeTruthy();
-    fireEvent.change(categorySelect, { target: { value: 'B' } });
+    fireEvent.click(categorySelect);
+    fireEvent.click(screen.getByRole('option', { name: /Balance Sheet/i }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Access' }));
     const generalManagerLabel = screen.getByText('General Manager').closest('label');
     expect(generalManagerLabel).toBeTruthy();
     fireEvent.click(generalManagerLabel);
 
-    await waitFor(() => expect(screen.getByText('B')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Balance Sheet')).toBeInTheDocument());
     expect(screen.getByText(/Admin User, General Manager/i)).toBeInTheDocument();
   });
 
@@ -1096,11 +1129,12 @@ describe('App shell', () => {
 
     const { container } = render(<App />);
 
-    await waitFor(() => expect(screen.getByDisplayValue('Finance Owner (Admin)')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByRole('combobox')[0]).toHaveTextContent('Finance Owner (Admin)'));
     const roleSelector = screen.getAllByRole('combobox')[0];
-    expect(Array.from(roleSelector.options).map((option) => option.textContent)).toEqual(
-      expect.arrayContaining(['Finance Owner (Admin)', 'Regional Viewer (User)'])
-    );
+    fireEvent.click(roleSelector);
+    expect(await screen.findByRole('option', { name: 'Finance Owner (Admin)' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Regional Viewer (User)' })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' });
 
     fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
     fireEvent.click(screen.getByRole('button', { name: 'Access' }));
@@ -1293,12 +1327,11 @@ describe('App shell', () => {
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument());
 
     const themeSelect = screen.getAllByRole('combobox').find((select) =>
-      Array.from(select.options).some((option) => option.textContent === 'Amber Theme')
+      select.textContent?.includes('Classic Blue')
     );
     expect(themeSelect).toBeTruthy();
-    expect(Array.from(themeSelect.options).map((option) => option.textContent)).toEqual(
-      expect.arrayContaining(['Amber Theme'])
-    );
+    fireEvent.click(themeSelect);
+    expect(await screen.findByRole('option', { name: 'Amber Theme' })).toBeInTheDocument();
 
     expect(screen.getByText('Columns Configurator')).toBeInTheDocument();
   });
@@ -1385,20 +1418,21 @@ describe('App shell', () => {
     await waitFor(() => expect(screen.getAllByText('Period Selector Report').length).toBeGreaterThan(0));
 
     const periodSelect = screen.getAllByRole('combobox').find((select) =>
-      Array.from(select.options).some((option) => option.textContent === 'P2 - February 28, 2025')
+      select.textContent?.includes('P2 - February 28, 2025')
     );
     expect(periodSelect).toBeTruthy();
-    expect(Array.from(periodSelect.options).map((option) => option.textContent)).toEqual(
-      expect.arrayContaining(['P1 - January 31, 2025', 'P2 - February 28, 2025'])
-    );
+    fireEvent.click(periodSelect);
+    expect(await screen.findByRole('option', { name: 'P1 - January 31, 2025' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'P2 - February 28, 2025' })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' });
 
     const revisionSelect = screen.getAllByRole('combobox').find((select) =>
-      Array.from(select.options).some((option) => option.textContent === 'Rev 9')
+      select.textContent?.includes('Rev 0')
     );
     expect(revisionSelect).toBeTruthy();
-    expect(Array.from(revisionSelect.options).map((option) => option.textContent)).toEqual(
-      expect.arrayContaining(['Rev 0', 'Rev 9'])
-    );
+    fireEvent.click(revisionSelect);
+    expect(await screen.findByRole('option', { name: 'Rev 0' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Rev 9' })).toBeInTheDocument();
   });
 
   it('includes day in the report data API call when the report uses PTD columns', async () => {

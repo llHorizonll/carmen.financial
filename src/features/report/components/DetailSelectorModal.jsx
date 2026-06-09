@@ -1,6 +1,18 @@
 import React, { useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { normalizeDeptLookupCode } from '../lib/normalizeCode.js';
+import { Button } from '@/components/ui/button.jsx';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog.jsx';
+import { Input } from '@/components/ui/input.jsx';
+import { ScrollArea } from '@/components/ui/scroll-area.jsx';
+import { Separator } from '@/components/ui/separator.jsx';
 
 export default function DetailSelectorModal({
   title,
@@ -16,7 +28,7 @@ export default function DetailSelectorModal({
 
   const uniqueSortedAvailable = useMemo(() => {
     const uniqueMap = new Map();
-    availableItems.forEach(item => {
+    availableItems.forEach((item) => {
       const idKey = String(item.id).trim();
       if (idKey !== '' && !uniqueMap.has(idKey)) uniqueMap.set(idKey, item);
     });
@@ -27,7 +39,7 @@ export default function DetailSelectorModal({
 
   const availableByLookupKey = useMemo(() => {
     const lookup = new Map();
-    uniqueSortedAvailable.forEach(item => {
+    uniqueSortedAvailable.forEach((item) => {
       const key = normalizeDeptLookupCode(item.id);
       if (!lookup.has(key)) lookup.set(key, item);
     });
@@ -39,7 +51,7 @@ export default function DetailSelectorModal({
     [tempSelected]
   );
 
-  const filteredAvailable = uniqueSortedAvailable.filter(item =>
+  const filteredAvailable = uniqueSortedAvailable.filter((item) =>
     !selectedLookupKeys.has(normalizeDeptLookupCode(item.id)) &&
     (String(item.id).toLowerCase().includes(searchTerm.toLowerCase()) || String(item.name).toLowerCase().includes(searchTerm.toLowerCase()))
   );
@@ -50,58 +62,93 @@ export default function DetailSelectorModal({
   };
   const handleRemove = (id) => {
     const key = normalizeDeptLookupCode(id);
-    setTempSelected(tempSelected.filter(i => normalizeDeptLookupCode(i) !== key));
+    setTempSelected(tempSelected.filter((item) => normalizeDeptLookupCode(item) !== key));
   };
-  const handleSelectAll = () => setTempSelected([...tempSelected, ...filteredAvailable.map(i => String(i.id))]);
+  const handleSelectAll = () => setTempSelected([...tempSelected, ...filteredAvailable.map((item) => String(item.id))]);
   const handleRemoveAll = () => setTempSelected([]);
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[120] p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-[800px] flex flex-col border border-purple-100 overflow-hidden">
-        <div className="bg-purple-50 px-6 py-4 border-b border-purple-100"><h2 className="text-xl font-bold text-purple-900">{title}</h2></div>
-        <div className="p-6 space-y-4">
-          <h3 className="text-lg font-bold text-slate-700">{subTitle}</h3>
-          <div className="flex border border-purple-200 rounded-xl overflow-hidden h-[350px] shadow-sm">
-            <div className="flex-1 flex flex-col border-r border-purple-200 bg-white">
-              <div className="flex items-center border-b border-purple-200 bg-purple-50/50">
-                <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search..." className="w-full px-4 py-3 text-sm outline-none bg-transparent placeholder-slate-400 text-slate-700 flex-1" />
-                <button onClick={handleSelectAll} className="bg-purple-600 text-white px-6 py-3 text-sm font-bold hover:bg-purple-700 transition-colors">Select All</button>
-              </div>
-              <div className="overflow-y-auto flex-1 custom-scrollbar">
-                {filteredAvailable.map(item => (
-                  <div key={item.id} onClick={() => handleSelect(item.id)} className="px-4 py-3 text-sm text-slate-700 hover:bg-purple-50 cursor-pointer border-b border-slate-50 transition-colors">
-                    <span className="font-mono font-bold text-purple-700 mr-2">{item.id}</span> {item.name}
-                  </div>
-                ))}
-                {filteredAvailable.length === 0 && <div className="p-4 text-center text-slate-400 text-sm">No items found</div>}
-              </div>
+    <Dialog open onOpenChange={(open) => !open && onCancel()}>
+      <DialogContent
+        className="w-[calc(100vw-1rem)] max-w-6xl"
+        style={{ width: 'min(98vw, 90rem)', maxWidth: 'min(98vw, 90rem)' }}
+      >
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{subTitle}</DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-xl border border-border bg-background">
+            <div className="flex flex-col gap-2 border-b bg-muted/30 p-3 sm:flex-row">
+              <Input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search..." className="h-9" />
+              <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleSelectAll}>
+                Select all
+              </Button>
             </div>
-            <div className="flex-1 flex flex-col bg-white">
-              <div className="flex items-center justify-between border-b border-purple-200 bg-purple-50/50">
-                <div className="px-4 py-3 text-sm font-bold text-purple-700">{tempSelected.length} Items selected</div>
-                <button onClick={handleRemoveAll} className="bg-red-500 text-white px-6 py-3 text-sm font-bold hover:bg-red-600 transition-colors">Remove All</button>
+            <ScrollArea className="h-[min(54vh,420px)]">
+              <div className="divide-y">
+                {filteredAvailable.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleSelect(item.id)}
+                    className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm hover:bg-muted/30"
+                  >
+                    <span className="font-mono font-semibold text-primary">{item.id}</span>
+                    <span className="text-foreground">{item.name}</span>
+                  </button>
+                ))}
+                {filteredAvailable.length === 0 && <div className="p-4 text-center text-sm text-muted-foreground">No items found</div>}
               </div>
-              <div className="overflow-y-auto flex-1 custom-scrollbar">
-                {tempSelected.map(id => {
+            </ScrollArea>
+          </div>
+
+          <div className="rounded-xl border border-border bg-background">
+            <div className="flex items-center justify-between gap-2 border-b bg-muted/30 p-3">
+              <div className="text-sm font-medium">{tempSelected.length} Items selected</div>
+              <Button
+                type="button"
+                variant="destructive"
+                className="w-full sm:w-auto border-destructive/30 bg-destructive/10 text-destructive hover:border-destructive/40 hover:bg-destructive/20"
+                onClick={handleRemoveAll}
+              >
+                Remove all
+              </Button>
+            </div>
+            <ScrollArea className="h-[min(54vh,420px)]">
+              <div className="divide-y">
+                {tempSelected.map((id) => {
                   const normalizedId = normalizeDeptLookupCode(id);
                   const fullItem = availableByLookupKey.get(normalizedId)
-                    || [...(masterData?.accCodes || []), ...(masterData?.depts || [])].find(i => normalizeDeptLookupCode(i.id) === normalizedId);
+                    || [...(masterData?.accCodes || []), ...(masterData?.depts || [])].find((item) => normalizeDeptLookupCode(item.id) === normalizedId);
                   return (
-                    <div key={id} onClick={() => handleRemove(id)} className="px-4 py-3 text-sm text-slate-800 hover:bg-red-50 cursor-pointer border-b border-slate-50 flex justify-between group transition-colors">
-                      <span><span className="font-mono font-bold text-purple-700 mr-2">{id}</span> {fullItem?.name}</span>
-                      <X size={14} className="text-red-400 opacity-0 group-hover:opacity-100" />
-                    </div>
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => handleRemove(id)}
+                      className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-sm hover:bg-destructive/5"
+                    >
+                      <span>
+                        <span className="font-mono font-semibold text-primary">{id}</span>{' '}
+                        <span>{fullItem?.name}</span>
+                      </span>
+                      <X className="size-4 text-destructive" />
+                    </button>
                   );
                 })}
               </div>
-            </div>
+            </ScrollArea>
           </div>
         </div>
-        <div className="px-6 py-4 flex justify-end gap-3 bg-purple-50/50 border-t border-purple-100">
-          <button onClick={onCancel} className="bg-white border border-purple-200 text-slate-600 px-6 py-2.5 rounded-xl shadow-sm hover:bg-slate-50 font-bold text-sm transition-all">CANCEL</button>
-          <button onClick={() => onSave(tempSelected)} className="bg-purple-600 text-white px-8 py-2.5 rounded-xl shadow-md hover:bg-purple-700 font-bold text-sm transition-all">SAVE SELECTION</button>
-        </div>
-      </div>
-    </div>
+
+        <Separator />
+
+        <DialogFooter className="flex-col-reverse sm:flex-row">
+          <Button variant="outline" className="w-full sm:w-auto" onClick={onCancel}>Cancel</Button>
+          <Button className="w-full sm:w-auto" onClick={() => onSave(tempSelected)}>Save selection</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -198,7 +198,7 @@ describe('reportLogic helpers', () => {
     })).toEqual(expect.arrayContaining([
       'Dept and account code are both set.',
       'Grouped rows should not mix with explicit account codes.',
-      'Unknown account code(s): 4001.',
+      'unknown account code(s): 4001.',
     ]));
 
     expect(findRowMappingConflicts({ rows }, {

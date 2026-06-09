@@ -1,10 +1,46 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   FileText,
-  Printer, Menu, BarChart3,
+  Menu,
+  BarChart3,
   ShieldCheck,
-  ZoomIn, ZoomOut, UploadCloud, Download, RefreshCw
+  ZoomIn,
+  ZoomOut,
+  Download,
+  RefreshCw,
+  Printer,
+  LogOut,
+  MoonStar,
+  SunMedium,
 } from 'lucide-react';
+
+import { useIsMobile } from '@/hooks/use-mobile.js';
+import { Button } from '@/components/ui/button.jsx';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card.jsx';
+import { Badge } from '@/components/ui/badge.jsx';
+import { Input } from '@/components/ui/input.jsx';
+import { Slider } from "@/components/ui/slider"
+import { ScrollArea } from '@/components/ui/scroll-area.jsx';
+import { Skeleton } from '@/components/ui/skeleton.jsx';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet.jsx';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select.jsx';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog.jsx';
+import { applyShellTemplate, DEFAULT_SHELL_TEMPLATE, getStoredTheme, setStoredTheme } from '../lib/theme.js';
 
 import DetailSelectorModal from '../features/report/components/DetailSelectorModal.jsx';
 import MultiSelectDropdown from '../features/report/components/MultiSelectDropdown.jsx';
@@ -188,8 +224,11 @@ const writeStoredReports = (reports) => {
 // ============================================================================
 export default function App({ onLogout = null }) {
   const [activeTab, setActiveTab] = useState('report');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [themeMode, setThemeMode] = useState(() => getStoredTheme());
+  const [isPageTransitioning, setIsPageTransitioning] = useState(false);
+  const [isSetupSaving, setIsSetupSaving] = useState(false);
+
   const [alertMsg, setAlertMsg] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
   
@@ -229,6 +268,7 @@ export default function App({ onLogout = null }) {
   const glUploadRef = useRef(null);
   const budUploadRef = useRef(null);
   const reportSaveTimerRef = useRef(null);
+  const pageTransitionTimerRef = useRef(null);
   const reportDataFetchSkipRef = useRef(false);
 
   // --- Report Configuration Data ---
@@ -242,6 +282,7 @@ export default function App({ onLogout = null }) {
   const [detailSelecting, setDetailSelecting] = useState(null); 
   const [isAccessModalOpen, setIsAccessModalOpen] = useState(false); 
   const [modalAccCategory, setModalAccCategory] = useState('ALL'); 
+  const isMobile = useIsMobile();
 
   const canSetupReports = canSetupFinancialReports(currentUser);
   const accessibleReports = useMemo(() => getAccessibleReports(reports, currentUser), [reports, currentUser]);
@@ -392,6 +433,9 @@ export default function App({ onLogout = null }) {
           const reason = optionsResult.status === 'rejected'
             ? optionsResult.reason
             : reportsResult.reason;
+          const fallbackReports = readStoredReports() || getDefaultReports();
+          setReports(fallbackReports);
+          setReportsLoaded(true);
           throw reason || new Error('Unable to load Carmen report catalog.');
         }
         setReportCatalogError(null);
@@ -401,12 +445,8 @@ export default function App({ onLogout = null }) {
             onLogout();
             return;
           }
-          if (apiConfigured) {
-            setReports([]);
-          } else {
-            const fallbackReports = readStoredReports() || getDefaultReports();
-            setReports(fallbackReports);
-          }
+          const fallbackReports = readStoredReports() || getDefaultReports();
+          setReports(fallbackReports);
           setReportsLoaded(true);
           setReportCatalogError(error.message || 'Unable to load Carmen report catalog.');
         }
@@ -487,9 +527,17 @@ export default function App({ onLogout = null }) {
 
     setReportCatalogError(null);
     reportSaveTimerRef.current = setTimeout(() => {
-      saveCarmenReport(activeReport).catch((error) => {
-        setReportCatalogError(error.message || 'Unable to save report definition.');
-      });
+      setIsSetupSaving(true);
+      saveCarmenReport(activeReport)
+        .then(() => {
+          setReportCatalogError(null);
+        })
+        .catch((error) => {
+          setReportCatalogError(error.message || 'Unable to save report definition.');
+        })
+        .finally(() => {
+          setIsSetupSaving(false);
+        });
     }, 350);
 
     return () => {
@@ -595,6 +643,9 @@ export default function App({ onLogout = null }) {
     setAppliedYear(globalYear);
     setAppliedPeriod(globalPeriod);
     const nextRevision = activeReportUsesBudget ? globalRevision : '0';
+    if (!activeReportUsesBudget && String(globalRevision) !== '0') {
+      setAlertMsg('Revision selector is ignored for reports without budget columns.');
+    }
     setGlobalRevision(nextRevision);
     setAppliedRevision(nextRevision);
   };
@@ -828,225 +879,494 @@ export default function App({ onLogout = null }) {
   };
 
   const currentTheme = THEMES[activeReport?.theme || 'blue'];
+  const showPageSkeleton = isPageTransitioning || isSetupSaving;
+
+  const triggerPageTransition = () => {
+    if (pageTransitionTimerRef.current) {
+      clearTimeout(pageTransitionTimerRef.current);
+    }
+    setIsPageTransitioning(true);
+    pageTransitionTimerRef.current = setTimeout(() => {
+      setIsPageTransitioning(false);
+      pageTransitionTimerRef.current = null;
+    }, 700);
+  };
+
+  useLayoutEffect(() => {
+    setStoredTheme(themeMode);
+  }, [themeMode]);
+
+  useLayoutEffect(() => {
+    applyShellTemplate(DEFAULT_SHELL_TEMPLATE, themeMode);
+  }, [themeMode]);
+
+  useEffect(() => {
+    return () => {
+      if (pageTransitionTimerRef.current) {
+        clearTimeout(pageTransitionTimerRef.current);
+      }
+    };
+  }, []);
 
   // ============================================================================
   // 4. RENDER UI
   // ============================================================================
+  const sidebarPanel = (
+    <div className="flex h-full flex-col bg-background">
+      <div className="flex items-center justify-between border-b px-4 py-4">
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+            <BarChart3 className="size-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold tracking-tight">BI HUB</div>
+            <div className="text-xs text-muted-foreground">Financial reporting</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="border-b p-4">
+        <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+          <ShieldCheck className="size-4" />
+          {userSelectorLabel}
+        </div>
+        <Select
+          aria-label="User selector"
+          value={currentUser?.id || ''}
+          onValueChange={(value) => {
+            const selectedUser = reportUsers.find((user) => user.id === value);
+            if (!selectedUser) return;
+            const selectedReports = getAccessibleReports(reports, selectedUser);
+            setCurrentUser(selectedUser);
+            if (!selectedReports.some((report) => report.id === currentReportId)) {
+              setCurrentReportId(selectedReports[0]?.id || null);
+            }
+            if (!canSetupFinancialReports(selectedUser)) {
+              setActiveTab('report');
+            }
+          }}
+        >
+          <SelectTrigger className="h-10 w-full rounded-xl">
+            <SelectValue placeholder="Select user" />
+          </SelectTrigger>
+          <SelectContent position="popper">
+            {reportUsers.map((user) => (
+              <SelectItem key={user.id} value={user.id}>
+                {user.name} ({canSetupFinancialReports(user) ? 'Admin' : 'User'})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <ScrollArea className="flex-1">
+        <div className="p-3">
+          <div className="mb-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Reports
+          </div>
+          <div className="flex flex-col gap-1">
+            {accessibleReports.map((report) => (
+              <Button
+                key={report.id}
+                variant={currentReportId === report.id ? 'secondary' : 'ghost'}
+                className="w-full justify-start gap-2"
+                onClick={() => setCurrentReportId(report.id)}
+              >
+                <FileText className="size-4" />
+                <span className="truncate">{report.name}</span>
+              </Button>
+            ))}
+          </div>
+          {accessibleReports.length === 0 && (
+            <div className="px-2 py-8 text-sm text-muted-foreground">No reports available.</div>
+          )}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+
   return (
-    <div className="flex h-screen bg-[#FDFCFE] overflow-hidden font-sans text-slate-800">
-      
-      {/* CUSTOM ALERTS & CONFIRMS */}
+    <div className="flex min-h-screen bg-background text-foreground">
       {alertMsg && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 w-96 text-center border border-purple-100">
-            <p className="text-slate-800 font-bold mb-6 whitespace-pre-line text-sm">{alertMsg}</p>
-            <button onClick={() => setAlertMsg(null)} className="bg-purple-600 text-white px-8 py-2.5 rounded-xl font-bold hover:bg-purple-700 shadow-md">OK</button>
-          </div>
+        <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 px-4 sm:right-4 sm:left-auto sm:px-0">
+          <Card className="pointer-events-auto mx-auto w-[min(34rem,calc(100vw-2rem))] border border-border/80 bg-background/98 shadow-xl ring-1 ring-black/5 backdrop-blur-sm max-sm:w-full">
+            <CardHeader className="space-y-1.5 pb-3">
+              <CardTitle className="text-base tracking-tight">Notice</CardTitle>
+              <CardDescription className="whitespace-pre-line text-sm leading-6">{alertMsg}</CardDescription>
+            </CardHeader>
+            <CardContent className="flex justify-end pt-0">
+              <Button variant="outline" size="sm" onClick={() => setAlertMsg(null)}>OK</Button>
+            </CardContent>
+          </Card>
         </div>
       )}
-      {confirmAction && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 w-96 text-center border border-purple-100">
-            <p className="text-slate-800 font-bold mb-6 text-sm">{confirmAction.msg}</p>
-            <div className="flex justify-center gap-3">
-              <button onClick={() => setConfirmAction(null)} className="bg-slate-100 text-slate-600 px-6 py-2.5 rounded-xl font-bold hover:bg-slate-200">Cancel</button>
-              <button onClick={() => { confirmAction.onConfirm(); setConfirmAction(null); }} className="bg-red-500 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-red-600 shadow-md">Confirm</button>
+
+      {showPageSkeleton && (
+        <div className="fixed inset-0 z-[60] bg-background/80 backdrop-blur-sm">
+          <div className="flex h-full flex-col">
+            <div className="border-b border-border/60 bg-background/80 px-4 py-3 backdrop-blur lg:px-6">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-8 w-16 rounded-xl" />
+                  <Skeleton className="h-8 w-16 rounded-xl" />
+                  <Skeleton className="h-6 w-28 rounded-full" />
+                </div>
+                <Skeleton className="h-8 w-28 rounded-full" />
+              </div>
+            </div>
+
+            <div className="flex min-h-0 flex-1 overflow-hidden p-4 lg:p-6">
+              <div className="mx-auto flex h-full w-full max-w-[1800px] min-h-0 flex-col gap-4">
+                {activeTab === 'report' ? (
+                  <>
+                    <Skeleton className="h-[8.5rem] w-full rounded-2xl border border-border/50 bg-card/80" />
+                    <div className="flex justify-end">
+                      <Skeleton className="h-[5rem] w-full max-w-[22rem] rounded-2xl border border-border/50 bg-card/80" />
+                    </div>
+                    <Skeleton className="min-h-0 flex-1 w-full rounded-2xl border border-border/50 bg-card/80" />
+                  </>
+                ) : (
+                  <div className="flex min-h-0 flex-1 flex-col gap-4">
+                    <Skeleton className="h-[12rem] w-full rounded-2xl border border-border/50 bg-card/80" />
+                    <Skeleton className="h-[20rem] w-full rounded-2xl border border-border/50 bg-card/80" />
+                    <Skeleton className="h-[28rem] w-full rounded-2xl border border-border/50 bg-card/80" />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* --- SIDEBAR --- */}
-      <aside className={`bg-white border-r border-purple-100 transition-all duration-300 flex flex-col print:hidden flex-shrink-0 ${isSidebarOpen ? 'w-72' : 'w-20'}`}>
-        <div className="p-5 flex items-center justify-between border-b border-purple-100">
-          <div className={`flex items-center gap-3 ${!isSidebarOpen && 'hidden'}`}>
-            <div className="bg-purple-600 p-2 rounded-lg shadow-md text-white"><BarChart3 size={18}/></div>
-            <div className="flex flex-col">
-               <span className="font-black text-base tracking-tight uppercase text-purple-900 leading-none">BI HUB</span>
-               <span className="text-[9px] font-bold text-purple-400">Version 1.0</span>
-            </div>
-          </div>
-          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="hover:bg-purple-50 p-2 rounded-lg text-purple-600 transition-colors"><Menu size={18}/></button>
-        </div>
-        
-        {/* Simulate Role Selector */}
-        <div className={`p-4 mx-4 mt-4 bg-purple-50 rounded-xl border border-purple-100 ${!isSidebarOpen && 'hidden'}`}>
-          <span className="text-[10px] font-black text-purple-500 uppercase tracking-widest flex items-center gap-1 mb-1.5"><ShieldCheck size={12}/> {userSelectorLabel}</span>
-          <select value={currentUser?.id || ''} onChange={e => {
-              const selectedUser = reportUsers.find(u=>u.id===e.target.value);
-              if (!selectedUser) return;
-              const selectedReports = getAccessibleReports(reports, selectedUser);
-              setCurrentUser(selectedUser);
-              if (!selectedReports.some(report => report.id === currentReportId)) {
-                setCurrentReportId(selectedReports[0]?.id || null);
-              }
-              if (!canSetupFinancialReports(selectedUser)) {
-                setActiveTab('report');
-              }
-            }} className="w-full bg-white text-xs font-bold text-purple-900 border border-purple-200 rounded-md px-2 py-1 outline-none cursor-pointer">
-            {reportUsers.map(u => <option key={u.id} value={u.id}>{u.name} ({canSetupFinancialReports(u) ? 'Admin' : 'User'})</option>)}
-          </select>
-        </div>
+      <AlertDialog open={Boolean(confirmAction)} onOpenChange={(open) => !open && setConfirmAction(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm action</AlertDialogTitle>
+            <AlertDialogDescription>{confirmAction?.msg || ''}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setConfirmAction(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                confirmAction?.onConfirm?.();
+                setConfirmAction(null);
+              }}
+            >
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
-        <div className="flex-1 overflow-y-auto p-3 space-y-1.5 mt-2">
-          {accessibleReports.map(rep => (
-            <button key={rep.id} onClick={() => setCurrentReportId(rep.id)} className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all font-bold ${currentReportId === rep.id ? 'bg-purple-100 text-purple-800' : 'text-slate-500 hover:bg-purple-50 hover:text-purple-700'}`}>
-              <FileText size={16} className={currentReportId === rep.id ? 'text-purple-600' : 'text-slate-400'}/>
-              {isSidebarOpen && <span className="text-sm truncate">{rep.name}</span>}
-            </button>
-          ))}
-          {accessibleReports.length === 0 && <div className="text-xs text-slate-400 text-center mt-10">No Reports Available</div>}
-        </div>
-      </aside>
+      {isMobile ? (
+        <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
+          <SheetContent side="left" className="w-[18rem] p-0">
+            <SheetHeader className="sr-only">
+              <SheetTitle>Reports</SheetTitle>
+              <SheetDescription>Report navigation and user switching.</SheetDescription>
+            </SheetHeader>
+            {sidebarPanel}
+          </SheetContent>
+        </Sheet>
+      ) : (
+        <aside className="hidden w-80 flex-col border-r bg-background/95 lg:flex print:hidden">
+          {sidebarPanel}
+        </aside>
+      )}
 
-      {/* --- MAIN WORKSPACE --- */}
-      <main className="flex-1 overflow-hidden flex flex-col relative print:bg-white bg-[#FDFCFE]">
-        
-        {/* Header แบ่ง 2 บรรทัด */}
-        <header className="flex-shrink-0 z-40 bg-white/90 backdrop-blur-md border-b border-purple-100 p-3 px-6 flex flex-col gap-3 print:hidden shadow-sm">
-          <div className="flex justify-between items-center">
-              <div className="flex items-center gap-6">
-                <div className="flex bg-purple-50 p-1 rounded-lg border border-purple-100">
-                  <button onClick={() => setActiveTab('report')} className={`px-5 py-1.5 rounded-md text-[11px] font-black transition-all ${activeTab === 'report' ? 'bg-white shadow-sm text-purple-700' : 'text-purple-400 hover:text-purple-600'}`}>VIEW</button>
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="border-b bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/80 print:hidden">
+          <div className="flex flex-col gap-3 px-4 py-3 lg:px-6">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                {isMobile && (
+                  <Button variant="ghost" size="icon-sm" onClick={() => setIsSidebarOpen(true)}>
+                    <Menu />
+                    <span className="sr-only">Open navigation</span>
+                  </Button>
+                )}
+
+                <div className="inline-flex items-center rounded-xl bg-muted p-1 shadow-inner ring-1 ring-border/60">
+                  <Button
+                    type="button"
+                    variant={activeTab === 'report' ? 'default' : 'ghost'}
+                    className={`h-8 px-4 ${activeTab === 'report' ? 'shadow-sm' : 'text-muted-foreground'}`}
+                    onClick={() => setActiveTab('report')}
+                    aria-current={activeTab === 'report' ? 'page' : undefined}
+                  >
+                    VIEW
+                  </Button>
                   {canSetupReports && (
-                    <button onClick={() => setActiveTab('setup')} className={`px-5 py-1.5 rounded-md text-[11px] font-black transition-all ${activeTab === 'setup' ? 'bg-white shadow-sm text-purple-700' : 'text-purple-400 hover:text-purple-600'}`}>SETUP</button>
+                    <Button
+                      type="button"
+                      variant={activeTab === 'setup' ? 'default' : 'ghost'}
+                      className={`h-8 px-4 ${activeTab === 'setup' ? 'shadow-sm' : 'text-muted-foreground'}`}
+                      onClick={() => setActiveTab('setup')}
+                      aria-current={activeTab === 'setup' ? 'page' : undefined}
+                    >
+                      SETUP
+                    </Button>
                   )}
                 </div>
-                {activeTab === 'setup' && <h2 className="text-lg font-black text-slate-800 tracking-tight">Configuration Mode</h2>}
-                {isMasterDataLoading && <span className="text-[10px] font-black uppercase tracking-widest text-blue-500">Syncing Carmen</span>}
-                {isReportCatalogLoading && <span className="text-[10px] font-black uppercase tracking-widest text-blue-500">Loading report catalog</span>}
-                {masterDataError && <span className="text-[10px] font-black uppercase tracking-widest text-red-500" title={masterDataError}>Carmen API unavailable</span>}
-                {reportCatalogError && <span className="text-[10px] font-black uppercase tracking-widest text-red-500" title={reportCatalogError}>Report catalog error</span>}
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {activeTab === 'setup' && <Badge variant="secondary">Configuration</Badge>}
+                  {isMasterDataLoading && <Badge variant="outline">Syncing master data</Badge>}
+                  {isReportCatalogLoading && <Badge variant="outline">Loading catalog</Badge>}
+                  {masterDataError && (
+                    <Badge
+                      variant="destructive"
+                      title={masterDataError}
+                      className="rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.12em]"
+                      style={{
+                        backgroundColor: 'color-mix(in oklch, var(--destructive) 16%, transparent)',
+                        borderColor: 'color-mix(in oklch, var(--destructive) 30%, transparent)',
+                      }}
+                    >
+                      Carmen API unavailable
+                    </Badge>
+                  )}
+                  {reportCatalogError && (
+                    <Badge
+                      variant="destructive"
+                      title={reportCatalogError}
+                      className="rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.12em]"
+                      style={{
+                        backgroundColor: 'color-mix(in oklch, var(--destructive) 16%, transparent)',
+                        borderColor: 'color-mix(in oklch, var(--destructive) 30%, transparent)',
+                      }}
+                    >
+                      Report catalog error
+                    </Badge>
+                  )}
+                </div>
               </div>
-            {typeof onLogout === 'function' && (
-              <button
-                onClick={onLogout}
-                className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200"
-              >
-                Logout
-              </button>
-            )}
+
+              <div className="flex w-full flex-col gap-2 xl:max-w-[42rem] xl:items-end">
+                <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      triggerPageTransition();
+                      setThemeMode(themeMode === 'light' ? 'dark' : 'light');
+                    }}
+                    aria-pressed={themeMode === 'dark'}
+                    aria-label={themeMode === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+                  >
+                    {themeMode === 'light' ? <MoonStar /> : <SunMedium />}
+                    <span>{themeMode === 'light' ? 'Dark mode' : 'Light mode'}</span>
+                  </Button>
+                  {typeof onLogout === 'function' && (
+                    <Button variant="outline" size="sm" onClick={onLogout}>
+                      <LogOut />
+                      Logout
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
 
             {activeTab === 'report' && (
-               <div className="flex items-center gap-2 bg-white p-1 px-3 rounded-lg border border-purple-100 shadow-sm hidden md:flex flex-shrink-0">
-                  <ZoomOut size={14} className="text-purple-400 cursor-pointer hover:text-purple-700" onClick={()=>setTableZoom(Math.max(50, tableZoom - 10))}/>
-                  <input type="range" min="50" max="150" value={tableZoom} onChange={e=>setTableZoom(Number(e.target.value))} className="w-16 accent-purple-600" />
-                  <ZoomIn size={14} className="text-purple-400 cursor-pointer hover:text-purple-700" onClick={()=>setTableZoom(Math.min(150, tableZoom + 10))}/>
-                  <span className="text-[10px] font-black text-purple-700 w-8 text-right">{tableZoom}%</span>
-               </div>
+              <Card className="border border-border bg-card/95 shadow-none ring-0">
+                <CardContent className="flex flex-col gap-4 p-3">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,0.72fr)_minmax(0,0.72fr)_minmax(0,0.72fr)_auto] xl:items-end">
+                    <div className="min-w-0">
+                      <MultiSelectDropdown
+                        testIdPrefix="dept"
+                        label="DEPT"
+                        options={masterData.depts}
+                        selected={globalDepts}
+                        onChange={setGlobalDepts}
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Year</span>
+                      <Input
+                        type="number"
+                        value={globalYear}
+                        onChange={(event) => setGlobalYear(event.target.value)}
+                        className="h-10 w-full px-3 text-sm"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Period</span>
+                      <Select value={globalPeriod} onValueChange={setGlobalPeriod}>
+                        <SelectTrigger className="!h-10 w-full min-w-0 rounded-xl px-3 text-sm">
+                          <SelectValue placeholder="Period" />
+                        </SelectTrigger>
+                        <SelectContent position="popper">
+                          {periodSelectOptions.map((option) => (
+                            <SelectItem key={option.id} value={String(option.id)}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Rev</span>
+                      <Select
+                        value={globalRevision}
+                        onValueChange={(nextValue) => {
+                          if (!activeReportUsesBudget && nextValue !== '0') {
+                            setGlobalRevision('0');
+                            setAppliedRevision('0');
+                            setAlertMsg('Revision selector is ignored for reports without budget columns.');
+                            return;
+                          }
+                          setGlobalRevision(nextValue);
+                        }}
+                      >
+                        <SelectTrigger className="!h-10 w-full min-w-0 rounded-xl px-3 text-sm">
+                          <SelectValue placeholder="Revision" />
+                        </SelectTrigger>
+                        <SelectContent position="popper">
+                          {revisionSelectOptions.map((option) => (
+                            <SelectItem key={option.id} value={String(option.id)}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <Button size="sm" className="h-10 w-full px-4 text-xs xl:w-auto" onClick={handleApplyFilters}>Apply</Button>
+                  </div>
+
+                  <div className="flex flex-col gap-3 border-t border-border/70 pt-3 xl:flex-row xl:items-center xl:justify-between">
+                    <div className="flex w-full flex-1 items-center gap-2 rounded-xl border border-border bg-background/80 px-3 py-3 shadow-sm xl:max-w-[42rem]">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-lg"
+                        className="shrink-0 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+                        onClick={() => setTableZoom((current) => Math.max(50, current - 10))}
+                        aria-label="Zoom out"
+                        title="Zoom out"
+                      >
+                        <ZoomOut className="size-4" />
+                      </Button>
+                      <Slider
+                        value={[tableZoom]}
+                        min={50}
+                        max={150}
+                        step={10}
+                        onValueChange={(value) => setTableZoom(value[0] || 100)}
+                        className="min-w-0 flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-lg"
+                        className="shrink-0 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+                        onClick={() => setTableZoom((current) => Math.min(150, current + 10))}
+                        aria-label="Zoom in"
+                        title="Zoom in"
+                      >
+                        <ZoomIn className="size-4" />
+                      </Button>
+                      <span className="w-10 text-right text-xs font-medium tabular-nums text-foreground/70">{tableZoom}%</span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full sm:w-auto"
+                        onClick={() => handleSyncReportData('gl')}
+                        title={apiConfigured ? 'Refresh GL data from Carmen API' : 'Fallback to GL CSV import'}
+                      >
+                        <RefreshCw />
+                        GL
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full sm:w-auto"
+                        onClick={() => handleSyncReportData('bud')}
+                        title={apiConfigured ? 'Refresh budget data from Carmen API' : 'Fallback to budget CSV import'}
+                      >
+                        <RefreshCw />
+                        BUD
+                      </Button>
+                      <input ref={glUploadRef} type="file" accept=".csv" onChange={(e) => handleFileUpload(e)} className="hidden" />
+                      <input ref={budUploadRef} type="file" accept=".csv" onChange={(e) => handleBudgetUpload(e)} className="hidden" />
+                      <Button variant="outline" size="sm" className="h-10 w-full px-4 text-xs sm:w-auto" onClick={exportToExcel} title="Export to Excel">
+                        <Download />
+                        Excel
+                      </Button>
+                      <Button className="h-10 w-full px-4 text-xs sm:w-auto" size="sm" variant="outline" onClick={() => window.print()} title="Print">
+                        <Printer />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             )}
           </div>
-
-          {/* Row 2: Parameters & Export Panel (ใช้เลื่อนซ้ายขวาตามแบบ V5.12 ต้นฉบับ) */}
-          {activeTab === 'report' && (
-               <div className="flex flex-wrap items-center gap-2 bg-white p-2 rounded-lg border border-purple-100 shadow-sm w-full relative z-40">
-                  <MultiSelectDropdown testIdPrefix="dept" label="DEPT" options={masterData.depts} selected={globalDepts} onChange={setGlobalDepts} />
-                  <div className="h-4 w-px bg-purple-100 flex-shrink-0 mx-1"></div>
-                  
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                     <span className="text-[9px] font-black text-purple-400 uppercase tracking-widest">Year:</span>
-                     <input type="number" value={globalYear} onChange={e=>setGlobalYear(e.target.value)} className="w-12 text-[11px] font-bold bg-transparent outline-none text-purple-900" />
-                  </div>
-                  <div className="h-4 w-px bg-purple-100 flex-shrink-0 mx-1"></div>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                     <span className="text-[9px] font-black text-purple-400 uppercase tracking-widest">Period:</span>
-                     <select value={globalPeriod} onChange={e=>setGlobalPeriod(e.target.value)} className="text-[11px] font-bold bg-transparent outline-none text-purple-900 cursor-pointer">
-                        {periodSelectOptions.map(option => <option key={option.id} value={String(option.id)}>{option.label}</option>)}
-                     </select>
-                  </div>
-                  <div className="h-4 w-px bg-purple-100 flex-shrink-0 mx-1"></div>
-                  
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                     <span className="text-[9px] font-black text-purple-400 uppercase tracking-widest">Rev:</span>
-                     <select value={globalRevision} onChange={e=>setGlobalRevision(e.target.value)} className="text-[11px] font-bold bg-transparent outline-none text-purple-900 cursor-pointer">
-                        {revisionSelectOptions.map(option => <option key={option.id} value={String(option.id)}>{option.label}</option>)}
-                     </select>
-                  </div>
-                  
-                  <div className="h-4 w-px bg-purple-100 mx-2 flex-shrink-0"></div>
-                  <button onClick={handleApplyFilters} className="px-5 py-1.5 bg-purple-600 text-white text-[10px] font-black rounded-lg shadow-sm hover:bg-purple-700 transition-colors uppercase tracking-widest flex-shrink-0">OK</button>
-
-                  <div className="flex-1 min-w-[20px]"></div>
-
-                  <button
-                    type="button"
-                    onClick={() => handleSyncReportData('gl')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-black rounded-lg hover:bg-emerald-100 transition-colors uppercase tracking-widest flex-shrink-0"
-                    title={apiConfigured ? 'Refresh GL data from Carmen API' : 'Fallback to GL CSV import'}
-                  >
-                    <RefreshCw size={14}/> GL
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSyncReportData('bud')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-black rounded-lg hover:bg-blue-100 transition-colors uppercase tracking-widest flex-shrink-0"
-                    title={apiConfigured ? 'Refresh budget data from Carmen API' : 'Fallback to budget CSV import'}
-                  >
-                    <RefreshCw size={14}/> BUD
-                  </button>
-                  <input ref={glUploadRef} type="file" accept=".csv" onChange={(e) => handleFileUpload(e)} className="hidden" />
-                  <input ref={budUploadRef} type="file" accept=".csv" onChange={(e) => handleBudgetUpload(e)} className="hidden" />
-                  
-                  <div className="h-4 w-px bg-purple-100 mx-1 flex-shrink-0"></div>
-                  
-                  <button onClick={exportToExcel} className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-[10px] font-black rounded-lg shadow-sm hover:bg-green-700 transition-colors uppercase tracking-widest flex-shrink-0" title="Export to Excel">
-                     <Download size={14}/> Excel
-                  </button>
-                  <button onClick={() => window.print()} className="p-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-all flex-shrink-0 border border-slate-200"><Printer size={16}/></button>
-               </div>
-          )}
         </header>
 
-        <div className="p-4 md:p-6 max-w-full mx-auto w-full print:p-0 flex flex-col flex-1 min-h-0 overflow-hidden">
-          {activeTab === 'report' && activeReport && (
+        <div className="min-h-0 flex-1 overflow-hidden p-4 lg:p-6">
+          <div className="mx-auto flex h-full max-w-[1800px] min-h-0 flex-col gap-4">
+            {activeTab === 'report' && activeReport && (
               <ReportView
                 activeReport={activeReport}
-              displayCompanyLabel={displayCompanyLabel}
-              displayDateLabel={displayDateLabel}
-              displayPeriodLabel={displayPeriodLabel}
-              reportData={reportData}
-              activeCols={activeCols}
-              currentTheme={currentTheme}
-              tableZoom={tableZoom}
-              getIndentClass={getIndentClass}
-            />
-          )}
+                displayCompanyLabel={displayCompanyLabel}
+                displayDateLabel={displayDateLabel}
+                displayPeriodLabel={displayPeriodLabel}
+                reportData={reportData}
+                activeCols={activeCols}
+                currentTheme={currentTheme}
+                tableZoom={tableZoom}
+                getIndentClass={getIndentClass}
+              />
+            )}
 
-          {activeTab === 'report' && !activeReport && (
-            <div className="h-full flex items-center justify-center text-sm font-bold text-slate-400">
-              No reports available for this user.
-            </div>
-          )}
+            {activeTab === 'report' && !activeReport && (
+              <Card className="flex h-full items-center justify-center border border-border shadow-none ring-0">
+                <CardContent className="py-16 text-center text-sm text-muted-foreground">
+                  No Reports Available
+                </CardContent>
+              </Card>
+            )}
 
-          {activeTab === 'setup' && canSetupReports && activeReport && (
+            {activeTab === 'setup' && canSetupReports && activeReport && (
               <ReportSetup
-              masterData={masterData}
-              reportOptions={reportOptions}
-              activeReport={activeReport}
-              activeCategories={activeCategories}
-              updateActiveReport={updateActiveReport}
-              handleCloneReport={handleCloneReport}
-              handleCreateBlankReport={handleCreateBlankReport}
-              handleDeleteReport={handleDeleteReport}
-              handleOCRUpload={handleOCRUpload}
-              setIsAccessModalOpen={setIsAccessModalOpen}
-              handleAddCol={handleAddCol}
-              handleUpdateCol={handleUpdateCol}
-              moveCol={moveCol}
-              handleDeleteCol={handleDeleteCol}
-              handleAddRow={handleAddRow}
-              handleUpdateRow={handleUpdateRow}
-              handleUpdateRowMulti={handleUpdateRowMulti}
-              moveRow={moveRow}
-              handleDeleteRow={handleDeleteRow}
-              setEditingRow={setEditingRow}
-              setConfirmAction={setConfirmAction}
-            />
-          )}
+                themeMode={themeMode}
+                masterData={masterData}
+                reportOptions={reportOptions}
+                activeReport={activeReport}
+                activeCategories={activeCategories}
+                updateActiveReport={updateActiveReport}
+                onBusyTransition={triggerPageTransition}
+                handleCloneReport={handleCloneReport}
+                handleCreateBlankReport={handleCreateBlankReport}
+                handleDeleteReport={handleDeleteReport}
+                handleOCRUpload={handleOCRUpload}
+                setIsAccessModalOpen={setIsAccessModalOpen}
+                handleAddCol={handleAddCol}
+                handleUpdateCol={handleUpdateCol}
+                moveCol={moveCol}
+                handleDeleteCol={handleDeleteCol}
+                handleAddRow={handleAddRow}
+                handleUpdateRow={handleUpdateRow}
+                handleUpdateRowMulti={handleUpdateRowMulti}
+                moveRow={moveRow}
+                handleDeleteRow={handleDeleteRow}
+                setEditingRow={setEditingRow}
+                setConfirmAction={setConfirmAction}
+              />
+            )}
+          </div>
         </div>
       </main>
 
-      {/* --- MODALS --- */}
       <AccessModal
         isOpen={isAccessModalOpen}
         masterData={masterData}
@@ -1097,7 +1417,7 @@ export default function App({ onLogout = null }) {
           title={detailSelecting.title}
           subTitle={detailSelecting.subTitle || 'Select Items'}
           availableItems={detailSelecting.items}
-          selectedItems={editingRow[detailSelecting.field]?.split(',').map(s => s.trim()).filter(Boolean) || []}
+          selectedItems={editingRow[detailSelecting.field]?.split(',').map((item) => item.trim()).filter(Boolean) || []}
           onCancel={() => setDetailSelecting(null)}
           onSave={(newSelection) => {
             setEditingRow({ ...editingRow, [detailSelecting.field]: newSelection.join(', ') });
@@ -1105,25 +1425,6 @@ export default function App({ onLogout = null }) {
           }}
         />
       )}
-
-      
-
-      
-
-      {/* Custom CSS */}
-      <style dangerouslySetInnerHTML={{ __html: `
-        .custom-scrollbar::-webkit-scrollbar { width: 10px; height: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: #f3e8ff; border-radius: 8px; border: 1px solid #e9d5ff; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #d8b4fe; border-radius: 8px; border: 2px solid #f3e8ff; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #c084fc; }
-        @media print {
-          @page { size: A4 portrait; margin: 1cm; }
-          body { background: white; }
-          .print\\:hidden { display: none !important; }
-          table { width: 100% !important; border: 1px solid #e2e8f0 !important; zoom: 1 !important; }
-          th, td { padding: 4pt !important; border: 1px solid #e2e8f0 !important; font-size: 7pt !important; }
-        }
-      `}} />
     </div>
   );
 }

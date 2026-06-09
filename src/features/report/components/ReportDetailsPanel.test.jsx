@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import ReportDetailsPanel from './ReportDetailsPanel.jsx';
 
 describe('ReportDetailsPanel', () => {
-  it('updates report settings and triggers report actions', () => {
+  it('updates report settings and triggers report actions', async () => {
     const updateActiveReport = vi.fn();
     const handleCloneReport = vi.fn();
     const handleCreateBlankReport = vi.fn();
@@ -41,14 +41,12 @@ describe('ReportDetailsPanel', () => {
     });
     expect(updateActiveReport).toHaveBeenCalledWith({ name: 'P&L Summary' });
 
-    fireEvent.change(screen.getAllByRole('combobox')[0], {
-      target: { value: 'green' },
-    });
+    fireEvent.click(screen.getAllByRole('combobox')[0]);
+    fireEvent.click(await screen.findByRole('option', { name: /Emerald Green/i }));
     expect(updateActiveReport).toHaveBeenCalledWith({ theme: 'green' });
 
-    fireEvent.change(screen.getAllByRole('combobox')[1], {
-      target: { value: 'short' },
-    });
+    fireEvent.click(screen.getAllByRole('combobox')[1]);
+    fireEvent.click(await screen.findByRole('option', { name: /Short Month \+ YYYY/i }));
     expect(updateActiveReport).toHaveBeenCalledWith({ periodFormat: 'short' });
 
     fireEvent.click(screen.getByRole('button', { name: /Clone/i }));
@@ -57,7 +55,7 @@ describe('ReportDetailsPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /Blank/i }));
     expect(handleCreateBlankReport).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole('button', { name: /Access/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Access' }));
     expect(setIsAccessModalOpen).toHaveBeenCalledWith(true);
 
     fireEvent.click(screen.getByRole('button', { name: /Delete/i }));
@@ -67,7 +65,7 @@ describe('ReportDetailsPanel', () => {
     fireEvent.change(fileInput, { target: { files: [new File(['x'], 'scan.png', { type: 'image/png' })] } });
     expect(handleOCRUpload).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole('button', { name: /Manage/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Manage access' }));
     expect(setIsAccessModalOpen).toHaveBeenCalledWith(true);
   });
 });

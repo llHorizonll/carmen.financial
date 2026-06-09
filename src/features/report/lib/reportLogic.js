@@ -447,7 +447,7 @@ export const getRowMappingWarnings = (row, allRows = [], masterData = null) => {
       .filter(Boolean)
       .filter((dept) => !masterDeptIds.includes(dept));
     if (invalidDepts.length > 0) {
-      warnings.push(`Unknown department code(s): ${invalidDepts.join(', ')}.`);
+      warnings.push(`unknown department code(s): ${invalidDepts.join(', ')}.`);
     }
   }
 
@@ -459,7 +459,7 @@ export const getRowMappingWarnings = (row, allRows = [], masterData = null) => {
       .filter(Boolean)
       .filter((acc) => !masterAccIds.includes(acc));
     if (invalidAccs.length > 0) {
-      warnings.push(`Unknown account code(s): ${invalidAccs.join(', ')}.`);
+      warnings.push(`unknown account code(s): ${invalidAccs.join(', ')}.`);
     }
   }
 

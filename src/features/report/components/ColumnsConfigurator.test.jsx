@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import ColumnsConfigurator from './ColumnsConfigurator.jsx';
 
 describe('ColumnsConfigurator', () => {
-  it('adds, updates, moves, and deletes columns', () => {
+  it('adds, updates, moves, and deletes columns', async () => {
     const handleAddCol = vi.fn();
     const handleUpdateCol = vi.fn();
     const moveCol = vi.fn();
@@ -53,13 +53,16 @@ describe('ColumnsConfigurator', () => {
     fireEvent.click(rowButtons[2]);
     expect(moveCol).toHaveBeenCalledWith(0, 'right');
 
-    fireEvent.change(screen.getByDisplayValue('AC'), { target: { value: 'BUDACC' } });
+    fireEvent.click(within(row).getAllByRole('combobox')[0]);
+    fireEvent.click(await screen.findByText('BUDACC'));
     expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'type', 'BUDACC');
 
-    fireEvent.change(within(row).getAllByRole('combobox')[2], { target: { value: '-1' } });
+    fireEvent.click(within(row).getAllByRole('combobox')[2]);
+    fireEvent.click(await screen.findByText('Prev'));
     expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'yearMode', '-1');
 
-    fireEvent.change(within(row).getAllByRole('combobox')[3], { target: { value: 'FY' } });
+    fireEvent.click(within(row).getAllByRole('combobox')[3]);
+    fireEvent.click(await screen.findByText('FY'));
     expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'periodMode', 'FY');
 
     fireEvent.click(screen.getAllByRole('checkbox')[0]);

@@ -24,7 +24,7 @@ describe('DetailSelectorModal', () => {
 
     expect(screen.getByText('1 Items selected')).toBeInTheDocument();
     expect(screen.getByText('Dept 0101')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('SAVE SELECTION'));
+    fireEvent.click(screen.getByText('Save selection'));
     expect(onSave).toHaveBeenCalledWith(['101']);
   });
 });

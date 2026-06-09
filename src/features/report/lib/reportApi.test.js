@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildReportDefinitionPayload, cloneCarmenReport, deleteCarmenReport, fetchCarmenReport, fetchCarmenReportOptions, saveCarmenReport } from './reportApi.js';
+import { buildReportDefinitionPayload, cloneCarmenReport, deleteCarmenReport, fetchCarmenReport, fetchCarmenReportOptions, loginWithCarmenCredentials, saveCarmenReport } from './reportApi.js';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -226,6 +226,40 @@ describe('reportApi helpers', () => {
 
     expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining('/api/reports/rep-1'), expect.objectContaining({
       method: 'PUT',
+    }));
+  });
+
+  it('normalizes login language codes before calling the auth API', async () => {
+    window.__CARMEN_CONFIG__ = {
+      apiUrl: 'http://localhost/Carmen.WebApi',
+      adminToken: 'admin-token',
+    };
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        AccessToken: 'access-token',
+        UserName: 'admin',
+        Tenant: 'tenant-1',
+        Permissions: [],
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await loginWithCarmenCredentials({
+      userName: 'admin',
+      password: 'secret',
+      tenant: 'tenant-1',
+      language: 'en-US',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/login?adminToken='), expect.objectContaining({
+      method: 'POST',
+    }));
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual(expect.objectContaining({
+      Language: 'EN',
+      UserName: 'admin',
+      Tenant: 'tenant-1',
     }));
   });
 

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import RowsConfigurator from './RowsConfigurator.jsx';
 
 describe('RowsConfigurator', () => {
-  it('adds and edits rows, and queues row deletion confirmation', () => {
+  it('adds and edits rows, and queues row deletion confirmation', async () => {
     const handleAddRow = vi.fn();
     const handleUpdateRow = vi.fn();
     const handleUpdateRowMulti = vi.fn();
@@ -82,15 +82,15 @@ describe('RowsConfigurator', () => {
     fireEvent.click(rowButtons[2]);
     expect(moveRow).toHaveBeenCalledWith(0, 'down');
 
-    fireEvent.change(within(revenueRow).getAllByRole('combobox')[0], {
-      target: { value: 'H' },
-    });
+    fireEvent.click(within(revenueRow).getAllByRole('combobox')[0]);
+    fireEvent.click(await screen.findByText('Header (H)'));
     expect(handleUpdateRowMulti).toHaveBeenCalledWith(
       'r1',
       expect.objectContaining({ isTotal: false, isHeader: true })
     );
 
-    fireEvent.change(within(revenueRow).getAllByRole('combobox')[1], { target: { value: '2' } });
+    fireEvent.click(within(revenueRow).getAllByRole('combobox')[1]);
+    fireEvent.click(await screen.findByText('Lvl 2'));
     expect(handleUpdateRow).toHaveBeenCalledWith('r1', 'indent', 2);
 
     fireEvent.change(screen.getByDisplayValue('R2'), { target: { value: 'R3' } });
@@ -100,9 +100,8 @@ describe('RowsConfigurator', () => {
     expect(setEditingRow).toHaveBeenCalledWith(expect.objectContaining({ id: 'r1' }));
 
     const formulaRow = screen.getByDisplayValue('Total Revenue').closest('tr');
-    fireEvent.change(within(formulaRow).getAllByRole('combobox')[0], {
-      target: { value: 'D' },
-    });
+    fireEvent.click(within(formulaRow).getAllByRole('combobox')[0]);
+    fireEvent.click(await screen.findByRole('option', { name: 'Data (D)' }));
     expect(handleUpdateRowMulti).toHaveBeenCalledWith(
       'r2',
       expect.objectContaining({ isTotal: false, isHeader: false })

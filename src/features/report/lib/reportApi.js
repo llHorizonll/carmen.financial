@@ -111,6 +111,14 @@ export const fetchBusinessUnitsByUsername = async (username) => {
 const extractAccessToken = (loginResponse) =>
   loginResponse?.AccessToken || loginResponse?.accessToken || loginResponse?.access_token || loginResponse?.Token || '';
 
+const normalizeLanguageCode = (language) => {
+  const value = String(language || '').trim().toLowerCase();
+  if (!value) return 'EN';
+  if (value.startsWith('th')) return 'TH';
+  if (value.startsWith('vi')) return 'VI';
+  return 'EN';
+};
+
 const normalizeReportRowDimensions = (row) => {
   const dimensions = [];
   const seen = new Set();
@@ -200,7 +208,7 @@ export const loginWithCarmenCredentials = async ({ userName, password, tenant, l
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      Language: language,
+      Language: normalizeLanguageCode(language),
       Tenant: tenant,
       Password: password,
       UserName: userName,

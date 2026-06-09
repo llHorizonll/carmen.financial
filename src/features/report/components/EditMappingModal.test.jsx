@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import EditMappingModal from './EditMappingModal.jsx';
 
 describe('EditMappingModal', () => {
-  it('updates fields and invokes detail selector and apply handlers', () => {
+  it('updates fields and invokes detail selector and apply handlers', async () => {
     const setEditingRow = vi.fn();
     const setModalAccCategory = vi.fn();
     const onOpenDetailSelector = vi.fn();
@@ -38,10 +38,11 @@ describe('EditMappingModal', () => {
     fireEvent.change(screen.getByDisplayValue('Revenue'), { target: { value: 'New Revenue' } });
     expect(setEditingRow).toHaveBeenCalledWith(expect.objectContaining({ desc: 'New Revenue' }));
 
-    fireEvent.click(screen.getAllByText('Select')[0]);
+    fireEvent.click(screen.getByRole('button', { name: /Select departments/i }));
     expect(onOpenDetailSelector).toHaveBeenCalledWith(expect.objectContaining({ field: 'dept' }));
 
-    fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: 'B' } });
+    fireEvent.click(screen.getAllByRole('combobox')[1]);
+    fireEvent.click(await screen.findByText('Balance Sheet'));
     expect(setModalAccCategory).toHaveBeenCalledWith('B');
 
     fireEvent.click(screen.getByText('Apply Mapping'));
@@ -104,7 +105,7 @@ describe('EditMappingModal', () => {
       />
     );
 
-    fireEvent.click(screen.getAllByText('Select')[1]);
+    fireEvent.click(screen.getByRole('button', { name: /Select groups/i }));
 
     expect(onOpenDetailSelector).toHaveBeenCalledWith(expect.objectContaining({
       field: 'groups',
