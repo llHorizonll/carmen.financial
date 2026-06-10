@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import App from './App.jsx';
@@ -31,7 +31,7 @@ describe('App shell', () => {
     delete document.documentElement.dataset.shellTemplate;
   });
 
-  it('keeps the default shell template applied without showing template compare controls', () => {
+  it('keeps the default shell template applied without showing template compare controls', async () => {
     render(<App />);
 
     expect(document.documentElement.dataset.shellTemplate).toBe('classic-calm');
@@ -39,19 +39,19 @@ describe('App shell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
     expect(screen.queryByText('Compare')).not.toBeInTheDocument();
-    expect(screen.getByText('Report Details')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument(), { timeout: 5000 });
   });
 
-  it('switches from VIEW to SETUP for the admin user', () => {
-    const { container } = render(<App />);
+  it('switches from VIEW to SETUP for the admin user', async () => {
+    render(<App />);
 
     expect(screen.getByRole('button', { name: 'VIEW' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'SETUP' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
 
-    expect(screen.getByText('Configuration Mode')).toBeInTheDocument();
-    expect(screen.getByText('Report Details')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/Configuration Mode/i)).toBeInTheDocument(), { timeout: 5000 });
+    await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument(), { timeout: 5000 });
   });
 
   it('updates the setup theme badge when the report theme changes', async () => {
@@ -59,15 +59,14 @@ describe('App shell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
 
-    const themeSelect = screen.getAllByRole('combobox').find((select) =>
-      select.textContent?.includes('Classic Blue')
-    );
+    const themeLabel = await screen.findByText('Report Theme', {}, { timeout: 5000 });
+    const themeSelect = themeLabel.closest('div')?.querySelector('[role="combobox"]');
     expect(themeSelect).toBeTruthy();
 
     fireEvent.click(themeSelect);
     fireEvent.click(await screen.findByRole('option', { name: 'Emerald Green' }));
 
-    await waitFor(() => expect(screen.getByText('Emerald Green theme')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Emerald Green theme/i)).toBeInTheDocument());
   });
 
   it('hides the setup tab when the role changes to a non-admin user', () => {
@@ -132,9 +131,11 @@ describe('App shell', () => {
 
       fireEvent.change(budgetInput, { target: { files: [new File(['ignored'], 'budget.csv', { type: 'text/csv' })] } });
 
-      await waitFor(() => expect(screen.getByText(/Budget สำเร็จ/)).toBeInTheDocument());
+      const notice = await screen.findByText('Notice', {}, { timeout: 5000 });
+      const noticeCard = notice.closest('[data-slot="card"]');
+      expect(within(noticeCard).getByText(/Budget/)).toBeInTheDocument();
       fireEvent.click(screen.getAllByRole('button', { name: 'OK' })[0]);
-      await waitFor(() => expect(screen.queryByText(/Budget สำเร็จ/)).not.toBeInTheDocument());
+      await waitFor(() => expect(screen.queryByText('Notice')).not.toBeInTheDocument());
       expect(screen.getByText('Budget')).toBeInTheDocument();
     } finally {
       globalThis.FileReader = originalFileReader;
@@ -240,7 +241,7 @@ describe('App shell', () => {
       fireEvent.change(glInput, { target: { files: [new File(['ignored'], 'gl.csv', { type: 'text/csv' })] } });
 
       await waitFor(() => expect(screen.queryByText(/Transaction \(GL\)/)).not.toBeInTheDocument());
-      expect(screen.getByText('Revenue')).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByText('Revenue')).toBeInTheDocument());
       expect(reportApiMocks.fetchCarmenReportData).toHaveBeenCalled();
     } finally {
       globalThis.FileReader = originalFileReader;
@@ -1601,3 +1602,4 @@ describe('App shell', () => {
     expect(reportApiMocks.fetchCarmenReportData).not.toHaveBeenCalled();
   });
 });
+

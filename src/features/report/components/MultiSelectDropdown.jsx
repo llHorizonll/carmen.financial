@@ -46,6 +46,7 @@ export default function MultiSelectDropdown({ options, selected, onChange, label
     () => validOptions.filter((option) => selectedLookupKeys.has(normalizeDeptLookupCode(option.id))),
     [selectedLookupKeys, validOptions]
   );
+  const isAllSelected = validOptions.length > 0 && selectedItems.length === validOptions.length;
   const filteredOptions = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     if (!term) return validOptions;
@@ -55,6 +56,8 @@ export default function MultiSelectDropdown({ options, selected, onChange, label
   }, [searchTerm, validOptions]);
 
   const isSelected = (id) => selectedLookupKeys.has(normalizeDeptLookupCode(id));
+  const selectAll = () => onChange(validOptions.map((option) => option.id));
+  const clearAll = () => onChange([]);
   const toggleSelected = (id) => {
     const key = normalizeDeptLookupCode(id);
     const existingIndex = selected.findIndex((item) => normalizeDeptLookupCode(item) === key);
@@ -73,7 +76,7 @@ export default function MultiSelectDropdown({ options, selected, onChange, label
           <span className="min-w-0 flex-1">
             <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
             <span className="mt-0.5 block truncate text-sm font-medium" data-testid={`selected-value-${testIdPrefix}`}>
-              {selected.length === 0
+              {selected.length === 0 || isAllSelected
                 ? 'All'
                 : selectedItems.length <= 2
                   ? selectedItems.map((item) => item.display).join(', ')
@@ -87,20 +90,44 @@ export default function MultiSelectDropdown({ options, selected, onChange, label
         className="w-[min(28rem,calc(100vw-2rem))] overflow-hidden border border-border p-0 shadow-[0_24px_72px_-24px_rgba(15,23,42,0.22)] ring-1 ring-black/5"
         align="start"
       >
-        <div className="flex items-center gap-2 border-b border-border/60 px-3 py-2">
-          <Search className="size-4 shrink-0 text-muted-foreground" />
-          <Input
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape') {
-                event.preventDefault();
-                setSearchTerm('');
-              }
-            }}
-            placeholder="Search department..."
-            className="h-8 border-0 bg-transparent p-0 shadow-none focus-visible:ring-0"
-          />
+        <div className="border-b border-border/60 px-3 py-2">
+          <div className="flex items-center gap-2">
+            <Search className="size-4 shrink-0 text-muted-foreground" />
+            <Input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  setSearchTerm('');
+                }
+              }}
+              placeholder="Search department..."
+              className="h-8 border-0 bg-transparent p-0 shadow-none focus-visible:ring-0"
+            />
+          </div>
+          <div className="mt-2 flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              className="h-7 rounded-full px-3 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+              onClick={selectAll}
+              disabled={validOptions.length === 0 || isAllSelected}
+            >
+              Select all
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              className="h-7 rounded-full px-3 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+              onClick={clearAll}
+              disabled={selected.length === 0}
+            >
+              Clear
+            </Button>
+          </div>
         </div>
         <div className="max-h-[min(60vh,320px)] overflow-y-auto p-1">
           {filteredOptions.length === 0 ? (
