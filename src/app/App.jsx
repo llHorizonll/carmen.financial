@@ -225,6 +225,7 @@ const writeStoredReports = (reports) => {
 // ============================================================================
 export default function App({ onLogout = null }) {
   const [activeTab, setActiveTab] = useState('report');
+  const [tabMotionDirection, setTabMotionDirection] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [themeMode, setThemeMode] = useState(() => getStoredTheme());
   const [isPageTransitioning, setIsPageTransitioning] = useState(false);
@@ -881,6 +882,17 @@ export default function App({ onLogout = null }) {
 
   const currentTheme = THEMES[activeReport?.theme || 'blue'];
   const showPageSkeleton = isPageTransitioning || isSetupSaving;
+  const activeTabMotionClass = tabMotionDirection === null
+    ? ''
+    : activeTab === 'setup'
+      ? 'app-pane-enter-from-right'
+      : 'app-pane-enter-from-left';
+
+  const handleTabChange = (nextTab) => {
+    if (nextTab === activeTab) return;
+    setTabMotionDirection(nextTab === 'setup' ? 'forward' : 'backward');
+    setActiveTab(nextTab);
+  };
 
   const triggerPageTransition = () => {
     if (pageTransitionTimerRef.current) {
@@ -1093,7 +1105,7 @@ export default function App({ onLogout = null }) {
                     type="button"
                     variant={activeTab === 'report' ? 'default' : 'ghost'}
                     className={`h-8 px-4 ${activeTab === 'report' ? 'shadow-sm' : 'text-muted-foreground'}`}
-                    onClick={() => setActiveTab('report')}
+                    onClick={() => handleTabChange('report')}
                     aria-current={activeTab === 'report' ? 'page' : undefined}
                   >
                     VIEW
@@ -1103,7 +1115,7 @@ export default function App({ onLogout = null }) {
                       type="button"
                       variant={activeTab === 'setup' ? 'default' : 'ghost'}
                       className={`h-8 px-4 ${activeTab === 'setup' ? 'shadow-sm' : 'text-muted-foreground'}`}
-                      onClick={() => setActiveTab('setup')}
+                      onClick={() => handleTabChange('setup')}
                       aria-current={activeTab === 'setup' ? 'page' : undefined}
                     >
                       SETUP
@@ -1314,7 +1326,7 @@ export default function App({ onLogout = null }) {
         </header>
 
         <div className="min-h-0 flex-1 overflow-hidden p-4 lg:p-6">
-          <div className="mx-auto flex h-full max-w-[1800px] min-h-0 flex-col gap-4">
+          <div className={`mx-auto flex h-full max-w-[1800px] min-h-0 flex-col gap-4 ${activeTabMotionClass}`}>
             {activeTab === 'report' && activeReport && (
               <React.Suspense
                 fallback={

@@ -36,6 +36,8 @@ This repository now uses a small Vite React scaffold with the main application i
 - Be careful when editing report row or column logic because formula references and renumbering are tightly coupled.
 - Avoid changing import/export behavior unless the task specifically asks for it.
 - Keep UI changes consistent with the current BI/dashboard styling.
+- Keep motion subtle and purposeful: login entrance effects, shell tab transitions, and modal/sheet transitions are acceptable, but avoid animating the report table or other dense data surfaces.
+- Respect reduced-motion preferences whenever adding new animations or transitions.
 
 ## Verification Checklist
 - Confirm the app loads in both `VIEW` and `SETUP` modes through the Vite entrypoint.

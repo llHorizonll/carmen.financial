@@ -59,6 +59,8 @@ const featureRows = [
   },
 ];
 
+const getLoginDelayStyle = (delayMs) => ({ animationDelay: `${delayMs}ms` });
+
 export default function LoginShell() {
   const [isAuthenticated, setIsAuthenticated] = useState(hasSession);
   const [username, setUsername] = useState('');
@@ -213,7 +215,7 @@ export default function LoginShell() {
       <div className="relative mx-auto flex min-h-screen max-w-7xl items-stretch px-4 py-6 sm:px-6 sm:py-10 lg:items-center lg:px-8">
         <div className="grid w-full gap-8 lg:grid-cols-[1.15fr_0.85fr] lg:gap-10">
           <section className="order-2 flex flex-col justify-center gap-8 lg:order-1">
-            <div className="max-w-2xl space-y-5">
+            <div className="login-enter-from-left max-w-2xl space-y-5" style={getLoginDelayStyle(90)}>
               <Badge variant="outline" className="w-fit rounded-full px-3 py-1">
                 <Sparkles className="size-3.5" />
                 Carmen Financial BI
@@ -231,10 +233,14 @@ export default function LoginShell() {
             <div className="grid max-w-2xl gap-0 overflow-hidden rounded-2xl border bg-background/90 shadow-sm">
               {featureRows.map((item, index) => {
                 const Icon = item.icon;
+                const delayMs = 220 + (index * 120);
                 return (
                   <React.Fragment key={item.title}>
                     {index > 0 && <Separator />}
-                    <div className="flex items-start gap-4 px-4 py-4 sm:px-5">
+                    <div
+                      className="login-enter-rise flex items-start gap-4 px-4 py-4 sm:px-5"
+                      style={getLoginDelayStyle(delayMs)}
+                    >
                       <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border bg-muted/30">
                         <Icon className="size-4 text-foreground" />
                       </div>
@@ -249,7 +255,10 @@ export default function LoginShell() {
             </div>
           </section>
 
-          <Card className="order-1 self-center border border-border bg-card/95 shadow-sm ring-0 lg:order-2">
+          <Card
+            className="login-enter-from-right order-1 self-center border border-border bg-card/95 shadow-sm ring-0 lg:order-2"
+            style={getLoginDelayStyle(180)}
+          >
             <CardHeader className="space-y-2">
               <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">
                 Secure sign-in

@@ -193,6 +193,100 @@ body {
   }
 }
 
+@keyframes login-enter-from-left {
+  from {
+    opacity: 0;
+    transform: translate3d(-1.5rem, 0, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes login-enter-from-right {
+  from {
+    opacity: 0;
+    transform: translate3d(1.5rem, 0, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes login-enter-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 0.9rem, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes app-pane-enter-from-left {
+  from {
+    opacity: 0;
+    transform: translate3d(-0.9rem, 0.6rem, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes app-pane-enter-from-right {
+  from {
+    opacity: 0;
+    transform: translate3d(0.9rem, 0.6rem, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .login-enter-from-left {
+    animation: login-enter-from-left 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .login-enter-from-right {
+    animation: login-enter-from-right 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .login-enter-rise {
+    animation: login-enter-rise 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .app-pane-enter-from-left {
+    animation: app-pane-enter-from-left 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .app-pane-enter-from-right {
+    animation: app-pane-enter-from-right 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-enter-from-left,
+  .login-enter-from-right,
+  .login-enter-rise,
+  .app-pane-enter-from-left,
+  .app-pane-enter-from-right {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
 @media print {
   @page {
     size: landscape;
