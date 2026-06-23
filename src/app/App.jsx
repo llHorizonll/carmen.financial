@@ -887,6 +887,15 @@ export default function App({ onLogout = null }) {
     : activeTab === 'setup'
       ? 'app-pane-enter-from-right'
       : 'app-pane-enter-from-left';
+  const mainContentPaddingClass = activeTab === 'report'
+    ? 'p-3'
+    : 'p-3 lg:p-5';
+  const mainContentWidthClass = activeTab === 'report'
+    ? 'flex h-full w-full min-h-0 flex-col gap-3'
+    : 'mx-auto flex h-full w-full max-w-[1800px] min-h-0 flex-col gap-3';
+  const headerPaddingClass = activeTab === 'report'
+    ? 'px-3 py-3'
+    : 'px-4 py-3 lg:px-6';
 
   const handleTabChange = (nextTab) => {
     if (nextTab === activeTab) return;
@@ -1090,7 +1099,7 @@ export default function App({ onLogout = null }) {
 
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <header className="border-b bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/80 print:hidden">
-          <div className="flex flex-col gap-3 px-4 py-3 lg:px-6">
+          <div className={`flex flex-col gap-3 ${headerPaddingClass}`}>
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                 {isMobile && (
@@ -1158,6 +1167,41 @@ export default function App({ onLogout = null }) {
 
               <div className="flex w-full flex-col gap-2 xl:max-w-[42rem] xl:items-end">
                 <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+                  {activeTab === 'report' && (
+                    <div className="flex items-center gap-1 rounded-lg border border-border bg-card/80 px-2 py-1 shadow-sm">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        className="shrink-0 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                        onClick={() => setTableZoom((current) => Math.max(50, current - 10))}
+                        aria-label="Zoom out"
+                        title="Zoom out"
+                      >
+                        <ZoomOut className="size-3.5" />
+                      </Button>
+                      <Slider
+                        value={[tableZoom]}
+                        min={50}
+                        max={150}
+                        step={10}
+                        onValueChange={(value) => setTableZoom(value[0] || 100)}
+                        className="w-20 min-w-20"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        className="shrink-0 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                        onClick={() => setTableZoom((current) => Math.min(150, current + 10))}
+                        aria-label="Zoom in"
+                        title="Zoom in"
+                      >
+                        <ZoomIn className="size-3.5" />
+                      </Button>
+                      <span className="w-9 text-right text-[11px] font-medium tabular-nums text-foreground/70">{tableZoom}%</span>
+                    </div>
+                  )}
                   <Button
                     type="button"
                     variant="outline"
@@ -1184,114 +1228,81 @@ export default function App({ onLogout = null }) {
 
             {activeTab === 'report' && (
               <Card className="border border-border bg-card/95 shadow-none ring-0">
-                <CardContent className="flex flex-col gap-4 p-3">
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,0.72fr)_minmax(0,0.72fr)_minmax(0,0.72fr)_auto] xl:items-end">
-                    <div className="min-w-0">
-                      <MultiSelectDropdown
-                        testIdPrefix="dept"
-                        label="DEPT"
-                        options={masterData.depts}
-                        selected={globalDepts}
-                        onChange={setGlobalDepts}
-                      />
+                <CardContent className="p-3">
+                  <div className="flex flex-col gap-2 xl:flex-row xl:items-end">
+                    <div className="grid flex-1 gap-2 sm:grid-cols-2 sm:items-end xl:grid-cols-[180px_110px_minmax(180px,1fr)_120px_88px]">
+                      <div className="min-w-0 self-end">
+                        <MultiSelectDropdown
+                          testIdPrefix="dept"
+                          label="DEPT"
+                          options={masterData.depts}
+                          selected={globalDepts}
+                          onChange={setGlobalDepts}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <span className="block text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Year</span>
+                        <Input
+                          type="number"
+                          value={globalYear}
+                          onChange={(event) => setGlobalYear(event.target.value)}
+                          className="h-8 rounded-lg px-2.5 text-sm"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <span className="block text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Period</span>
+                        <Select value={globalPeriod} onValueChange={setGlobalPeriod}>
+                          <SelectTrigger size="sm" className="h-8 w-full min-w-0 rounded-lg px-2.5 text-sm">
+                            <SelectValue placeholder="Period" />
+                          </SelectTrigger>
+                          <SelectContent position="popper">
+                            {periodSelectOptions.map((option) => (
+                              <SelectItem key={option.id} value={String(option.id)}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <span className="block text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Rev</span>
+                        <Select
+                          value={globalRevision}
+                          onValueChange={(nextValue) => {
+                            if (!activeReportUsesBudget && nextValue !== '0') {
+                              setGlobalRevision('0');
+                              setAppliedRevision('0');
+                              setAlertMsg('Revision selector is ignored for reports without budget columns.');
+                              return;
+                            }
+                            setGlobalRevision(nextValue);
+                          }}
+                        >
+                          <SelectTrigger size="sm" className="h-8 w-full min-w-0 rounded-lg px-2.5 text-sm">
+                            <SelectValue placeholder="Revision" />
+                          </SelectTrigger>
+                          <SelectContent position="popper">
+                            {revisionSelectOptions.map((option) => (
+                              <SelectItem key={option.id} value={String(option.id)}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <Button size="sm" className="h-8 w-full self-end px-3 text-xs xl:w-auto" onClick={handleApplyFilters}>Apply</Button>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">Year</span>
-                      <Input
-                        type="number"
-                        value={globalYear}
-                        onChange={(event) => setGlobalYear(event.target.value)}
-                        className="h-10 w-full px-3 text-sm"
-                      />
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">Period</span>
-                      <Select value={globalPeriod} onValueChange={setGlobalPeriod}>
-                        <SelectTrigger className="!h-10 w-full min-w-0 rounded-xl px-3 text-sm">
-                          <SelectValue placeholder="Period" />
-                        </SelectTrigger>
-                        <SelectContent position="popper">
-                          {periodSelectOptions.map((option) => (
-                            <SelectItem key={option.id} value={String(option.id)}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">Rev</span>
-                      <Select
-                        value={globalRevision}
-                        onValueChange={(nextValue) => {
-                          if (!activeReportUsesBudget && nextValue !== '0') {
-                            setGlobalRevision('0');
-                            setAppliedRevision('0');
-                            setAlertMsg('Revision selector is ignored for reports without budget columns.');
-                            return;
-                          }
-                          setGlobalRevision(nextValue);
-                        }}
-                      >
-                        <SelectTrigger className="!h-10 w-full min-w-0 rounded-xl px-3 text-sm">
-                          <SelectValue placeholder="Revision" />
-                        </SelectTrigger>
-                        <SelectContent position="popper">
-                          {revisionSelectOptions.map((option) => (
-                            <SelectItem key={option.id} value={String(option.id)}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <Button size="sm" className="h-10 w-full px-4 text-xs xl:w-auto" onClick={handleApplyFilters}>Apply</Button>
-                  </div>
-
-                  <div className="flex flex-col gap-3 border-t border-border/70 pt-3 xl:flex-row xl:items-center xl:justify-between">
-                    <div className="flex w-full flex-1 items-center gap-2 rounded-xl border border-border bg-background/80 px-3 py-3 shadow-sm xl:max-w-[42rem]">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-lg"
-                        className="shrink-0 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
-                        onClick={() => setTableZoom((current) => Math.max(50, current - 10))}
-                        aria-label="Zoom out"
-                        title="Zoom out"
-                      >
-                        <ZoomOut className="size-4" />
-                      </Button>
-                      <Slider
-                        value={[tableZoom]}
-                        min={50}
-                        max={150}
-                        step={10}
-                        onValueChange={(value) => setTableZoom(value[0] || 100)}
-                        className="min-w-0 flex-1"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-lg"
-                        className="shrink-0 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
-                        onClick={() => setTableZoom((current) => Math.min(150, current + 10))}
-                        aria-label="Zoom in"
-                        title="Zoom in"
-                      >
-                        <ZoomIn className="size-4" />
-                      </Button>
-                      <span className="w-10 text-right text-xs font-medium tabular-nums text-foreground/70">{tableZoom}%</span>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2 xl:flex-nowrap xl:self-end">
                       <Button
                         type="button"
                         variant="outline"
-                        className="w-full sm:w-auto"
+                        size="sm"
+                        className="h-8 w-full sm:w-auto"
                         onClick={() => handleSyncReportData('gl')}
                         title={apiConfigured ? 'Refresh GL data from Carmen API' : 'Fallback to GL CSV import'}
                       >
@@ -1301,7 +1312,8 @@ export default function App({ onLogout = null }) {
                       <Button
                         type="button"
                         variant="outline"
-                        className="w-full sm:w-auto"
+                        size="sm"
+                        className="h-8 w-full sm:w-auto"
                         onClick={() => handleSyncReportData('bud')}
                         title={apiConfigured ? 'Refresh budget data from Carmen API' : 'Fallback to budget CSV import'}
                       >
@@ -1310,11 +1322,11 @@ export default function App({ onLogout = null }) {
                       </Button>
                       <input ref={glUploadRef} type="file" accept=".csv" onChange={(e) => handleFileUpload(e)} className="hidden" />
                       <input ref={budUploadRef} type="file" accept=".csv" onChange={(e) => handleBudgetUpload(e)} className="hidden" />
-                      <Button variant="outline" size="sm" className="h-10 w-full px-4 text-xs sm:w-auto" onClick={exportToExcel} title="Export to Excel">
+                      <Button variant="outline" size="sm" className="h-8 w-full px-3 text-xs sm:w-auto" onClick={exportToExcel} title="Export to Excel">
                         <Download />
                         Excel
                       </Button>
-                      <Button className="h-10 w-full px-4 text-xs sm:w-auto" size="sm" variant="outline" onClick={() => window.print()} title="Print">
+                      <Button className="h-8 w-full px-3 text-xs sm:w-auto" size="sm" variant="outline" onClick={() => window.print()} title="Print">
                         <Printer />
                       </Button>
                     </div>
@@ -1325,8 +1337,8 @@ export default function App({ onLogout = null }) {
           </div>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-hidden p-4 lg:p-6">
-          <div className={`mx-auto flex h-full max-w-[1800px] min-h-0 flex-col gap-4 ${activeTabMotionClass}`}>
+        <div className={`min-h-0 flex-1 overflow-hidden ${mainContentPaddingClass}`}>
+          <div className={`${mainContentWidthClass} ${activeTabMotionClass}`}>
             {activeTab === 'report' && activeReport && (
               <React.Suspense
                 fallback={

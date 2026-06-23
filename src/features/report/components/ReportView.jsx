@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card.jsx';
-import { ScrollArea } from '@/components/ui/scroll-area.jsx';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area.jsx';
 import {
   Table,
   TableBody,
@@ -25,7 +25,7 @@ export default function ReportView({
 
   return (
     <Card className="flex h-full min-h-0 flex-col border border-border shadow-none ring-0">
-      <CardHeader className="space-y-1 border-b px-4 pb-4 sm:px-6 sm:pb-5">
+      <CardHeader className="space-y-1 border-b px-4 pt-3 pb-3 sm:px-5 sm:pt-4 sm:pb-4">
         <CardTitle className="text-center text-[1.55rem] font-semibold tracking-tight text-foreground sm:text-2xl lg:text-[2rem]">
           {displayCompanyLabel}
         </CardTitle>
@@ -45,7 +45,7 @@ export default function ReportView({
 
       <CardContent className="min-h-0 flex-1 p-0">
         <ScrollArea className="h-full print:overflow-visible">
-          <div className="min-w-full overflow-auto">
+          <div className="w-max min-w-full">
             <Table
               className="min-w-full whitespace-nowrap print:table-auto"
               style={{ zoom: tableZoom / 100 }}
@@ -113,6 +113,7 @@ export default function ReportView({
               </TableBody>
             </Table>
           </div>
+          <ScrollBar orientation="horizontal" />
         </ScrollArea>
       </CardContent>
     </Card>

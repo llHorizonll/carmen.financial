@@ -70,12 +70,12 @@ export default function MultiSelectDropdown({ options, selected, onChange, label
       <PopoverTrigger asChild>
         <Button
           variant="outline"
-          className="h-10 w-full justify-between gap-2 rounded-xl px-3 text-left"
+          className="h-8 w-full justify-between gap-2 rounded-lg px-2.5 text-left"
           data-testid={`dropdown-${testIdPrefix}`}
         >
-          <span className="min-w-0 flex-1">
-            <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
-            <span className="mt-0.5 block truncate text-sm font-medium" data-testid={`selected-value-${testIdPrefix}`}>
+          <span className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+            <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">{label}</span>
+            <span className="truncate text-[13px] font-medium leading-4" data-testid={`selected-value-${testIdPrefix}`}>
               {selected.length === 0 || isAllSelected
                 ? 'All'
                 : selectedItems.length <= 2
