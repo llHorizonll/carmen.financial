@@ -113,6 +113,14 @@ Approved direction: `Executive ledger`.
   - `@astryxdesign/core/reset.css`
   - `@astryxdesign/core/astryx.css`
 - Update `src/index.css` to align the app token usage with Astryx-friendly neutral surfaces while keeping existing theme plumbing and print rules intact.
+- Prefer Astryx-native controls where there is a direct semantic match, not a one-component-fits-all replacement rule.
+- Expected control mapping:
+  - text entry -> `TextInput` or `TextArea`
+  - single-value selection -> `Selector`, `SegmentedControl`, or `RadioList` depending on option count and visibility needs
+  - multi-value selection -> `MultiSelector` for longer searchable lists, `CheckboxList` for short always-visible groups
+  - single boolean setting -> `CheckboxInput` or `Switch`
+  - labeled validation wrapper -> `Field`
+- `MultiSelector` should be used only where users truly select multiple items from a finite list, such as departments, assigned users, or similar multi-filter surfaces.
 
 ### LoginShell
 
@@ -134,6 +142,8 @@ Approved direction: `Executive ledger`.
 - `ReportDetailsPanel.jsx`, `ColumnsConfigurator.jsx`, `RowsConfigurator.jsx`, and `SetupSectionTabs.jsx` receive the main visual pass.
 - Keep prop contracts and handler signatures unchanged where possible.
 - Avoid new global component systems for this pass. Use the smallest local reshaping that delivers the Astryx language.
+- Replace existing shadcn-style inputs opportunistically where Astryx provides a good semantic match and the swap is low-risk.
+- Do not force every existing control into `MultiSelector`; each field should use the Astryx component that matches its behavior.
 
 ### Report View
 
@@ -187,4 +197,11 @@ Minimum verification after implementation:
 - Prefer the shortest diff that establishes the new visual system.
 - Reuse the current component split under `src/features/report/components/` instead of growing `App.jsx`.
 - Let Astryx guide layout and tone, but do not force an all-`div` purge or large-scale markup rewrites where current components already express the needed structure.
+- Favor exact Astryx component matches over generic wrappers:
+  - `MultiSelector` for multi-pick filters
+  - `Selector` for single dropdowns
+  - `CheckboxInput` for lone toggles
+  - `CheckboxList` for short visible groups
+  - `Field` for labels, descriptions, and validation framing
+- If replacing a control would raise regression risk without meaningful visual gain, keep the current logic and style it to the same Astryx language instead.
 - After Phase 1 lands cleanly, use the same visual language to style the setup tables in Phase 2.
