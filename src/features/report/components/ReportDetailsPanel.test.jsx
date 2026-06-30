@@ -54,6 +54,7 @@ describe('ReportDetailsPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Blank/i }));
     expect(handleCreateBlankReport).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: /Clone/i }).className).toMatch(/bg-stone|border-stone|text-stone/);
 
     fireEvent.click(screen.getByRole('button', { name: 'Access' }));
     expect(setIsAccessModalOpen).toHaveBeenCalledWith(true);

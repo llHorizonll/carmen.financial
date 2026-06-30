@@ -25,11 +25,118 @@ import {
 } from '@/components/ui/select.jsx';
 import { Separator } from '@/components/ui/separator.jsx';
 
+const EMPTY_REPORT_OPTIONS = {};
+const REPORT_TYPE_OPTIONS = [
+  { id: 'Monthly', label: 'Monthly' },
+  { id: 'Daily', label: 'Daily' },
+];
+
+function ReportActionButtons({
+  friendlyButtonClassName,
+  handleCloneReport,
+  handleCreateBlankReport,
+  handleDeleteReport,
+  handleOCRUpload,
+  setIsAccessModalOpen,
+}) {
+  return (
+    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+      <Button type="button" variant="outline" className={`w-full sm:w-auto ${friendlyButtonClassName}`} onClick={handleCloneReport}>
+        <Copy />
+        Clone
+      </Button>
+      <Button type="button" variant="outline" className={`w-full sm:w-auto ${friendlyButtonClassName}`} onClick={handleCreateBlankReport}>
+        <FilePlus />
+        Blank
+      </Button>
+      <Button variant="outline" className={`w-full sm:w-auto ${friendlyButtonClassName}`} type="button" onClick={() => document.getElementById('report-ocr-upload')?.click()}>
+        <ScanText />
+        OCR
+      </Button>
+      <input
+        id="report-ocr-upload"
+        aria-label="OCR"
+        type="file"
+        accept="image/*,.pdf"
+        onChange={handleOCRUpload}
+        className="hidden"
+      />
+      <Button type="button" variant="outline" className={`w-full sm:w-auto ${friendlyButtonClassName}`} onClick={() => setIsAccessModalOpen(true)}>
+        <UserCheck />
+        Access
+      </Button>
+      <Button
+        type="button"
+        variant="destructive"
+        className="w-full sm:w-auto border-destructive/30 bg-destructive/10 text-destructive hover:border-destructive/40 hover:bg-destructive/20"
+        onClick={handleDeleteReport}
+      >
+        <Trash2 className="text-destructive" />
+        Delete
+      </Button>
+    </div>
+  );
+}
+
+function ReportAccessSummary({
+  activeReport,
+  friendlyButtonClassName,
+  masterData,
+  setIsAccessModalOpen,
+}) {
+  return (
+    <div className="space-y-3 rounded-xl border border-border bg-muted/10 p-4">
+      <div className="space-y-1">
+        <div className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
+          <ShieldCheck className="size-4 text-muted-foreground" />
+          Access Summary
+        </div>
+        <p className="text-sm text-muted-foreground">Assigned users and visibility control.</p>
+      </div>
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
+        <Button type="button" variant="outline" className={`shrink-0 ${friendlyButtonClassName}`} onClick={() => setIsAccessModalOpen(true)}>
+          Manage access
+        </Button>
+        <div className="flex h-8 min-w-0 items-center rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm text-foreground dark:bg-input/30">
+          {activeReport.assignedUsers.length > 0
+            ? activeReport.assignedUsers.map((uid) => masterData?.users?.find((user) => user.id === uid)?.name || uid).join(', ')
+            : 'None'}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReportStatusCard({ activeReport, updateActiveReport }) {
+  return (
+    <div className="space-y-3 rounded-xl border border-border bg-muted/10 p-4">
+      <div className="space-y-1">
+        <div className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
+          <Eye className="size-4 text-muted-foreground" />
+          Status
+        </div>
+        <p className="text-sm text-muted-foreground">Toggle whether this report is visible.</p>
+      </div>
+      <Button
+        variant="outline"
+        className={`w-full justify-center border ${activeReport.isActive !== false
+          ? 'border-stone-300 bg-stone-100 text-stone-800 hover:bg-stone-200 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100'
+          : 'border-stone-300 bg-stone-50 text-stone-600 hover:bg-stone-100 dark:border-stone-700 dark:bg-stone-950 dark:text-stone-300'
+        }`}
+        onClick={() => updateActiveReport({ isActive: activeReport.isActive === false ? true : false })}
+      >
+        {activeReport.isActive !== false ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
+        {activeReport.isActive !== false ? 'Active' : 'Inactive'}
+      </Button>
+    </div>
+  );
+}
+
 export default function ReportDetailsPanel({
   activeReport,
   activeCategories,
   masterData,
-  reportOptions = {},
+  reportOptions = EMPTY_REPORT_OPTIONS,
   updateActiveReport,
   handleCloneReport,
   handleCreateBlankReport,
@@ -66,13 +173,10 @@ export default function ReportDetailsPanel({
         { id: 'I', label: 'Income Statement (I)' },
         { id: 'B', label: 'Balance Sheet (B)' },
       ];
-  const reportTypeOptions = [
-    { id: 'Monthly', label: 'Monthly' },
-    { id: 'Daily', label: 'Daily' },
-  ];
   const accountCategoryLabelMap = new Map(accountCategoryOptions.map((option) => [option.id, option.label]));
   const dateDisplayValue = activeReport.overrideDateDisplay ?? activeReport.customDateLabel ?? '';
   const periodDisplayValue = activeReport.overridePeriodDisplay ?? activeReport.customPeriodLabel ?? '';
+  const friendlyButtonClassName = 'border-stone-300 bg-stone-100 text-stone-800 hover:bg-stone-200 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100';
 
   return (
     <Card className="border border-border shadow-none ring-0">
@@ -159,7 +263,7 @@ export default function ReportDetailsPanel({
                 <SelectValue placeholder="Select type" />
               </SelectTrigger>
               <SelectContent position="popper">
-                {reportTypeOptions.map((option) => (
+                {REPORT_TYPE_OPTIONS.map((option) => (
                   <SelectItem key={option.id} value={option.id}>
                     {option.label}
                   </SelectItem>
@@ -243,83 +347,26 @@ export default function ReportDetailsPanel({
 
         <Separator />
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-          <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleCloneReport}>
-            <Copy />
-            Clone
-          </Button>
-          <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleCreateBlankReport}>
-            <FilePlus />
-            Blank
-          </Button>
-          <Button variant="outline" className="w-full sm:w-auto" type="button" onClick={() => document.getElementById('report-ocr-upload')?.click()}>
-            <ScanText />
-            OCR
-          </Button>
-          <input
-            id="report-ocr-upload"
-            aria-label="OCR"
-            type="file"
-            accept="image/*,.pdf"
-            onChange={handleOCRUpload}
-            className="hidden"
-          />
-          <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setIsAccessModalOpen(true)}>
-            <UserCheck />
-            Access
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            className="w-full sm:w-auto border-destructive/30 bg-destructive/10 text-destructive hover:border-destructive/40 hover:bg-destructive/20"
-            onClick={handleDeleteReport}
-          >
-            <Trash2 className="text-destructive" />
-            Delete
-          </Button>
-        </div>
+        <ReportActionButtons
+          friendlyButtonClassName={friendlyButtonClassName}
+          handleCloneReport={handleCloneReport}
+          handleCreateBlankReport={handleCreateBlankReport}
+          handleDeleteReport={handleDeleteReport}
+          handleOCRUpload={handleOCRUpload}
+          setIsAccessModalOpen={setIsAccessModalOpen}
+        />
 
         <div className="grid gap-3 lg:grid-cols-2">
-          <div className="space-y-3 rounded-xl border border-border bg-muted/10 p-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
-                <ShieldCheck className="size-4 text-muted-foreground" />
-                Access Summary
-              </div>
-              <p className="text-sm text-muted-foreground">Assigned users and visibility control.</p>
-            </div>
-            <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
-              <Button type="button" variant="outline" className="shrink-0" onClick={() => setIsAccessModalOpen(true)}>
-                Manage access
-              </Button>
-              <div className="flex min-w-0 items-center rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm text-foreground h-8 dark:bg-input/30">
-                {activeReport.assignedUsers.length > 0
-                  ? activeReport.assignedUsers.map((uid) => masterData?.users?.find((user) => user.id === uid)?.name || uid).join(', ')
-                  : 'None'}
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-3 rounded-xl border border-border bg-muted/10 p-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
-                <Eye className="size-4 text-muted-foreground" />
-                Status
-              </div>
-              <p className="text-sm text-muted-foreground">Toggle whether this report is visible.</p>
-            </div>
-            <Button
-              variant="outline"
-              className={`w-full justify-center border ${activeReport.isActive !== false
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/15'
-                : 'border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15'
-              }`}
-              onClick={() => updateActiveReport({ isActive: activeReport.isActive === false ? true : false })}
-            >
-              {activeReport.isActive !== false ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
-              {activeReport.isActive !== false ? 'Active' : 'Inactive'}
-            </Button>
-          </div>
+          <ReportAccessSummary
+            activeReport={activeReport}
+            friendlyButtonClassName={friendlyButtonClassName}
+            masterData={masterData}
+            setIsAccessModalOpen={setIsAccessModalOpen}
+          />
+          <ReportStatusCard
+            activeReport={activeReport}
+            updateActiveReport={updateActiveReport}
+          />
         </div>
       </CardContent>
     </Card>

@@ -934,7 +934,7 @@ describe('App shell', () => {
 
     const rowInput = screen.getByDisplayValue('Rooms');
     const row = rowInput.closest('tr');
-    fireEvent.click(within(row).getAllByRole('button')[3]);
+    fireEvent.click(within(row).getByTitle('Edit mapping for row r1'));
 
     const accTextarea = screen.getByPlaceholderText('e.g. 4001, 4002');
     fireEvent.change(accTextarea, { target: { value: '4001' } });
@@ -1040,7 +1040,9 @@ describe('App shell', () => {
     fireEvent.click(screen.getByRole('option', { name: /Balance Sheet/i }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Access' }));
-    const generalManagerLabel = screen.getByText('General Manager').closest('label');
+    const generalManagerLabel = screen.getByRole('button', {
+      name: /general manager/i,
+    });
     expect(generalManagerLabel).toBeTruthy();
     fireEvent.click(generalManagerLabel);
 
@@ -1525,6 +1527,16 @@ describe('App shell', () => {
 
     expect(printSpy).toHaveBeenCalledTimes(1);
     printSpy.mockRestore();
+  });
+
+  it('uses the neutral filter/action button palette in the report toolbar', async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText('Carmen Hotel & Resorts')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'VIEW' }).className).toMatch(/bg-stone|border-stone|text-stone|ring-stone/);
+    expect(screen.getByRole('button', { name: /DEPT/i }).className).toMatch(/bg-stone|border-stone|text-stone/);
+    expect(screen.getByRole('button', { name: 'Apply' }).className).toMatch(/bg-stone|border-stone|text-stone/);
+    expect(screen.getByRole('button', { name: /GL/i }).className).toMatch(/bg-stone|border-stone|text-stone/);
   });
 
   it('rejects an out-of-range day for PTD reports before loading report data', async () => {

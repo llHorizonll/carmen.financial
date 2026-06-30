@@ -1,6 +1,29 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildReportDefinitionPayload, cloneCarmenReport, deleteCarmenReport, fetchCarmenReport, fetchCarmenReportOptions, loginWithCarmenCredentials, saveCarmenReport } from './reportApi.js';
 
+const createSessionStorageMock = (session = {}) => {
+  const storage = new Map();
+  const user = session.user ?? null;
+  const businessUnit = session.businessUnit ?? null;
+
+  if (session.accessToken) storage.set('carmen_access_token', session.accessToken);
+  if (session.username) storage.set('carmen_username', session.username);
+  if (user !== undefined) storage.set('carmen_user', JSON.stringify(user));
+  if (businessUnit !== undefined) storage.set('carmen_business_unit', JSON.stringify(businessUnit));
+
+  vi.spyOn(window.localStorage, 'getItem').mockImplementation((key) =>
+    storage.has(key) ? storage.get(key) : null
+  );
+  vi.spyOn(window.localStorage, 'removeItem').mockImplementation((key) => {
+    storage.delete(key);
+  });
+  vi.spyOn(window.localStorage, 'clear').mockImplementation(() => {
+    storage.clear();
+  });
+
+  return storage;
+};
+
 afterEach(() => {
   vi.unstubAllGlobals();
   window.localStorage.clear();
@@ -124,10 +147,12 @@ describe('reportApi helpers', () => {
   });
 
   it('rejects report detail loads for unauthorized users', async () => {
-    window.localStorage.setItem('carmen_access_token', 'token');
-    window.localStorage.setItem('carmen_username', 'viewer');
-    window.localStorage.setItem('carmen_user', JSON.stringify({ id: 'viewer' }));
-    window.localStorage.setItem('carmen_business_unit', JSON.stringify({ tenant: 'tenant-1' }));
+    createSessionStorageMock({
+      accessToken: 'token',
+      username: 'viewer',
+      user: { id: 'viewer' },
+      businessUnit: { tenant: 'tenant-1' },
+    });
 
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
@@ -143,10 +168,12 @@ describe('reportApi helpers', () => {
   });
 
   it('allows report detail loads for the owning user', async () => {
-    window.localStorage.setItem('carmen_access_token', 'token');
-    window.localStorage.setItem('carmen_username', 'owner-1');
-    window.localStorage.setItem('carmen_user', JSON.stringify({ id: 'owner-1' }));
-    window.localStorage.setItem('carmen_business_unit', JSON.stringify({ tenant: 'tenant-1' }));
+    createSessionStorageMock({
+      accessToken: 'token',
+      username: 'owner-1',
+      user: { id: 'owner-1' },
+      businessUnit: { tenant: 'tenant-1' },
+    });
 
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
@@ -186,10 +213,12 @@ describe('reportApi helpers', () => {
   });
 
   it('sends POST for new reports and PUT for updates', async () => {
-    window.localStorage.setItem('carmen_access_token', 'token');
-    window.localStorage.setItem('carmen_username', 'owner-1');
-    window.localStorage.setItem('carmen_user', JSON.stringify({ id: 'owner-1' }));
-    window.localStorage.setItem('carmen_business_unit', JSON.stringify({ tenant: 'tenant-1' }));
+    createSessionStorageMock({
+      accessToken: 'token',
+      username: 'owner-1',
+      user: { id: 'owner-1' },
+      businessUnit: { tenant: 'tenant-1' },
+    });
 
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -264,10 +293,12 @@ describe('reportApi helpers', () => {
   });
 
   it('sends delete and clone requests to the API', async () => {
-    window.localStorage.setItem('carmen_access_token', 'token');
-    window.localStorage.setItem('carmen_username', 'owner-1');
-    window.localStorage.setItem('carmen_user', JSON.stringify({ id: 'owner-1' }));
-    window.localStorage.setItem('carmen_business_unit', JSON.stringify({ tenant: 'tenant-1' }));
+    createSessionStorageMock({
+      accessToken: 'token',
+      username: 'owner-1',
+      user: { id: 'owner-1' },
+      businessUnit: { tenant: 'tenant-1' },
+    });
 
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({
@@ -297,10 +328,12 @@ describe('reportApi helpers', () => {
   });
 
   it('clears the Carmen session when the API returns 401', async () => {
-    window.localStorage.setItem('carmen_access_token', 'token');
-    window.localStorage.setItem('carmen_username', 'owner-1');
-    window.localStorage.setItem('carmen_user', JSON.stringify({ id: 'owner-1' }));
-    window.localStorage.setItem('carmen_business_unit', JSON.stringify({ tenant: 'tenant-1' }));
+    createSessionStorageMock({
+      accessToken: 'token',
+      username: 'owner-1',
+      user: { id: 'owner-1' },
+      businessUnit: { tenant: 'tenant-1' },
+    });
 
     const fetchMock = vi.fn().mockResolvedValue({
       ok: false,

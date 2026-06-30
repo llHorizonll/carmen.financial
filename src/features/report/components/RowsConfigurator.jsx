@@ -27,10 +27,12 @@ export default function RowsConfigurator({
   setConfirmAction,
 }) {
   const brokenRowReferences = findBrokenReferences(activeReport).filter((issue) => issue.scope === 'row');
+  const headerActionClassName = 'w-full justify-center rounded-xl border shadow-sm transition-colors';
+  const friendlyActionClassName = 'border-stone-300 bg-stone-100 text-stone-800 hover:bg-stone-200 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100';
 
   return (
-    <Card className="min-h-0 border border-border shadow-none ring-0">
-      <CardHeader className="border-b pb-5">
+    <Card className="min-h-0 overflow-hidden border border-border bg-card/95 shadow-none ring-0">
+      <CardHeader className="border-b bg-muted/20 pb-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-1.5">
             <CardTitle className="flex items-center gap-2 text-base font-semibold tracking-tight text-foreground">
@@ -40,9 +42,9 @@ export default function RowsConfigurator({
             <CardDescription className="text-sm text-muted-foreground">Control report row structure, formulas, and mappings.</CardDescription>
           </div>
           <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[24rem]">
-            <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRow('data')}>+ Add Data Row</Button>
-            <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRow('header')}>+ Add Header Row</Button>
-            <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRow('formula')}>+ Add Formula Row</Button>
+            <Button variant="outline" size="sm" className={`${headerActionClassName} ${friendlyActionClassName}`} onClick={() => handleAddRow('data')}>+ Add Data Row</Button>
+            <Button variant="outline" size="sm" className={`${headerActionClassName} ${friendlyActionClassName}`} onClick={() => handleAddRow('header')}>+ Add Header Row</Button>
+            <Button variant="outline" size="sm" className={`${headerActionClassName} ${friendlyActionClassName}`} onClick={() => handleAddRow('formula')}>+ Add Formula Row</Button>
           </div>
         </div>
       </CardHeader>

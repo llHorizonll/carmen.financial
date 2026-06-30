@@ -456,7 +456,7 @@ export const getStoredTheme = () => {
   return stored === 'dark' ? 'dark' : 'light';
 };
 
-export const applyTheme = (theme) => {
+const applyTheme = (theme) => {
   if (typeof document === 'undefined') return;
   document.documentElement.classList.toggle('dark', theme === 'dark');
 };

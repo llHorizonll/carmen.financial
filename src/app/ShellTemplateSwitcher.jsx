@@ -3,9 +3,11 @@ import { Badge } from '@/components/ui/badge.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { cn } from '@/lib/utils.js';
 
+const EMPTY_OPTIONS = [];
+
 export default function ShellTemplateSwitcher({
   value,
-  options = [],
+  options = EMPTY_OPTIONS,
   onChange,
 }) {
   return (

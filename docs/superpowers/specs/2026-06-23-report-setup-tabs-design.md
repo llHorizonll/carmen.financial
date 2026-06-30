@@ -67,7 +67,8 @@ This is the smallest change that improves scanability and keeps the current busi
 - Keep the table header sticky.
 - Add a right-edge fade or shadow cue over the scroll area so users can tell more fields exist offscreen.
 - Keep horizontal scrolling native; do not add custom drag logic.
-- Keep the action buttons in the header.
+- Keep the action buttons in the header and give them clearer visual roles with subtle color styling.
+- Add a per-column visibility toggle using an eye icon near the delete control so setup users can quickly show or hide columns in view mode without hunting for the checkbox cell.
 - Do not pin columns yet unless the current table still feels hard to scan after the lighter refresh.
 
 ### Rows Configurator
@@ -75,6 +76,7 @@ This is the smallest change that improves scanability and keeps the current busi
 - Leave row logic and structure intact.
 - Only change its visibility through the new tabs.
 - Minimal cosmetic alignment so it does not feel mismatched beside the refreshed columns card.
+- Apply the same colored-action-button pattern to the row header controls so both configurators feel like the same editing system.
 
 ## Component Design
 
@@ -102,7 +104,24 @@ This avoids growing `ReportSetup.jsx` further while staying below the threshold 
 ### ColumnsConfigurator Changes
 
 - Rework the card header layout and scroll container styling only.
+- Add an eye / eye-off action beside delete for each row, wired to the existing `isActive` column state.
+- Style header actions such as `+ Data`, `+ Formula`, and `%` with distinct but restrained semantic fills/borders so users can scan available actions faster.
+- Keep the existing `Active` field behavior unless the implementation makes it clearly redundant; if both remain, the icon becomes the fast action and the field remains as a readable status/control.
 - Keep handler props and row rendering contract unchanged so existing tests stay relevant.
+
+### Header Action Button Styling
+
+- Use color to distinguish action intent, not to create a loud rainbow toolbar.
+- Keep contrast accessible in both light and dark themes.
+- Prefer soft tinted backgrounds with matching border/text accents over fully saturated fills.
+- Reuse the same visual mapping in both configurators wherever the action meaning matches.
+
+Suggested mapping:
+
+- Add actions: blue or primary-tinted
+- Formula / calculated actions: violet or slate-tinted
+- Percent / ratio actions: emerald-tinted
+- Destructive actions remain destructive only where deletion happens, not in header toolbars
 
 ## State and Data Flow
 
@@ -115,6 +134,7 @@ This avoids growing `ReportSetup.jsx` further while staying below the threshold 
 
 - Existing warnings in `ColumnsConfigurator` for incompatible types and broken references remain unchanged.
 - Tab switching must not reset unsaved edits because edits already flow upward through existing handlers.
+- The visibility eye toggle must update only presentation state (`isActive`) and must not affect formulas, references, or column ordering.
 
 ## Testing
 
@@ -124,6 +144,7 @@ Minimum checks:
 - Switching to `Rows` hides columns content and shows row content.
 - Switching back preserves ongoing edits because parent state still owns the data.
 - `ColumnsConfigurator` still renders add buttons, warnings, and the horizontal table.
+- Clicking the eye icon toggles the column active state the same way as the existing active control.
 
 Prefer adding or updating a small component test around `ReportSetup` rather than rewriting configurator tests.
 

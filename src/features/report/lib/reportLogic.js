@@ -286,6 +286,85 @@ const getColumnValueMode = (colType) => {
   return 'ac';
 };
 
+let reportCloneCounter = 0;
+
+const createReportId = () =>
+  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? `rep-${crypto.randomUUID()}`
+    : `rep-${++reportCloneCounter}`;
+
+const evaluateArithmeticExpression = (expression) => {
+  const sanitized = String(expression || '').replace(/[^-()\d/*+.\s]/g, '').trim();
+  if (!sanitized) return 0;
+
+  let index = 0;
+
+  const skipWhitespace = () => {
+    while (index < sanitized.length && /\s/.test(sanitized[index])) index += 1;
+  };
+
+  const parseNumber = () => {
+    skipWhitespace();
+    const start = index;
+    while (index < sanitized.length && /[\d.]/.test(sanitized[index])) index += 1;
+    const value = Number.parseFloat(sanitized.slice(start, index));
+    if (!Number.isFinite(value)) throw new Error('Invalid number');
+    return value;
+  };
+
+  const parseFactor = () => {
+    skipWhitespace();
+    if (sanitized[index] === '+') {
+      index += 1;
+      return parseFactor();
+    }
+    if (sanitized[index] === '-') {
+      index += 1;
+      return -parseFactor();
+    }
+    if (sanitized[index] === '(') {
+      index += 1;
+      const value = parseExpression();
+      skipWhitespace();
+      if (sanitized[index] !== ')') throw new Error('Missing closing parenthesis');
+      index += 1;
+      return value;
+    }
+    return parseNumber();
+  };
+
+  const parseTerm = () => {
+    let value = parseFactor();
+    while (true) {
+      skipWhitespace();
+      const operator = sanitized[index];
+      if (operator !== '*' && operator !== '/') break;
+      index += 1;
+      const rhs = parseFactor();
+      value = operator === '*' ? value * rhs : value / rhs;
+    }
+    return value;
+  };
+
+  const parseExpression = () => {
+    let value = parseTerm();
+    while (true) {
+      skipWhitespace();
+      const operator = sanitized[index];
+      if (operator !== '+' && operator !== '-') break;
+      index += 1;
+      const rhs = parseTerm();
+      value = operator === '+' ? value + rhs : value - rhs;
+    }
+    return value;
+  };
+
+  const value = parseExpression();
+  skipWhitespace();
+  if (index !== sanitized.length) throw new Error('Unexpected token');
+  return Number.isFinite(value) ? value : 0;
+};
+
 const normalizeRowDimensions = (row) => {
   const dimensions = [];
   if (Array.isArray(row?.dimensions)) {
@@ -321,8 +400,8 @@ export const getIndentClass = (level) => level === 1 ? 'pl-8' : level === 2 ? 'p
 
 export { createBlankReport, createOcrReport } from '../data/reportTemplates.js';
 
-export const cloneReport = (report, newId = `rep-${Date.now()}`) => {
-  const cloned = JSON.parse(JSON.stringify(report));
+export const cloneReport = (report, newId = createReportId()) => {
+  const cloned = structuredClone(report);
   cloned.id = newId;
   cloned.name = `${report.name} (Copy)`;
   return cloned;
@@ -628,7 +707,7 @@ const applyFormulaRows = (rows, columns, rowRefMap) => {
         evalStr = evalStr.replace(new RegExp(`\\b${v}\\b`, 'g'), (rows[idx] && rowRefMap[rows[idx].id][col.id]) || 0);
       });
       try {
-        const res = new Function('return ' + evalStr.replace(/[^-()\d/*+.]/g, ''))();
+        const res = evaluateArithmeticExpression(evalStr);
         rowRefMap[row.id][col.id] = (!isFinite(res) || isNaN(res)) ? 0 : res;
       } catch {
         rowRefMap[row.id][col.id] = 0;
@@ -726,7 +805,7 @@ export const buildReportData = ({
         evalStr = evalStr.replace(new RegExp(`\\b${v}\\b`, 'g'), (columns[idx] && rowRefMap[row.id][columns[idx].id]) || 0);
       });
       try {
-        const res = new Function('return ' + evalStr.replace(/[^-()\d/*+.]/g, ''))();
+        const res = evaluateArithmeticExpression(evalStr);
         rowRefMap[row.id][col.id] = (!isFinite(res) || isNaN(res)) ? 0 : res;
       } catch {
         rowRefMap[row.id][col.id] = 0;

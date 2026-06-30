@@ -16,6 +16,13 @@ const SESSION_KEYS = {
   businessUnit: 'carmen_business_unit',
   user: 'carmen_user',
 };
+const toTrimmedStringArray = (value) =>
+  Array.isArray(value)
+    ? value.flatMap((item) => {
+        const trimmed = String(item).trim();
+        return trimmed ? [trimmed] : [];
+      })
+    : [];
 
 const getWindowConfig = () => (typeof window !== 'undefined' ? window.__CARMEN_CONFIG__ || {} : {});
 const joinUrl = (baseUrl, path) => `${baseUrl.replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
@@ -313,10 +320,10 @@ export const buildReportDefinitionPayload = (report) => ({
   name: String(report?.name || '').trim(),
   companyName: String(report?.companyName || '').trim(),
   category: Array.isArray(report?.category) && report.category.length > 0
-    ? report.category.map((item) => String(item).trim()).filter(Boolean)
+    ? toTrimmedStringArray(report.category)
     : ['ALL'],
   assignedUsers: Array.isArray(report?.assignedUsers)
-    ? report.assignedUsers.map((item) => String(item).trim()).filter(Boolean)
+    ? toTrimmedStringArray(report.assignedUsers)
     : [],
   isActive: report?.isActive !== false,
   periodFormat: String(report?.periodFormat || 'standard').trim() || 'standard',
@@ -333,19 +340,19 @@ export const buildReportDefinitionPayload = (report) => ({
   access: Array.isArray(report?.access) && report.access.length > 0
     ? report.access
     : Array.isArray(report?.assignedUsers)
-      ? report.assignedUsers.map((userId) => {
+      ? report.assignedUsers.reduce((entries, userId) => {
         const trimmedUserId = String(userId).trim();
-        return trimmedUserId
-          ? {
-              userId: trimmedUserId,
-              userName: trimmedUserId,
-              displayName: trimmedUserId,
-              role: 'User',
-              canView: true,
-              canEdit: true,
-            }
-          : null;
-      }).filter(Boolean)
+        if (!trimmedUserId) return entries;
+        entries.push({
+          userId: trimmedUserId,
+          userName: trimmedUserId,
+          displayName: trimmedUserId,
+          role: 'User',
+          canView: true,
+          canEdit: true,
+        });
+        return entries;
+      }, [])
       : [],
 });
 

@@ -185,4 +185,4 @@
     }
 ];
 
-export const getDefaultReports = () => JSON.parse(JSON.stringify(DEFAULT_REPORTS));
+export const getDefaultReports = () => structuredClone(DEFAULT_REPORTS);

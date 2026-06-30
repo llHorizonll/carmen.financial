@@ -21,12 +21,14 @@ import {
 } from '@/components/ui/select.jsx';
 import { Textarea } from '@/components/ui/textarea.jsx';
 
+const EMPTY_REPORT_OPTIONS = {};
+
 export default function EditMappingModal({
   isOpen,
   editingRow,
   setEditingRow,
   masterData,
-  reportOptions = {},
+  reportOptions = EMPTY_REPORT_OPTIONS,
   modalAccCategory,
   setModalAccCategory,
   onOpenDetailSelector,
@@ -34,6 +36,7 @@ export default function EditMappingModal({
   onClose,
 }) {
   if (!isOpen || !editingRow) return null;
+  const friendlyButtonClassName = 'border-stone-300 bg-stone-100 text-stone-800 hover:bg-stone-200 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100';
 
   const accountCategoryOptions = reportOptions.accountCategories?.length > 0
     ? reportOptions.accountCategories
@@ -44,8 +47,10 @@ export default function EditMappingModal({
       ];
   const accountCodeTokens = String(editingRow.accCodes || '')
     .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
+    .flatMap((item) => {
+      const trimmed = item.trim();
+      return trimmed ? [trimmed] : [];
+    });
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -74,7 +79,7 @@ export default function EditMappingModal({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="w-full justify-start sm:w-auto"
+                className={`w-full justify-start sm:w-auto ${friendlyButtonClassName}`}
                 aria-label="Select departments"
                 onClick={() => onOpenDetailSelector({ field: 'dept', title: 'Select Departments', subTitle: editingRow.desc, items: masterData.depts })}
               >
@@ -115,7 +120,7 @@ export default function EditMappingModal({
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="w-full justify-start sm:w-auto"
+                  className={`w-full justify-start sm:w-auto ${friendlyButtonClassName}`}
                   aria-label="Select groups"
                   onClick={() => onOpenDetailSelector({ field: 'groups', title: 'Select Groups', subTitle: editingRow.desc, items: masterData.groups[editingRow.groupLevel || 'L4'] })}
                 >
@@ -174,7 +179,7 @@ export default function EditMappingModal({
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="w-full justify-start sm:w-auto"
+                  className={`w-full justify-start sm:w-auto ${friendlyButtonClassName}`}
                   aria-label="Select account details"
                   onClick={() => onOpenDetailSelector({ field: 'accCodes', title: 'Select Account Detail', subTitle: editingRow.desc, items: masterData.accCodes.filter((item) => modalAccCategory === 'ALL' || item.type === modalAccCategory) })}
                 >
@@ -202,10 +207,10 @@ export default function EditMappingModal({
         </div>
 
         <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={onClose}>
+          <Button variant="outline" size="sm" className={`w-full sm:w-auto ${friendlyButtonClassName}`} onClick={onClose}>
             Cancel
           </Button>
-          <Button size="sm" className="w-full border-border shadow-sm sm:w-auto" onClick={onApply}>
+          <Button size="sm" className={`w-full border shadow-sm sm:w-auto ${friendlyButtonClassName}`} onClick={onApply}>
             Apply Mapping
           </Button>
         </DialogFooter>

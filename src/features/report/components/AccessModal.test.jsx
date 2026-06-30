@@ -27,7 +27,7 @@ describe('AccessModal', () => {
     expect(screen.getByText('Admin User')).toBeInTheDocument();
     expect(screen.getByText('General Manager')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('General Manager').closest('label'));
+    fireEvent.click(screen.getByRole('button', { name: /general manager/i }));
     expect(onUpdateUsers).toHaveBeenCalledWith(['u1', 'u2']);
 
     fireEvent.click(screen.getByText('Done'));

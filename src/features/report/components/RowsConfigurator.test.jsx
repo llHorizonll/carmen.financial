@@ -57,12 +57,14 @@ describe('RowsConfigurator', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '+ Add Data Row' }));
     expect(handleAddRow).toHaveBeenCalledWith('data');
+    expect(screen.getByRole('button', { name: '+ Add Data Row' }).className).toMatch(/bg-stone|border-stone|text-stone/);
 
     fireEvent.click(screen.getByRole('button', { name: '+ Add Header Row' }));
     expect(handleAddRow).toHaveBeenCalledWith('header');
 
     fireEvent.click(screen.getByRole('button', { name: '+ Add Formula Row' }));
     expect(handleAddRow).toHaveBeenCalledWith('formula');
+    expect(screen.getByRole('button', { name: '+ Add Formula Row' }).className).toMatch(/bg-stone|border-stone|text-stone/);
 
     const revenueInput = screen.getByDisplayValue('Revenue');
     fireEvent.change(revenueInput, { target: { value: 'Room Revenue' } });

@@ -14,6 +14,8 @@ import { Input } from '@/components/ui/input.jsx';
 import { ScrollArea } from '@/components/ui/scroll-area.jsx';
 import { Separator } from '@/components/ui/separator.jsx';
 
+const toSelectedIds = (selectedItems) => [...selectedItems].map(String);
+
 export default function DetailSelectorModal({
   title,
   subTitle,
@@ -24,7 +26,8 @@ export default function DetailSelectorModal({
   masterData,
 }) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [tempSelected, setTempSelected] = useState([...selectedItems].map(String));
+  const [tempSelected, setTempSelected] = useState(() => toSelectedIds(selectedItems));
+  const friendlyButtonClassName = 'border-stone-300 bg-stone-100 text-stone-800 hover:bg-stone-200 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100';
 
   const uniqueSortedAvailable = useMemo(() => {
     const uniqueMap = new Map();
@@ -82,7 +85,7 @@ export default function DetailSelectorModal({
           <div className="rounded-xl border border-border bg-background">
             <div className="flex flex-col gap-2 border-b bg-muted/30 p-3 sm:flex-row">
               <Input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search..." className="h-9" />
-              <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleSelectAll}>
+              <Button type="button" variant="outline" className={`w-full sm:w-auto ${friendlyButtonClassName}`} onClick={handleSelectAll}>
                 Select all
               </Button>
             </div>
@@ -145,8 +148,8 @@ export default function DetailSelectorModal({
         <Separator />
 
         <DialogFooter className="flex-col-reverse sm:flex-row">
-          <Button variant="outline" className="w-full sm:w-auto" onClick={onCancel}>Cancel</Button>
-          <Button className="w-full sm:w-auto" onClick={() => onSave(tempSelected)}>Save selection</Button>
+          <Button variant="outline" className={`w-full sm:w-auto ${friendlyButtonClassName}`} onClick={onCancel}>Cancel</Button>
+          <Button className={`w-full sm:w-auto border ${friendlyButtonClassName}`} onClick={() => onSave(tempSelected)}>Save selection</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

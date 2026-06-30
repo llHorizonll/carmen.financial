@@ -30,6 +30,8 @@ describe('ColumnsConfigurator', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '+ Formula' }));
     expect(handleAddCol).toHaveBeenCalledWith('formula');
+    expect(screen.getByRole('button', { name: '+ Data' }).className).toMatch(/bg-stone|border-stone|text-stone/);
+    expect(screen.getByRole('button', { name: '+ Formula' }).className).toMatch(/bg-stone|border-stone|text-stone/);
 
     fireEvent.click(screen.getByRole('button', { name: /Mix %/i }));
     expect(handleAddCol).toHaveBeenCalledWith('percent');
@@ -45,12 +47,15 @@ describe('ColumnsConfigurator', () => {
     const rowButtons = within(row).getAllByRole('button');
 
     fireEvent.click(rowButtons[0]);
-    expect(handleDeleteCol).toHaveBeenCalledWith('C1');
+    expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'isActive', false);
 
     fireEvent.click(rowButtons[1]);
-    expect(moveCol).toHaveBeenCalledWith(0, 'left');
+    expect(handleDeleteCol).toHaveBeenCalledWith('C1');
 
     fireEvent.click(rowButtons[2]);
+    expect(moveCol).toHaveBeenCalledWith(0, 'left');
+
+    fireEvent.click(rowButtons[3]);
     expect(moveCol).toHaveBeenCalledWith(0, 'right');
 
     fireEvent.click(within(row).getAllByRole('combobox')[0]);
@@ -64,8 +69,26 @@ describe('ColumnsConfigurator', () => {
     fireEvent.click(within(row).getAllByRole('combobox')[3]);
     fireEvent.click(await screen.findByText('FY'));
     expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'periodMode', 'FY');
+  });
 
-    fireEvent.click(screen.getAllByRole('checkbox')[0]);
+  it('toggles column visibility from the eye action', () => {
+    const handleUpdateCol = vi.fn();
+
+    render(
+      <ColumnsConfigurator
+        activeReport={{
+          columns: [
+            { id: 'C1', label: 'Actual', isActive: true, type: 'AC', yearMode: 'current', periodMode: 'current', width: '' },
+          ],
+        }}
+        handleAddCol={vi.fn()}
+        handleUpdateCol={handleUpdateCol}
+        moveCol={vi.fn()}
+        handleDeleteCol={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Hide column C1/i }));
     expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'isActive', false);
   });
 });

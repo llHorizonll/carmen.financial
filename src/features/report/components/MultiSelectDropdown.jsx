@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils.js';
 export default function MultiSelectDropdown({ options, selected, onChange, label, testIdPrefix }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const friendlyButtonClassName = 'border-stone-300 bg-stone-100 text-stone-800 hover:bg-stone-200 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100';
 
   const validOptions = useMemo(() => {
     const unique = [];
@@ -70,7 +71,7 @@ export default function MultiSelectDropdown({ options, selected, onChange, label
       <PopoverTrigger asChild>
         <Button
           variant="outline"
-          className="h-8 w-full justify-between gap-2 rounded-lg px-2.5 text-left"
+          className={`h-8 w-full justify-between gap-2 rounded-lg px-2.5 text-left ${friendlyButtonClassName}`}
           data-testid={`dropdown-${testIdPrefix}`}
         >
           <span className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">

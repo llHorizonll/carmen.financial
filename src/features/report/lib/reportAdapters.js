@@ -29,7 +29,7 @@ export const adaptCarmenCompany = (company) => ({
   name: company?.name || company?.HotelName || company?.RegName || 'Carmen Hotel & Resorts',
 });
 
-export const getCarmenFinancialReportPermission = (permissions) => {
+const getCarmenFinancialReportPermission = (permissions) => {
   const targetName = 'gl.financialreport';
   return toArray(permissions).find((permission) =>
     String(permission?.Name || permission?.name || '').trim().toLowerCase() === targetName

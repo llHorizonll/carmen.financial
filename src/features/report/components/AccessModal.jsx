@@ -24,6 +24,7 @@ const getUserRoleLabel = (user) => (isSetupAdmin(user) ? 'Admin' : 'User');
 
 export default function AccessModal({ isOpen, masterData, activeReport, onClose, onUpdateUsers }) {
   if (!activeReport) return null;
+  const friendlyButtonClassName = 'border-stone-300 bg-stone-100 text-stone-800 hover:bg-stone-200 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100';
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -40,27 +41,21 @@ export default function AccessModal({ isOpen, masterData, activeReport, onClose,
           <div className="space-y-2">
             {masterData.users.map((user) => {
               const isSelected = activeReport.assignedUsers.includes(user.id);
+              const nextUsers = isSelected
+                ? activeReport.assignedUsers.filter((id) => id !== user.id)
+                : [...activeReport.assignedUsers, user.id];
               return (
-                <label
+                <button
+                  type="button"
                   key={user.id}
-                  htmlFor={`access-user-${user.id}`}
                   onClick={() => {
-                    const newUsers = isSelected
-                      ? activeReport.assignedUsers.filter((id) => id !== user.id)
-                      : [...activeReport.assignedUsers, user.id];
-                    onUpdateUsers(newUsers);
+                    onUpdateUsers(nextUsers);
                   }}
                   className={`flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors ${
                     isSelected ? 'border-foreground/20 bg-muted/40' : 'hover:bg-muted/20'
                   }`}
+                  aria-pressed={isSelected}
                 >
-                  <input
-                    id={`access-user-${user.id}`}
-                    type="checkbox"
-                    className="sr-only"
-                    checked={isSelected}
-                    readOnly
-                  />
                   <div className={`flex size-5 items-center justify-center rounded border ${isSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-border'}`}>
                     {isSelected && <Check className="size-3.5" />}
                   </div>
@@ -69,14 +64,14 @@ export default function AccessModal({ isOpen, masterData, activeReport, onClose,
                     <div className="text-xs text-muted-foreground">{getUserRoleLabel(user)}</div>
                   </div>
                   {isSelected && <Badge variant="secondary">Can view</Badge>}
-                </label>
+                </button>
               );
             })}
           </div>
         </ScrollArea>
 
         <DialogFooter className="gap-2 sm:gap-2">
-          <Button variant="outline" className="w-full sm:w-auto" onClick={onClose}>
+          <Button variant="outline" className={`w-full sm:w-auto ${friendlyButtonClassName}`} onClick={onClose}>
             Done
           </Button>
         </DialogFooter>

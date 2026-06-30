@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useMemo, useState } from 'react';
+import React, { Suspense, lazy, useMemo, useRef, useState } from 'react';
 import {
   clearCarmenSession,
   fetchBusinessUnitsByUsername,
@@ -73,7 +73,7 @@ export default function LoginShell() {
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [submitAttempted, setSubmitAttempted] = useState(false);
-  const [usernameUsedForBusinessUnits, setUsernameUsedForBusinessUnits] = useState('');
+  const usernameUsedForBusinessUnitsRef = useRef('');
 
   React.useEffect(() => {
     initializeTheme();
@@ -98,14 +98,14 @@ export default function LoginShell() {
   const loadBusinessUnits = async () => {
     const trimmedUserName = username.trim();
     if (!trimmedUserName) return;
-    if (trimmedUserName === usernameUsedForBusinessUnits) return;
+    if (trimmedUserName === usernameUsedForBusinessUnitsRef.current) return;
 
     setError('');
     setIsLoadingBusinessUnits(true);
     try {
       const items = await fetchBusinessUnitsByUsername(trimmedUserName);
       setBusinessUnits(items);
-      setUsernameUsedForBusinessUnits(trimmedUserName);
+      usernameUsedForBusinessUnitsRef.current = trimmedUserName;
       const defaultItem = items.find((item) => item?.IsDefault === true) || items[0] || null;
       setSelectedTenant(defaultItem ? getBusinessUnitTenant(defaultItem) : '');
       if (!defaultItem) {
@@ -124,7 +124,7 @@ export default function LoginShell() {
     const next = event.target.value;
     setUsername(next);
     setFieldErrors((prev) => ({ ...prev, username: '' }));
-    if (next.trim() !== usernameUsedForBusinessUnits) {
+    if (next.trim() !== usernameUsedForBusinessUnitsRef.current) {
       setBusinessUnits([]);
       setSelectedTenant('');
       setFieldErrors((prev) => ({ ...prev, selectedTenant: '' }));

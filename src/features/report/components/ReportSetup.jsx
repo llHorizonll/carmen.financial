@@ -1,13 +1,21 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { cn } from '@/lib/utils.js';
 import { Badge } from '@/components/ui/badge.jsx';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card.jsx';
 import ReportDetailsPanel from './ReportDetailsPanel.jsx';
 import ColumnsConfigurator from './ColumnsConfigurator.jsx';
 import RowsConfigurator from './RowsConfigurator.jsx';
+import SetupSectionTabs from './SetupSectionTabs.jsx';
 import { THEMES } from '../lib/reportLogic.js';
 
+const themeBadgeClassMap = {
+  blue: 'border-stone-300 bg-stone-100 text-stone-800 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100',
+  green: 'border-stone-300 bg-stone-100 text-stone-800 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100',
+  gray: 'border-stone-300 bg-stone-100 text-stone-800 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100',
+};
+
 export default function ReportSetup(props) {
+  const [activeSetupSection, setActiveSetupSection] = useState('columns');
   const activeColumns = props.activeReport?.columns?.filter((column) => column?.isActive !== false).length || 0;
   const activeRows = props.activeReport?.rows?.length || 0;
   const activeCategoryCount = props.activeCategories?.length || 0;
@@ -20,16 +28,25 @@ export default function ReportSetup(props) {
       ];
   const activeThemeId = props.activeReport?.theme || 'blue';
   const activeTheme = themeOptions.find((option) => option.id === activeThemeId) || null;
-  const themeBadgeClassMap = {
-    blue: 'border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900/40 dark:bg-blue-950/45 dark:text-blue-100',
-    green: 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/45 dark:text-emerald-100',
-    gray: 'border-slate-200 bg-slate-100 text-slate-800 dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-100',
-  };
   const themeBadgeClass = themeBadgeClassMap[activeThemeId] || themeBadgeClassMap.blue;
   const themeBadgeLabel = activeTheme?.label || THEMES[activeThemeId]?.name || activeThemeId;
+  const setupTabs = [
+    {
+      key: 'columns',
+      label: `Columns (${activeColumns})`,
+      tabId: 'report-setup-tab-columns',
+      panelId: 'report-setup-panel-columns',
+    },
+    {
+      key: 'rows',
+      label: `Rows (${activeRows})`,
+      tabId: 'report-setup-tab-rows',
+      panelId: 'report-setup-panel-rows',
+    },
+  ];
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-5 overflow-y-auto pb-8 pr-2">
+    <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto">
       <Card className="overflow-hidden border border-border bg-gradient-to-br from-background via-background to-muted/25 shadow-none ring-0">
         <CardContent className="grid gap-5 p-5 xl:grid-cols-[1.15fr_0.85fr] xl:items-center xl:p-6">
           <div className="space-y-3">
@@ -76,8 +93,27 @@ export default function ReportSetup(props) {
       </Card>
       <ReportDetailsPanel {...props} />
       <div className="grid gap-5">
-        <ColumnsConfigurator {...props} />
-        <RowsConfigurator {...props} />
+        <SetupSectionTabs
+          items={setupTabs}
+          activeKey={activeSetupSection}
+          onChange={setActiveSetupSection}
+        />
+        <section
+          id="report-setup-panel-columns"
+          role="tabpanel"
+          aria-labelledby="report-setup-tab-columns"
+          hidden={activeSetupSection !== 'columns'}
+        >
+          <ColumnsConfigurator {...props} />
+        </section>
+        <section
+          id="report-setup-panel-rows"
+          role="tabpanel"
+          aria-labelledby="report-setup-tab-rows"
+          hidden={activeSetupSection !== 'rows'}
+        >
+          <RowsConfigurator {...props} />
+        </section>
       </div>
     </div>
   );
