@@ -37,25 +37,23 @@ describe('ColumnsConfigurator', () => {
     expect(handleAddCol).toHaveBeenCalledWith('percent');
 
     const labelInput = screen.getByDisplayValue('Actual');
-    const row = labelInput.closest('tr');
+    const row = labelInput.closest('[data-testid="column-card"]');
 
     fireEvent.change(labelInput, {
       target: { value: 'Operating Revenue' },
     });
     expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'label', 'Operating Revenue');
 
-    const rowButtons = within(row).getAllByRole('button');
-
-    fireEvent.click(rowButtons[0]);
+    fireEvent.click(within(row).getByRole('button', { name: /Hide column C1/i }));
     expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'isActive', false);
 
-    fireEvent.click(rowButtons[1]);
+    fireEvent.click(within(row).getByRole('button', { name: /Delete column C1/i }));
     expect(handleDeleteCol).toHaveBeenCalledWith('C1');
 
-    fireEvent.click(rowButtons[2]);
+    fireEvent.click(within(row).getByRole('button', { name: /Move column C1 left/i }));
     expect(moveCol).toHaveBeenCalledWith(0, 'left');
 
-    fireEvent.click(rowButtons[3]);
+    fireEvent.click(within(row).getByRole('button', { name: /Move column C1 right/i }));
     expect(moveCol).toHaveBeenCalledWith(0, 'right');
 
     fireEvent.click(within(row).getAllByRole('combobox')[0]);

@@ -103,6 +103,7 @@ export default function ReportSetup(props) {
           role="tabpanel"
           aria-labelledby="report-setup-tab-columns"
           hidden={activeSetupSection !== 'columns'}
+          className="w-full min-w-0 overflow-hidden"
         >
           <ColumnsConfigurator {...props} />
         </section>
@@ -111,6 +112,7 @@ export default function ReportSetup(props) {
           role="tabpanel"
           aria-labelledby="report-setup-tab-rows"
           hidden={activeSetupSection !== 'rows'}
+          className="w-full min-w-0 overflow-hidden"
         >
           <RowsConfigurator {...props} />
         </section>

@@ -11,22 +11,27 @@ const createSessionStorageMock = (session = {}) => {
   if (user !== undefined) storage.set('carmen_user', JSON.stringify(user));
   if (businessUnit !== undefined) storage.set('carmen_business_unit', JSON.stringify(businessUnit));
 
-  vi.spyOn(window.localStorage, 'getItem').mockImplementation((key) =>
-    storage.has(key) ? storage.get(key) : null
-  );
-  vi.spyOn(window.localStorage, 'removeItem').mockImplementation((key) => {
-    storage.delete(key);
-  });
-  vi.spyOn(window.localStorage, 'clear').mockImplementation(() => {
-    storage.clear();
-  });
+  const mockLocalStorage = {
+    getItem: vi.fn((key) => (storage.has(key) ? storage.get(key) : null)),
+    setItem: vi.fn((key, value) => {
+      storage.set(key, String(value));
+    }),
+    removeItem: vi.fn((key) => {
+      storage.delete(key);
+    }),
+    clear: vi.fn(() => {
+      storage.clear();
+    }),
+  };
+
+  vi.stubGlobal('localStorage', mockLocalStorage);
 
   return storage;
 };
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  window.localStorage.clear();
+  vi.restoreAllMocks();
 });
 
 describe('reportApi helpers', () => {

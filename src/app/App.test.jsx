@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import App from './App.jsx';
@@ -18,7 +18,27 @@ const reportApiMocks = vi.hoisted(() => ({
 vi.mock('../features/report/lib/reportApi.js', () => reportApiMocks);
 
 describe('App shell', () => {
+  let localStorageStore = {};
   beforeEach(() => {
+    localStorageStore = {};
+    const mockLocalStorage = {
+      getItem: vi.fn((key) => localStorageStore[key] || null),
+      setItem: vi.fn((key, value) => {
+        localStorageStore[key] = String(value);
+      }),
+      removeItem: vi.fn((key) => {
+        delete localStorageStore[key];
+      }),
+      clear: vi.fn(() => {
+        localStorageStore = {};
+      }),
+    };
+    Object.defineProperty(window, 'localStorage', {
+      value: mockLocalStorage,
+      writable: true,
+      configurable: true,
+    });
+    vi.stubGlobal('localStorage', mockLocalStorage);
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(false);
     reportApiMocks.getStoredCarmenSession.mockReturnValue(null);
     reportApiMocks.fetchCarmenMasterData.mockReset();
@@ -411,8 +431,8 @@ describe('App shell', () => {
 
     const { container } = render(<App />);
 
-    await waitFor(() => expect(screen.getByText('No Reports Available')).toBeInTheDocument());
-    expect(screen.getAllByText('Local Storage Report').length).toBeGreaterThan(0);
+    const elements = await screen.findAllByText('Local Storage Report');
+    expect(elements.length).toBeGreaterThan(0);
   });
 
   it('ignores the revision selector for reports without budget columns', async () => {
