@@ -256,7 +256,7 @@ export default function LoginShell() {
           </section>
 
           <Card
-            className="login-enter-from-right order-1 self-center border border-border bg-card/95 shadow-sm ring-0 lg:order-2"
+            className="login-enter-from-right order-1 w-full max-w-[420px] self-center border border-border bg-card/95 shadow-sm ring-0 lg:order-2"
             style={getLoginDelayStyle(180)}
           >
             <CardHeader className="space-y-2">

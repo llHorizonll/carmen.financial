@@ -37,9 +37,7 @@ export const THEMES = {
 export const INITIAL_MASTER_DATA = {
   companyProfile: { name: 'Carmen Hotel & Resorts' },
   users: [
-    { id: 'u1', name: 'Admin User', role: 'Admin' },
-    { id: 'u2', name: 'General Manager', role: 'User' },
-    { id: 'u3', name: 'F&B Director', role: 'User' }
+    { id: 'admin', name: 'admin', role: 'Admin' }
   ],
   depts: [],
   deptGroups: [

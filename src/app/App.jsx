@@ -19,6 +19,7 @@ import {
   LogOut,
   MoonStar,
   SunMedium,
+  AlertTriangle,
 } from "lucide-react";
 
 import { useIsMobile } from "@/hooks/use-mobile.js";
@@ -176,16 +177,16 @@ const DEFAULT_REPORT_OPTIONS = {
     { id: "gray", label: "Slate Gray" },
   ],
   periodFormats: [
-    { id: "standard", label: "Standard (Period : YYYY-MM)" },
-    { id: "year_month", label: "Year-Month (YYYY-MM)" },
-    { id: "numeric", label: "Numeric Full (MM/YYYY)" },
-    { id: "numeric_short", label: "Numeric Short (MM/YY)" },
-    { id: "short", label: "Short Month + YYYY" },
-    { id: "short_yy", label: "Short Month + YY" },
-    { id: "long", label: "Long Month + YYYY" },
-    { id: "month_only", label: "Month Only" },
-    { id: "day_month_year", label: "Day Month Year" },
-    { id: "end_of_month", label: "End of Month" },
+    { id: "standard", label: "Standard (Period : 2026-02)" },
+    { id: "year_month", label: "Year-Month (2026-02)" },
+    { id: "numeric", label: "Numeric Full (02/2026)" },
+    { id: "numeric_short", label: "Numeric Short (02/26)" },
+    { id: "short", label: "Short Month + YYYY (Feb 2026)" },
+    { id: "short_yy", label: "Short Month + YY (Feb '26)" },
+    { id: "long", label: "Long Month + YYYY (February 2026)" },
+    { id: "month_only", label: "Month Only (February)" },
+    { id: "day_month_year", label: "Day Month Year (28 Feb 2026)" },
+    { id: "end_of_month", label: "End of Month (February 28, 2026)" },
   ],
   accountCategories: [
     { id: "ALL", label: "All Categories" },
@@ -288,7 +289,7 @@ const mergeReportOptions = (defaults, loaded) => ({
   indentLevels: mergeOptionArrays(defaults.indentLevels, loaded?.indentLevels),
 });
 
-const REPORT_STORAGE_KEY = "carmen_bi_reports_config_v5_16";
+const REPORT_STORAGE_KEY = "carmen_bi_reports_config_v5_23";
 const NEUTRAL_BUTTON_CLASS =
   "border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150";
 const NEUTRAL_FILTER_TRIGGER_CLASS =
@@ -336,7 +337,7 @@ export default function App({ onLogout = null }) {
   const [confirmAction, setConfirmAction] = useState(null);
 
   const [masterData, setMasterData] = usePersistentState(
-    "carmen_bi_master_v5_16",
+    "carmen_bi_master_v5_23",
     INITIAL_MASTER_DATA,
   );
   const [periodOptions, setPeriodOptions] = useState([]);
@@ -1352,7 +1353,7 @@ export default function App({ onLogout = null }) {
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       {alertMsg && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 px-4 sm:right-4 sm:left-auto sm:px-0">
+        <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 px-4 sm:right-4 sm:left-auto sm:w-full sm:max-w-136 sm:px-0">
           <Card className="pointer-events-auto mx-auto w-full max-w-136 border border-border/80 bg-background/98 shadow-xl ring-1 ring-black/5 backdrop-blur-sm">
             <CardHeader className="space-y-1.5 pb-3">
               <CardTitle className="text-base tracking-tight">Notice</CardTitle>
@@ -1788,76 +1789,102 @@ export default function App({ onLogout = null }) {
           className={`min-h-0 flex-1 overflow-hidden ${mainContentPaddingClass}`}
         >
           <div className={`${mainContentWidthClass} ${activeTabMotionClass}`}>
-            {visibleActiveTab === "report" && activeReport && (
-              <React.Suspense
-                fallback={
-                  <Card className="flex h-full min-h-0 items-center justify-center border border-border shadow-none ring-0">
-                    <CardContent className="py-16 text-center text-sm text-muted-foreground">
-                      Loading report view...
-                    </CardContent>
-                  </Card>
-                }
-              >
-                <ReportView
-                  activeReport={activeReport}
-                  displayCompanyLabel={displayCompanyLabel}
-                  displayDateLabel={displayDateLabel}
-                  displayPeriodLabel={displayPeriodLabel}
-                  reportData={reportData}
-                  activeCols={activeCols}
-                  currentTheme={currentTheme}
-                  tableZoom={tableZoom}
-                  getIndentClass={getIndentClass}
-                />
-              </React.Suspense>
-            )}
-
-            {visibleActiveTab === "report" && !activeReport && (
-              <Card className="flex h-full items-center justify-center border border-border shadow-none ring-0">
-                <CardContent className="py-16 text-center text-sm text-muted-foreground">
-                  No Reports Available
+            {(masterDataError || reportCatalogError) && reports.length === 0 ? (
+              <Card className="mx-auto w-full max-w-[500px] border border-destructive/20 bg-destructive/5 shadow-none ring-0">
+                <CardContent className="flex flex-col items-center justify-center p-6 text-center sm:p-10">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-destructive/10 text-destructive mb-4">
+                    <AlertTriangle className="size-6" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-foreground mb-2">
+                    API Connection Error
+                  </h3>
+                  <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
+                    {masterDataError || reportCatalogError}
+                  </p>
+                  <Button
+                    onClick={() => window.location.reload()}
+                    variant="outline"
+                    className="h-9 border border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:border-destructive/40 transition-all gap-2"
+                  >
+                    <RefreshCw className="size-3.5" />
+                    Retry Connection
+                  </Button>
                 </CardContent>
               </Card>
-            )}
+            ) : (
+              <>
+                {visibleActiveTab === "report" && activeReport && (
+                  <React.Suspense
+                    fallback={
+                      <Card className="flex h-full min-h-0 items-center justify-center border border-border shadow-none ring-0">
+                        <CardContent className="py-16 text-center text-sm text-muted-foreground">
+                          Loading report view...
+                        </CardContent>
+                      </Card>
+                    }
+                  >
+                    <ReportView
+                      activeReport={activeReport}
+                      displayCompanyLabel={displayCompanyLabel}
+                      displayDateLabel={displayDateLabel}
+                      displayPeriodLabel={displayPeriodLabel}
+                      reportData={reportData}
+                      activeCols={activeCols}
+                      currentTheme={currentTheme}
+                      tableZoom={tableZoom}
+                      getIndentClass={getIndentClass}
+                    />
+                  </React.Suspense>
+                )}
 
-            {visibleActiveTab === "setup" &&
-              canSetupReports &&
-              activeReport && (
-                <React.Suspense
-                  fallback={
-                    <Card className="flex h-full min-h-0 items-center justify-center border border-border shadow-none ring-0">
-                      <CardContent className="py-16 text-center text-sm text-muted-foreground">
-                        Loading setup tools...
-                      </CardContent>
-                    </Card>
-                  }
-                >
-                  <ReportSetup
-                    themeMode={themeMode}
-                    masterData={masterData}
-                    reportOptions={reportOptions}
-                    activeReport={activeReport}
-                    activeCategories={activeCategories}
-                    updateActiveReport={updateActiveReport}
-                    onBusyTransition={triggerPageTransition}
-                    handleCloneReport={handleCloneReport}
-                    handleCreateBlankReport={handleCreateBlankReport}
-                    handleDeleteReport={handleDeleteReport}
-                    setIsAccessModalOpen={setIsAccessModalOpen}
-                    handleAddCol={handleAddCol}
-                    handleUpdateCol={handleUpdateCol}
-                    moveCol={moveCol}
-                    handleDeleteCol={handleDeleteCol}
-                    handleAddRow={handleAddRow}
-                    handleUpdateRow={handleUpdateRow}
-                    handleUpdateRowMulti={handleUpdateRowMulti}
-                    moveRow={moveRow}
-                    handleDeleteRow={handleDeleteRow}
-                    setEditingRow={setEditingRow}
-                    setConfirmAction={setConfirmAction}
-                  />
-                </React.Suspense>
-              )}
+                {visibleActiveTab === "report" && !activeReport && (
+                  <Card className="flex h-full items-center justify-center border border-border shadow-none ring-0">
+                    <CardContent className="py-16 text-center text-sm text-muted-foreground">
+                      No Reports Available
+                    </CardContent>
+                  </Card>
+                )}
+
+                {visibleActiveTab === "setup" &&
+                  canSetupReports &&
+                  activeReport && (
+                    <React.Suspense
+                      fallback={
+                        <Card className="flex h-full min-h-0 items-center justify-center border border-border shadow-none ring-0">
+                          <CardContent className="py-16 text-center text-sm text-muted-foreground">
+                            Loading setup tools...
+                          </CardContent>
+                        </Card>
+                      }
+                    >
+                      <ReportSetup
+                        themeMode={themeMode}
+                        masterData={masterData}
+                        reportOptions={reportOptions}
+                        activeReport={activeReport}
+                        activeCategories={activeCategories}
+                        updateActiveReport={updateActiveReport}
+                        onBusyTransition={triggerPageTransition}
+                        handleCloneReport={handleCloneReport}
+                        handleCreateBlankReport={handleCreateBlankReport}
+                        handleDeleteReport={handleDeleteReport}
+                        setIsAccessModalOpen={setIsAccessModalOpen}
+                        handleAddCol={handleAddCol}
+                        handleUpdateCol={handleUpdateCol}
+                        moveCol={moveCol}
+                        handleDeleteCol={handleDeleteCol}
+                        handleAddRow={handleAddRow}
+                        handleUpdateRow={handleUpdateRow}
+                        handleUpdateRowMulti={handleUpdateRowMulti}
+                        moveRow={moveRow}
+                        handleDeleteRow={handleDeleteRow}
+                        setEditingRow={setEditingRow}
+                        setConfirmAction={setConfirmAction}
+                      />
+                    </React.Suspense>
+                  )}
+              </>
+            )}
           </div>
         </div>
       </main>

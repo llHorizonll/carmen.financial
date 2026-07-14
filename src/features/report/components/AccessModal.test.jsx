@@ -13,11 +13,11 @@ describe('AccessModal', () => {
         isOpen={true}
         masterData={{
           users: [
-            { id: 'u1', name: 'Admin User', role: 'Admin' },
-            { id: 'u2', name: 'General Manager', role: 'User' },
+            { id: 'admin', name: 'Admin User', role: 'Admin' },
+            { id: 'user', name: 'General Manager', role: 'User' },
           ],
         }}
-        activeReport={{ assignedUsers: ['u1'] }}
+        activeReport={{ assignedUsers: ['admin'] }}
         onClose={onClose}
         onUpdateUsers={onUpdateUsers}
       />
@@ -28,7 +28,7 @@ describe('AccessModal', () => {
     expect(screen.getByText('General Manager')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /general manager/i }));
-    expect(onUpdateUsers).toHaveBeenCalledWith(['u1', 'u2']);
+    expect(onUpdateUsers).toHaveBeenCalledWith(['admin', 'user']);
 
     fireEvent.click(screen.getByText('Done'));
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -55,13 +55,13 @@ describe('AccessModal', () => {
         masterData={{
           users: [
             {
-              id: 'u3',
+              id: 'permission_admin',
               name: 'Permission Admin',
               permissions: { financialReport: { setup: true } },
             },
           ],
         }}
-        activeReport={{ assignedUsers: ['u3'] }}
+        activeReport={{ assignedUsers: ['permission_admin'] }}
         onClose={() => {}}
         onUpdateUsers={() => {}}
       />

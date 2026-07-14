@@ -21,11 +21,11 @@ describe('ReportDetailsPanel', () => {
           customDateLabel: '',
           customPeriodLabel: '',
           category: ['I'],
-          assignedUsers: ['u1'],
+          assignedUsers: ['admin'],
           isActive: true,
         }}
         activeCategories={['I']}
-        masterData={{ users: [{ id: 'u1', name: 'Admin User' }] }}
+        masterData={{ users: [{ id: 'admin', name: 'Admin User' }] }}
         updateActiveReport={updateActiveReport}
         handleCloneReport={handleCloneReport}
         handleCreateBlankReport={handleCreateBlankReport}
@@ -46,7 +46,7 @@ describe('ReportDetailsPanel', () => {
     fireEvent.click(screen.getAllByRole('combobox')[1]);
     fireEvent.click(await screen.findByRole('option', { name: /Short Month \+ YYYY/i }));
     expect(updateActiveReport).toHaveBeenCalledWith({ periodFormat: 'short' });
-    expect(screen.getByPlaceholderText('u1')).toHaveAttribute('readonly');
+    expect(screen.getByPlaceholderText('admin')).toHaveAttribute('readonly');
 
     fireEvent.click(screen.getByRole('button', { name: /Clone/i }));
     expect(handleCloneReport).toHaveBeenCalledTimes(1);

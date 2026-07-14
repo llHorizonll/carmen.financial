@@ -175,12 +175,12 @@ describe('reportLogic helpers', () => {
   });
 
   it('creates and clones blank reports', () => {
-    const blank = createBlankReport('Carmen', ['u1'], 'rep-1');
+    const blank = createBlankReport('Carmen', ['admin'], 'rep-1');
     const cloned = cloneReport(blank, 'rep-2');
 
     expect(blank.name).toBe('New Custom Report');
     expect(cloned.name).toBe('New Custom Report (Copy)');
-    expect(blank.assignedUsers).toEqual(['u1']);
+    expect(blank.assignedUsers).toEqual(['admin']);
   });
 
   it('detects unresolved references before save', () => {
@@ -225,7 +225,7 @@ describe('reportLogic helpers', () => {
 
   it('keeps theme and master data constants stable', () => {
     expect(THEMES.blue.name).toBe('Classic Blue');
-    expect(INITIAL_MASTER_DATA.users).toHaveLength(3);
+    expect(INITIAL_MASTER_DATA.users).toHaveLength(1);
   });
 });
 

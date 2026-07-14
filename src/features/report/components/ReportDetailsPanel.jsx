@@ -137,20 +137,36 @@ export default function ReportDetailsPanel({
         { id: 'green', label: 'Emerald Green' },
         { id: 'gray', label: 'Slate Gray' },
       ];
-  const periodFormatOptions = reportOptions.periodFormats?.length > 0
+  const periodFormatLabels = {
+    standard: "Standard (Period : 2026-02)",
+    year_month: "Year-Month (2026-02)",
+    numeric: "Numeric Full (02/2026)",
+    numeric_short: "Numeric Short (02/26)",
+    short: "Short Month + YYYY (Feb 2026)",
+    short_yy: "Short Month + YY (Feb '26)",
+    long: "Long Month + YYYY (February 2026)",
+    month_only: "Month Only (February)",
+    day_month_year: "Day Month Year (28 Feb 2026)",
+    end_of_month: "End of Month (February 28, 2026)",
+  };
+
+  const periodFormatOptions = (reportOptions.periodFormats?.length > 0
     ? reportOptions.periodFormats
     : [
-        { id: 'standard', label: 'Standard (Period : YYYY-MM)' },
-        { id: 'year_month', label: 'Year-Month (YYYY-MM)' },
-        { id: 'numeric', label: 'Numeric Full (MM/YYYY)' },
-        { id: 'numeric_short', label: 'Numeric Short (MM/YY)' },
-        { id: 'short', label: 'Short Month + YYYY (Feb 2025)' },
-        { id: 'short_yy', label: "Short Month + YY (Feb '25)" },
-        { id: 'long', label: 'Long Month + YYYY (February 2025)' },
+        { id: 'standard', label: 'Standard (Period : 2026-02)' },
+        { id: 'year_month', label: 'Year-Month (2026-02)' },
+        { id: 'numeric', label: 'Numeric Full (02/2026)' },
+        { id: 'numeric_short', label: 'Numeric Short (02/26)' },
+        { id: 'short', label: 'Short Month + YYYY (Feb 2026)' },
+        { id: 'short_yy', label: "Short Month + YY (Feb '26)" },
+        { id: 'long', label: 'Long Month + YYYY (February 2026)' },
         { id: 'month_only', label: 'Month Only (February)' },
-        { id: 'day_month_year', label: 'Day Month Year (28 Feb 2025)' },
-        { id: 'end_of_month', label: 'End of Month (February 28, 2025)' },
-      ];
+        { id: 'day_month_year', label: 'Day Month Year (28 Feb 2026)' },
+        { id: 'end_of_month', label: 'End of Month (February 28, 2026)' },
+      ]).map(option => ({
+        ...option,
+        label: periodFormatLabels[option.id] || option.label
+      }));
   const accountCategoryOptions = reportOptions.accountCategories?.length > 0
     ? reportOptions.accountCategories
     : [

@@ -2,6 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import App from './App.jsx';
+import { INITIAL_MASTER_DATA } from '../features/report/lib/reportLogic.js';
 
 const reportApiMocks = vi.hoisted(() => ({
   isCarmenApiConfigured: vi.fn(() => false),
@@ -41,10 +42,27 @@ describe('App shell', () => {
     vi.stubGlobal('localStorage', mockLocalStorage);
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(false);
     reportApiMocks.getStoredCarmenSession.mockReturnValue(null);
+    
     reportApiMocks.fetchCarmenMasterData.mockReset();
+    reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
+      currentUser: { id: 'admin', role: 'Admin' },
+      companyProfile: {},
+      depts: [],
+      accCodes: [],
+      periods: [],
+      budgetRevisions: [],
+      groups: {},
+    });
+
     reportApiMocks.fetchCarmenReportOptions.mockReset();
+    reportApiMocks.fetchCarmenReportOptions.mockResolvedValue({});
+
     reportApiMocks.fetchCarmenReports.mockReset();
+    reportApiMocks.fetchCarmenReports.mockResolvedValue([]);
+
     reportApiMocks.fetchCarmenReportData.mockReset();
+    reportApiMocks.fetchCarmenReportData.mockResolvedValue({ actualRows: [], budgetRows: [] });
+
     reportApiMocks.saveCarmenReport.mockClear();
     reportApiMocks.cloneCarmenReport.mockClear();
     reportApiMocks.deleteCarmenReport.mockClear();
@@ -90,14 +108,23 @@ describe('App shell', () => {
   });
 
   it('hides the setup tab when the role changes to a non-admin user', () => {
-    const { container } = render(<App />);
+    const originalUsers = [...INITIAL_MASTER_DATA.users];
+    INITIAL_MASTER_DATA.users = [
+      { id: 'admin', name: 'admin', role: 'Admin' },
+      { id: 'u2', name: 'General Manager', role: 'User' },
+    ];
+    try {
+      const { container } = render(<App />);
 
-    const roleSelector = screen.getAllByRole('combobox')[0];
-    fireEvent.click(roleSelector);
-    fireEvent.click(screen.getByRole('option', { name: /General Manager \(User\)/i }));
+      const roleSelector = screen.getAllByRole('combobox')[0];
+      fireEvent.click(roleSelector);
+      fireEvent.click(screen.getByRole('option', { name: /General Manager \(User\)/i }));
 
-    expect(screen.getByRole('button', { name: 'VIEW' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'SETUP' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'VIEW' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'SETUP' })).not.toBeInTheDocument();
+    } finally {
+      INITIAL_MASTER_DATA.users = originalUsers;
+    }
   });
 
   it('handles GL CSV uploads through the file input flow', async () => {
@@ -279,7 +306,7 @@ describe('App shell', () => {
     });
     reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
       currentUser: {
-        id: 'u1',
+        id: 'admin',
         name: 'Admin User',
         role: 'Admin',
         permissions: {
@@ -294,7 +321,7 @@ describe('App shell', () => {
       },
       users: [
         {
-          id: 'u1',
+          id: 'admin',
           name: 'Admin User',
           role: 'Admin',
           permissions: {
@@ -325,11 +352,11 @@ describe('App shell', () => {
         name: 'Broken Report',
         companyName: 'Carmen Hotel & Resorts',
         category: ['ALL'],
-        assignedUsers: ['u1'],
+        assignedUsers: ['admin'],
         isActive: true,
         periodFormat: 'standard',
         reportType: 'Monthly',
-        owner: 'u1',
+        owner: 'admin',
         overrideDateDisplay: '',
         overridePeriodDisplay: '',
         day: '',
@@ -363,11 +390,11 @@ describe('App shell', () => {
         name: 'Local Storage Report',
         companyName: 'Old Company',
         category: ['ALL'],
-        assignedUsers: ['u1'],
+        assignedUsers: ['admin'],
         isActive: true,
         periodFormat: 'standard',
         reportType: 'Monthly',
-        owner: 'u1',
+        owner: 'admin',
         overrideDateDisplay: '',
         overridePeriodDisplay: '',
         day: '',
@@ -377,7 +404,7 @@ describe('App shell', () => {
       },
     ];
 
-    window.localStorage.setItem('carmen_bi_reports_config_v5_16', JSON.stringify(storedReports));
+    window.localStorage.setItem('carmen_bi_reports_config_v5_23', JSON.stringify(storedReports));
 
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.getStoredCarmenSession.mockReturnValue({
@@ -389,7 +416,7 @@ describe('App shell', () => {
     });
     reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
       currentUser: {
-        id: 'u1',
+        id: 'admin',
         name: 'Admin User',
         role: 'Admin',
         permissions: {
@@ -404,7 +431,7 @@ describe('App shell', () => {
       },
       users: [
         {
-          id: 'u1',
+          id: 'admin',
           name: 'Admin User',
           role: 'Admin',
           permissions: {
@@ -439,7 +466,7 @@ describe('App shell', () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
       currentUser: {
-        id: 'u1',
+        id: 'admin',
         name: 'Admin User',
         role: 'Admin',
         permissions: {
@@ -454,7 +481,7 @@ describe('App shell', () => {
       },
       users: [
         {
-          id: 'u1',
+          id: 'admin',
           name: 'Admin User',
           role: 'Admin',
           permissions: {
@@ -485,11 +512,11 @@ describe('App shell', () => {
         name: 'Actual Only',
         companyName: 'Carmen Hotel & Resorts',
         category: ['ALL'],
-        assignedUsers: ['u1'],
+        assignedUsers: ['admin'],
         isActive: true,
         periodFormat: 'standard',
         reportType: 'Monthly',
-        owner: 'u1',
+        owner: 'admin',
         overrideDateDisplay: '',
         overridePeriodDisplay: '',
         day: '',
@@ -524,7 +551,7 @@ describe('App shell', () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
       currentUser: {
-        id: 'u1',
+        id: 'admin',
         name: 'Admin User',
         role: 'Admin',
         permissions: {
@@ -539,7 +566,7 @@ describe('App shell', () => {
       },
       users: [
         {
-          id: 'u1',
+          id: 'admin',
           name: 'Admin User',
           role: 'Admin',
           permissions: {
@@ -568,11 +595,11 @@ describe('App shell', () => {
         name: 'Daily Invalid',
         companyName: 'Carmen Hotel & Resorts',
         category: ['ALL'],
-        assignedUsers: ['u1'],
+        assignedUsers: ['admin'],
         isActive: true,
         periodFormat: 'standard',
         reportType: 'Daily',
-        owner: 'u1',
+        owner: 'admin',
         overrideDateDisplay: '',
         overridePeriodDisplay: '',
         day: '1',
@@ -601,7 +628,7 @@ describe('App shell', () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
       currentUser: {
-        id: 'u1',
+        id: 'admin',
         name: 'Admin User',
         role: 'Admin',
         permissions: {
@@ -616,7 +643,7 @@ describe('App shell', () => {
       },
       users: [
         {
-          id: 'u1',
+          id: 'admin',
           name: 'Admin User',
           role: 'Admin',
           permissions: {
@@ -645,11 +672,11 @@ describe('App shell', () => {
         name: 'Duplicate Mapping',
         companyName: 'Carmen Hotel & Resorts',
         category: ['ALL'],
-        assignedUsers: ['u1'],
+        assignedUsers: ['admin'],
         isActive: true,
         periodFormat: 'standard',
         reportType: 'Monthly',
-        owner: 'u1',
+        owner: 'admin',
         overrideDateDisplay: '',
         overridePeriodDisplay: '',
         day: '',
@@ -675,7 +702,7 @@ describe('App shell', () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
       currentUser: {
-        id: 'u1',
+        id: 'admin',
         name: 'Admin User',
         role: 'Admin',
         permissions: {
@@ -690,7 +717,7 @@ describe('App shell', () => {
       },
       users: [
         {
-          id: 'u1',
+          id: 'admin',
           name: 'Admin User',
           role: 'Admin',
           permissions: {
@@ -719,11 +746,11 @@ describe('App shell', () => {
         name: 'Invalid Master Data Mapping',
         companyName: 'Carmen Hotel & Resorts',
         category: ['ALL'],
-        assignedUsers: ['u1'],
+        assignedUsers: ['admin'],
         isActive: true,
         periodFormat: 'standard',
         reportType: 'Monthly',
-        owner: 'u1',
+        owner: 'admin',
         overrideDateDisplay: '',
         overridePeriodDisplay: '',
         day: '',
@@ -751,7 +778,7 @@ describe('App shell', () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.getStoredCarmenSession.mockReturnValue({
       user: {
-        id: 'u1',
+        id: 'admin',
         name: 'Admin User',
         role: 'Admin',
       },
@@ -759,7 +786,7 @@ describe('App shell', () => {
     reportApiMocks.fetchCarmenMasterData
       .mockResolvedValueOnce({
         currentUser: {
-          id: 'u1',
+          id: 'admin',
           name: 'Admin User',
           role: 'Admin',
           permissions: {
@@ -774,7 +801,7 @@ describe('App shell', () => {
         },
         users: [
           {
-            id: 'u1',
+            id: 'admin',
             name: 'Admin User',
             role: 'Admin',
             permissions: {
@@ -797,7 +824,7 @@ describe('App shell', () => {
       })
       .mockResolvedValueOnce({
         currentUser: {
-          id: 'u1',
+          id: 'admin',
           name: 'Admin User',
           role: 'Admin',
           permissions: {
@@ -812,7 +839,7 @@ describe('App shell', () => {
         },
         users: [
           {
-            id: 'u1',
+            id: 'admin',
             name: 'Admin User',
             role: 'Admin',
             permissions: {
@@ -841,11 +868,11 @@ describe('App shell', () => {
         name: 'Validating Report',
         companyName: 'Carmen Hotel & Resorts',
         category: ['ALL'],
-        assignedUsers: ['u1'],
+        assignedUsers: ['admin'],
         isActive: true,
         periodFormat: 'standard',
         reportType: 'Monthly',
-        owner: 'u1',
+        owner: 'admin',
         overrideDateDisplay: '',
         overridePeriodDisplay: '',
         day: '',
@@ -875,14 +902,14 @@ describe('App shell', () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.getStoredCarmenSession.mockReturnValue({
       user: {
-        id: 'u1',
+        id: 'admin',
         name: 'Admin User',
         role: 'Admin',
       },
     });
     reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
       currentUser: {
-        id: 'u1',
+        id: 'admin',
         name: 'Admin User',
         role: 'Admin',
         permissions: {
@@ -897,7 +924,7 @@ describe('App shell', () => {
       },
       users: [
         {
-          id: 'u1',
+          id: 'admin',
           name: 'Admin User',
           role: 'Admin',
           permissions: {
@@ -926,11 +953,11 @@ describe('App shell', () => {
         name: 'Edit Modal Report',
         companyName: 'Carmen Hotel & Resorts',
         category: ['ALL'],
-        assignedUsers: ['u1'],
+        assignedUsers: ['admin'],
         isActive: true,
         periodFormat: 'standard',
         reportType: 'Monthly',
-        owner: 'u1',
+        owner: 'admin',
         overrideDateDisplay: '',
         overridePeriodDisplay: '',
         day: '',
@@ -970,7 +997,7 @@ describe('App shell', () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
       currentUser: {
-        id: 'u1',
+        id: 'admin',
         name: 'Admin User',
         role: 'Admin',
         permissions: {
@@ -985,7 +1012,7 @@ describe('App shell', () => {
       },
       users: [
         {
-          id: 'u1',
+          id: 'admin',
           name: 'Admin User',
           role: 'Admin',
           permissions: {
@@ -1028,11 +1055,11 @@ describe('App shell', () => {
         name: 'Setup Edits',
         companyName: 'Carmen Hotel & Resorts',
         category: ['ALL'],
-        assignedUsers: ['u1'],
+        assignedUsers: ['admin'],
         isActive: true,
         periodFormat: 'standard',
         reportType: 'Monthly',
-        owner: 'u1',
+        owner: 'admin',
         overrideDateDisplay: '',
         overridePeriodDisplay: '',
         day: '',
@@ -1462,7 +1489,7 @@ describe('App shell', () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
       currentUser: {
-        id: 'u1',
+        id: 'admin',
         name: 'Admin User',
         role: 'Admin',
         permissions: {
@@ -1477,7 +1504,7 @@ describe('App shell', () => {
       },
       users: [
         {
-          id: 'u1',
+          id: 'admin',
           name: 'Admin User',
           role: 'Admin',
           permissions: {
@@ -1508,11 +1535,11 @@ describe('App shell', () => {
         name: 'PTD Report',
         companyName: 'Carmen Hotel & Resorts',
         category: ['ALL'],
-        assignedUsers: ['u1'],
+        assignedUsers: ['admin'],
         isActive: true,
         periodFormat: 'standard',
         reportType: 'Monthly',
-        owner: 'u1',
+        owner: 'admin',
         overrideDateDisplay: '',
         overridePeriodDisplay: '',
         day: '28',
@@ -1563,7 +1590,7 @@ describe('App shell', () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
       currentUser: {
-        id: 'u1',
+        id: 'admin',
         name: 'Admin User',
         role: 'Admin',
         permissions: {
@@ -1578,7 +1605,7 @@ describe('App shell', () => {
       },
       users: [
         {
-          id: 'u1',
+          id: 'admin',
           name: 'Admin User',
           role: 'Admin',
           permissions: {
@@ -1609,11 +1636,11 @@ describe('App shell', () => {
         name: 'PTD Invalid Day',
         companyName: 'Carmen Hotel & Resorts',
         category: ['ALL'],
-        assignedUsers: ['u1'],
+        assignedUsers: ['admin'],
         isActive: true,
         periodFormat: 'standard',
         reportType: 'Monthly',
-        owner: 'u1',
+        owner: 'admin',
         overrideDateDisplay: '',
         overridePeriodDisplay: '',
         day: '31',
