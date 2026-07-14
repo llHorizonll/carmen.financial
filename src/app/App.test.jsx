@@ -1314,7 +1314,7 @@ describe('App shell', () => {
       accountCategories: [{ id: 'S', label: 'Statistic' }],
       columnTypes: [{ id: 'AC', label: 'Actual Current' }, { id: 'FORMULA', label: 'Formula' }],
       yearModes: [{ id: 'current', label: 'Current Year' }],
-      periodModes: [{ id: 'FY', label: 'Fiscal Year' }],
+      periodModes: [{ id: 'current', label: 'Period (Parameter)' }],
       rowTypes: [{ id: 'header', label: 'Header' }],
       indentLevels: [{ id: '0', label: 'Level 0' }],
     });
@@ -1553,10 +1553,10 @@ describe('App shell', () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByText('Carmen Hotel & Resorts')).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: 'VIEW' }).className).toMatch(/bg-stone|border-stone|text-stone|ring-stone/);
-    expect(screen.getByRole('button', { name: /DEPT/i }).className).toMatch(/bg-stone|border-stone|text-stone/);
-    expect(screen.getByRole('button', { name: 'Apply' }).className).toMatch(/bg-stone|border-stone|text-stone/);
-    expect(screen.getByRole('button', { name: /GL/i }).className).toMatch(/bg-stone|border-stone|text-stone/);
+    expect(screen.getByRole('button', { name: 'VIEW' }).className).toMatch(/bg-stone|border-stone|text-stone|ring-stone|bg-primary|ring-primary/);
+    expect(screen.getByRole('button', { name: /DEPT/i }).className).toMatch(/bg-stone|border-stone|text-stone|bg-muted|border-border|text-muted/);
+    expect(screen.getByRole('button', { name: 'Apply' }).className).toMatch(/bg-stone|border-stone|text-stone|bg-muted|border-border|text-muted/);
+    expect(screen.getByRole('button', { name: /GL/i }).className).toMatch(/bg-stone|border-stone|text-stone|bg-muted|border-border|text-muted/);
   });
 
   it('rejects an out-of-range day for PTD reports before loading report data', async () => {

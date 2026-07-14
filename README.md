@@ -1,151 +1,135 @@
-# Carmen Financial BI Hub
+# Carmen Financial BI Hub (v2.0)
 
-โปรเจกต์นี้คือแอป React สำหรับงาน BI/Financial Reporting ที่รันผ่าน Vite และใช้ `lucide-react` เป็นชุดไอคอนหลัก
+แอปพลิเคชัน React สำหรับบริหารจัดการและจัดทำรายงานทางการเงินระดับผู้บริหาร (Financial & BI Reporting Hub) พัฒนาด้วยเทคโนโลยีสมัยใหม่ รองรับการนำเข้าข้อมูลบัญชีผ่าน CSV การคำนวณสูตรและสัดส่วนเปอร์เซ็นต์อย่างซับซ้อน การจัดการสิทธิ์การเข้าถึง และการทำงานร่วมกับระบบ OCR
 
-## เทคโนโลยีที่ใช้
-- Vite
-- React
-- Tailwind CSS
-- lucide-react
-- Browser APIs เช่น `localStorage`, `FileReader`, `Blob`, `window.print()`
+---
 
-## ติดตั้ง
+## 🗺️ โครงสร้างสถาปัตยกรรมระบบ (Codebase Architecture)
 
+ระบบถูกออกแบบโดยแยกส่วนการแสดงผล (UI) ออกจากแกนการประมวลผล (Business Logic) เพื่อให้ง่ายต่อการทดสอบ (Unit Testing) และบำรุงรักษา:
+
+```
+carmen.financial/
+├── 📁 src/
+│   ├── 📁 app/
+│   │   ├── App.jsx                 # ศูนย์กลางควบคุม State และ Flow หลักของแอป
+│   │   ├── App.css                 # สไตล์ชีทเสริมของแอป
+│   │   ├── index.css               # สไตล์ชีทหลักและพิกัดสีของธีมระบบ (Tailwind Tokens)
+│   │   └── main.jsx                # จุดเข้าโปรแกรมหลักของ React
+│   │
+│   ├── 📁 features/report/
+│   │   ├── 📁 components/          # ส่วนประกอบ UI ที่แยกเป็นโมดูลย่อย
+│   │   │   ├── AccessModal.jsx            # โมดัลสิทธิ์การเข้าถึงรายงาน
+│   │   │   ├── ColumnsConfigurator.jsx    # แผงจัดการคอลัมน์ (Data/Formula/Mix %)
+│   │   │   ├── DetailSelectorModal.jsx    # โมดัลเลือกกลุ่ม/บัญชีสำหรับเจาะลึก
+│   │   │   ├── EditMappingModal.jsx       # โมดัลตั้งค่าแมปผูกสูตรบัญชี
+│   │   │   ├── MultiSelectDropdown.jsx    # ดรอปดาวน์เลือกหลายรายการ
+│   │   │   ├── ReportDetailsPanel.jsx     # แผงแก้ไขหัวรายงาน/ธีมสี/รอบระยะเวลา
+│   │   │   ├── ReportSetup.jsx            # คอนเทนเนอร์หลักในโหมด SETUP
+│   │   │   ├── ReportView.jsx             # หน้าแสดงตารางรายงานพร้อมโหมดซูม/พิมพ์
+│   │   │   ├── RowsConfigurator.jsx       # แผงจัดการแถวในตารางรายงาน
+│   │   │   └── SetupSectionTabs.jsx       # แท็บสลับหน้าย่อยในโหมดตั้งค่า
+│   │   │
+│   │   ├── 📁 data/                # ข้อมูลเริ่มต้นและโครงสร้างข้อมูลสำเร็จรูป
+│   │   │   └── defaultReports.js          # รายงานตัวอย่าง (เช่น Profit & Loss, Balance Sheet)
+│   │   │
+│   │   └── 📁 lib/                 # แกนการคำนวณและประมวลผล (Core Engines)
+│   │       ├── normalizeCode.js           # ตัวช่วยจัดฟอร์แมตจัดกลุ่มรหัสบัญชี/แผนก
+│   │       ├── reportAdapters.js          # อะแดปเตอร์เชื่อมต่อและแปลงข้อมูลกับ API
+│   │       ├── reportApi.js               # ตัวเชื่อมต่อ API จำลองและ REST endpoints
+│   │       └── reportLogic.js             # หัวใจหลักการคำนวณตารางรายงาน (Pass 1 & Pass 2)
+│   │
+│   └── 📁 hooks/                   # Custom Hooks สำหรับการทำงานเฉพาะตัว
+│       └── useLocalStorage.js      # ฮุคจัดเก็บข้อมูลคงทน (Persistence) ในบราวเซอร์
+```
+
+---
+
+## ⚙️ เทคโนโลยีหลักและ Dependency (Technology Stack)
+
+* **UI Library**: React (Function Components & Hooks)
+* **Build System & Tooling**: Vite
+* **Styling & Theme Engine**: Tailwind CSS (ขับเคลื่อนผ่านระบบ Design Tokens ใน `tailwind-theme.css` และ `index.css`)
+* **Icons**: `lucide-react`
+* **Test Suite**: Vitest & React Testing Library (ครอบคลุมการทดสอบกว่า 84 เคสในแอปพลิเคชัน)
+* **Native Web APIs**: `localStorage` (จำลองการบันทึกฐานข้อมูล), `FileReader` (ใช้อ่านไฟล์ CSV), `Blob` (ส่งออกไฟล์), และ `window.print()`
+
+---
+
+## 🧠 ฟังก์ชันการคำนวณและประมวลผลรายงาน (Calculation Engine)
+
+หัวใจสำคัญใน [reportLogic.js](file:///C:/source/carmen.financial/src/features/report/lib/reportLogic.js) คือการประมวลผลรายงานแบบแบ่งรอบ (Pass-based Processing):
+
+### 1. การแปลงความหมายของช่วงเวลา (Time Resolution)
+ฟังก์ชัน `resolveTime` จะแกะตัวกรองจากคอลัมน์เพื่อดึงเดือน/ปีที่ต้องใช้:
+* **Quarters (`Q1`–`Q4`)**: รวบยอดจากกลุ่มช่วงเดือน (เช่น `Q1` ดึงยอดจริงจากเดือน `[1, 2, 3]`)
+* **Offsets (`Period -1`)**: คำนวณช่วงเดือนก่อนหน้าแบบไดนามิกข้ามปีปฏิทิน
+
+### 2. รอบประมวลผลการคำนวณ (Evaluation Passes)
+* **Pass 1 (ดึงและรวมค่าดิบ)**: ค้นหายอดเงินบันทึกจริง (GL) และงบประมาณ (Budget) โดยฟิลเตอร์ตามผังรหัสบัญชี รหัสแผนก และรหัสกลุ่มข้อมูลในช่วงเดือนที่กำหนด
+* **Pass 2 (สูตรและเปอร์เซ็นต์)**:
+  * **Formula Evaluation**: ประมวลผลสูตรอ้างอิงของคอลัมน์ (เช่น `C1 + C2`) และแถวสูตรคำนวณรวมผลลัพธ์ (เช่น `R1 + R2`)
+  * **Percent Mix**: คำนวณสัดส่วนเป็นเปอร์เซ็นต์โดยเทียบกับแถวฐาน (`Base Row` เช่น เปอร์เซ็นต์เมื่อเทียบกับรายได้ทั้งหมด)
+
+---
+
+## 🌟 ฟีเจอร์และการปรับปรุงใหม่ล่าสุด (v2.0 Highlights)
+
+ในการปรับปรุงเวอร์ชันนี้ ระบบได้รับการปรับแต่งด้าน UX/UI และฟังก์ชันตามเอกสารข้อกำหนด (FRD v5.23) อย่างสมบูรณ์:
+
+### 1. สลัดสีดำทึบเป็นธีมคลาสสิกน้ำเงินอันสวยงาม (Dynamic Color Tokens)
+* แก้ไขตัวแปรโครงสีเริ่มต้นใน `:root` และปุ่มส่วนกลางในระบบให้เปลี่ยนจากสีดำทึบเป็นสีกรมท่าคลาสสิก (`oklch(0.34 0.08 254)`) เพื่อความสบายตา
+* นำปุ่มควบคุมทั่วไป เช่น **DEPT**, **Period**, **Rev**, **Apply**, **Gl BUD**, **Excel** และปุ่มปิด/ล้างในโหมด SETUP ออกจากสไตล์หินแบบฮาร์ดโค้ด ไปใช้สีจากระบบ Tailwind Token อย่างไดนามิก (`border-border bg-muted/60 text-muted-foreground hover:bg-muted`)
+
+### 2. สีแยกความหมายสำหรับปุ่มเพิ่มคอลัมน์ (+Data, +Formula, +Mix %)
+* เพิ่มกรอบและพื้นหลังสีพาสเทลเพื่อแยกประเภทคอลัมน์ที่จะสร้างใหม่อย่างเด่นชัด:
+  * **+ Data**: กรอบสีน้ำเงินอ่อน (`border-blue-200 bg-blue-50/50 text-blue-700`)
+  * **+ Formula**: กรอบสีม่วงอ่อน (`border-purple-200 bg-purple-50/50 text-purple-700`)
+  * **+ Mix %**: กรอบสีเขียวมรกตอ่อน (`border-emerald-200 bg-emerald-50/50 text-emerald-700`)
+
+### 3. ประสบการณ์การกรอกข้อมูลอย่างรวดเร็ว (Auto-Scroll & Focus)
+* เมื่อกดปุ่มสร้างการ์ดคอลัมน์หรือแถวใหม่ ระบบจะเลื่อนหน้าจอไปยังตำแหน่งคอลัมน์/แถวนั้นโดยอัตโนมัติ (Smooth Scrolling)
+* โฟกัสและทำการเลือกข้อความ (Select text) ในกล่องป้อนชื่อทันทีเพื่อให้ผู้ใช้งานสามารถพิมพ์ต่อได้โดยไม่ต้องใช้เมาส์คลิกซ้ำ
+
+### 4. การจัดการตัวเลือกช่วงเวลาในโหมด VIEW และโหมด SETUP
+* **VIEW Mode**: ตัวกรองของหัวรายงานจะแสดงเฉพาะตัวเลือกเดือนมาตรฐาน **`P1`–`P12`** เพื่อให้ตรงตามขั้นตอนการดึงรายงาน
+* **SETUP Mode (Columns Configurator)**: ตัวเลือกการทำงานด้านเวลาของคอลัมน์ได้รับการปรับเปลี่ยนให้ตรงตาม FRD 7.1.3:
+  * `Period (Parameter)`
+  * `Period -1`
+  * `Q1` (Sum Period 1-3)
+  * `Q2` (Sum Period 4-6)
+  * `Q3` (Sum Period 7-9)
+  * `Q4` (Sum Period 10-12)
+  * *(ถอดตัวเลือก `FY` ที่ไม่เป็นมาตรฐานออก)*
+
+### 5. การจำกัดประเภทคอลัมน์มาตรฐาน (8 Column Types)
+* จำกัดตัวเลือกให้เลือกได้เพียง 8 ประเภทมาตรฐานตามเอกสารระบบ:
+  * `DAC`, `PTD`, `AC`, `ACC`, `DACBG`, `PTDBG`, `BC`, `BCC`
+  * *(ระบบยังคงรองรับคีย์ `BUD` และ `BUDACC` ในระดับโครงสร้างเบื้องหลังเพื่อเข้ากันได้ดีกับไฟล์งานตัวอย่างดั้งเดิมและเคสทดสอบเดิม)*
+
+---
+
+## 🛠️ วิธีการติดตั้งและรันระบบ (Setup & CLI Guide)
+
+### 1. ติดตั้ง Dependencies
 ```bash
 npm install
 ```
 
-## รันโปรเจกต์
-
+### 2. รันแอปพลิเคชันในโหมดพัฒนา
 ```bash
 npm run dev
 ```
+เปิดใช้งานเว็บผ่านบราวเซอร์ที่พอร์ตที่แสดงในคอมมานด์ไลน์ (เช่น `http://localhost:5173`)
 
-เปิด URL ที่ Vite แสดงผล เช่น `http://localhost:5173`
-
-## สร้างไฟล์โปรดักชัน
-
-```bash
-npm run build
-```
-
-## รันทดสอบ
-
+### 3. รันทดสอบระบบ (Vitest Runner)
 ```bash
 npm run test
 ```
+*ระบบทดสอบครอบคลุมการประมวลผล การโหลดข้อมูล การแมปค่า และการสลับสิทธิ์การใช้งานผ่าน Vitest แบบ 100%*
 
-ถ้าต้องการโหมดเฝ้าดูการเปลี่ยนแปลง ใช้:
-
+### 4. สร้างโปรเจกต์สำหรับใช้งานจริง (Production Build)
 ```bash
-npm run test:watch
+npm run build
 ```
-
-## ดูตัวอย่างไฟล์ build
-
-```bash
-npm run preview
-```
-
-## โครงสร้างสำคัญของโปรเจกต์
-- `src/main.jsx` คือจุดเริ่มต้นของแอป React
-- `src/app/App.jsx` คือไฟล์แอปหลักของโปรเจกต์
-- `src/features/report/components/` เก็บส่วนที่แยกออกมาแล้ว เช่น หน้าดูรายงาน, หน้าตั้งค่า, และโมดัล
-- `src/features/report/data/` เก็บ default report และ template builders
-- `src/hooks/` เก็บ hook สำหรับ state persistence
-- `src/features/report/lib/reportLogic.js` เก็บ helper และ business logic ที่ทดสอบได้
-- `src/features/report/lib/normalizeCode.js` เก็บกติกาการ normalize รหัสที่ใช้ร่วมกัน
-- `src/features/report/components/*.test.jsx` ทดสอบ component ที่แยกออกมา เช่น `ReportView`, `AccessModal`, `EditMappingModal`, และ `MultiSelectDropdown`
-
-## ชุดทดสอบที่มีอยู่
-- ทดสอบการ parse CSV และการอ่านตัวเลข
-- ทดสอบการ format period และเวลาแสดงผล
-- ทดสอบการสร้าง report template, clone report และ OCR starter report
-- ทดสอบ OCR starter scaffold และข้อมูลเริ่มต้นของ report ที่ import จากภาพ/PDF
-- ทดสอบ CSV parsing สำหรับไฟล์ GL และ Budget รวมถึงการอัปเดต master data
-- ทดสอบ flow อัปโหลดไฟล์ผ่าน input จริงของแอป พร้อม mock `FileReader`
-- ทดสอบการคำนวณรายงานจริงจากข้อมูล GL / Budget / Formula / Percent
-- ทดสอบการลบและย้ายแถว/คอลัมน์พร้อมการแก้ reference อัตโนมัติ
-- ทดสอบการ rewrite reference ตอนลบหรือย้าย row/column แบบเจาะจง
-- ทดสอบการสร้าง HTML สำหรับ export Excel
-- ทดสอบการ render ของ component รายงานหลัก
-- ทดสอบ component ฝั่งตั้งค่า เช่น `ReportDetailsPanel`, `ColumnsConfigurator`, และ `RowsConfigurator`
-- ทดสอบ flow หลักของแอป เช่น สลับ `VIEW`/`SETUP` และเปลี่ยน role ผู้ใช้
-
-## คู่มือการใช้งานแบบย่อ
-1. เปิดแอปแล้วจะเจอหน้า `VIEW` สำหรับดูรายงาน
-2. ใช้แถบ `SETUP` เพื่อแก้ไขโครงสร้างรายงาน
-3. อัปโหลดไฟล์ GL CSV และ Budget CSV เพื่อเติมข้อมูลจริง
-4. ใช้ OCR Import เพื่อสร้างโครงรายงานจากภาพหรือ PDF
-5. กำหนดสิทธิ์การเข้าถึงรายงานตามผู้ใช้
-6. Export เป็น Excel หรือสั่งพิมพ์จากเบราว์เซอร์ได้
-
-## Business Logic และ Feature ที่ควรรู้
-
-### 1) การสลับโหมดการทำงาน
-- `VIEW` ใช้สำหรับแสดงผลรายงาน
-- `SETUP` ใช้สำหรับแก้ไขโครงสร้างรายงานและ mapping
-
-### 2) การจำลองบทบาทผู้ใช้
-- เลือกผู้ใช้จากเมนู `View As Role`
-- ถ้าไม่ใช่ Admin ระบบจะกรองรายงานที่มีสิทธิ์ให้ดูเฉพาะรายงานที่ถูก assign
-
-### 3) การจัดการข้อมูลหลัก
-- เก็บ master data เช่น company profile, users, departments, groups และ account codes
-- ข้อมูลเหล่านี้ถูกจำไว้ใน `localStorage` เพื่อเปิดแอปใหม่แล้วยังอยู่
-
-### 4) การนำเข้าข้อมูล GL
-- อัปโหลดไฟล์ CSV ของรายการบัญชีจริง
-- ระบบจะอ่านคอลัมน์, แยกข้อมูล, หา department/account/group และอัปเดต master data
-- ข้อมูลนี้ถูกใช้เป็นฐานในการคำนวณรายงาน
-
-### 5) การนำเข้าข้อมูล Budget
-- อัปโหลดไฟล์ Budget CSV แยกจาก GL
-- ระบบจะเก็บ budget data และนำไปใช้กับคอลัมน์ประเภท budget ในรายงาน
-
-### 6) การคำนวณรายงาน
-- รายงานแต่ละบรรทัดถูกกำหนดได้ว่าเป็น Data, Header หรือ Formula
-- ระบบรองรับการอ้างอิงแถวและคอลัมน์แบบ `R1`, `C1`
-- มีการปรับ reference อัตโนมัติเมื่อย้ายหรือ ลบแถว/คอลัมน์
-
-### 7) การตั้งค่ารายงาน
-- เปลี่ยนชื่อรายงาน
-- เปลี่ยนชื่อบริษัทที่แสดงผล
-- เปลี่ยนธีมสีของรายงาน
-- กำหนดรูปแบบวันที่และรอบบัญชี
-- เปิด/ปิดสถานะรายงาน
-
-### 8) การกำหนดสิทธิ์รายงาน
-- เลือกผู้ใช้ที่สามารถเห็นรายงานนี้ได้
-- ใช้ร่วมกับ role simulation เพื่อทดสอบสิทธิ์ก่อนใช้งานจริง
-
-### 9) การจัดการแถวและคอลัมน์
-- เพิ่ม ลบ ย้าย หรือ clone รายงาน
-- เพิ่มแถว data/header/formula
-- เพิ่มคอลัมน์ report logic ตามช่วงเวลา, budget, formula หรือ percent
-- ตั้งค่า width, label, type และ target column
-
-### 10) การ map ข้อมูลรายละเอียด
-- ผูกข้อมูลกับ department codes
-- ผูก account codes
-- ผูก group ระดับ L1 ถึง L4
-- แก้ mapping ได้ผ่าน modal แบบเลือกหลายรายการ
-
-### 11) OCR Import
-- นำเข้าจากภาพหรือ PDF
-- ระบบจะสร้างแม่แบบรายงานเริ่มต้นให้จากการอ่านข้อมูล
-
-### 12) การ Export และ Print
-- Export เป็นไฟล์ Excel-compatible `.xls`
-- พิมพ์รายงานผ่าน `window.print()`
-- มี layout สำหรับ print โดยเฉพาะ
-
-### 13) ธีมรายงาน
-- เลือกสีของรายงานได้ 3 แบบ
-- ธีมมีผลกับ header, subtotal และ total row
-
-## หมายเหตุสำหรับนักพัฒนา
-- Business logic หลักถูกรวมอยู่ใน `src/app/App.jsx` และ `src/features/report/lib/reportLogic.js`
-- ตอนนี้ UI หลักถูกแยกออกเป็น component ย่อยแล้ว เช่น report view, setup panel, access modal, และ mapping modal
-- ตอนนี้ logic สำคัญบางส่วนถูกย้ายไปอยู่ใน `src/features/report/lib/reportLogic.js` เพื่อให้ทดสอบได้ง่ายขึ้น
-- ถ้าจะปรับโครงสร้างต่อไป แนะนำแยก helper, hooks, และ engine logic ออกเป็นไฟล์ย่อยทีละส่วน
+ผลลัพธ์จะถูกแพ็กไว้ในโฟลเดอร์ `/dist` เพื่อความเร็วสูงสุดในการโหลดและใช้งานจริง

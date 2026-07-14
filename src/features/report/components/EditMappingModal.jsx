@@ -36,7 +36,7 @@ export default function EditMappingModal({
   onClose,
 }) {
   if (!isOpen || !editingRow) return null;
-  const friendlyButtonClassName = 'border-stone-300 bg-stone-100 text-stone-800 hover:bg-stone-200 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100';
+  const friendlyButtonClassName = 'border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150';
 
   const accountCategoryOptions = reportOptions.accountCategories?.length > 0
     ? reportOptions.accountCategories

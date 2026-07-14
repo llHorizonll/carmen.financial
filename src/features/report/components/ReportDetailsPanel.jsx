@@ -106,8 +106,8 @@ function ReportStatusCard({ activeReport, updateActiveReport }) {
       <Button
         variant="outline"
         className={`w-full justify-center border ${activeReport.isActive !== false
-          ? 'border-stone-300 bg-stone-100 text-stone-800 hover:bg-stone-200 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100'
-          : 'border-stone-300 bg-stone-50 text-stone-600 hover:bg-stone-100 dark:border-stone-700 dark:bg-stone-950 dark:text-stone-300'
+          ? 'border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150'
+          : 'border-border bg-background text-muted-foreground hover:bg-muted transition-all duration-150'
         }`}
         onClick={() => updateActiveReport({ isActive: activeReport.isActive === false ? true : false })}
       >
@@ -161,7 +161,7 @@ export default function ReportDetailsPanel({
   const accountCategoryLabelMap = new Map(accountCategoryOptions.map((option) => [option.id, option.label]));
   const dateDisplayValue = activeReport.overrideDateDisplay ?? activeReport.customDateLabel ?? '';
   const periodDisplayValue = activeReport.overridePeriodDisplay ?? activeReport.customPeriodLabel ?? '';
-  const friendlyButtonClassName = 'border-stone-300 bg-stone-100 text-stone-800 hover:bg-stone-200 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100';
+  const friendlyButtonClassName = 'border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150';
 
   return (
     <Card className="border border-border shadow-none ring-0">

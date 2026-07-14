@@ -192,6 +192,12 @@ export const mergeAndSort = (oldArr, newMap) => {
 };
 
 export const formatAutoPeriod = (year, period, formatType) => {
+  if (period === 'Q1' || period === 'Q2' || period === 'Q3' || period === 'Q4') {
+    return `${period} ${year}`;
+  }
+  if (period === '-1') {
+    return `Previous Period (${year})`;
+  }
   const pInt = parseInt(period, 10);
   const yInt = parseInt(year, 10);
   if (isNaN(pInt) || isNaN(yInt)) return `Period : ${year}-${String(period).padStart(2, '0')}`;
@@ -271,14 +277,31 @@ export const resolveTime = (col, appliedYear, appliedPeriod, periodOptions = [])
     return { effYear: y.toString(), targetMonths: months };
   }
 
-  if (col.periodMode === 'current') months = [p];
-  else if (col.periodMode === '-1') { p -= 1; if (p < 1) { p = 12; y -= 1; } months = [p]; }
+  // Fallback non-sequence logic
+  let globalMonths = [p];
+  if (appliedPeriod === 'Q1') globalMonths = [1, 2, 3];
+  else if (appliedPeriod === 'Q2') globalMonths = [4, 5, 6];
+  else if (appliedPeriod === 'Q3') globalMonths = [7, 8, 9];
+  else if (appliedPeriod === 'Q4') globalMonths = [10, 11, 12];
+  else if (appliedPeriod === '-1') {
+    const prevM = new Date().getMonth(); // 0-11 (so 0 is Jan, meaning previous is Dec)
+    globalMonths = [prevM === 0 ? 12 : prevM];
+  }
+
+  if (col.periodMode === 'current') months = globalMonths;
+  else if (col.periodMode === '-1') {
+    let baseM = globalMonths[0];
+    if (isNaN(baseM)) baseM = new Date().getMonth() + 1;
+    let prevM = baseM - 1;
+    if (prevM < 1) { prevM = 12; y -= 1; }
+    months = [prevM];
+  }
   else if (col.periodMode === 'Q1') months = [1, 2, 3];
   else if (col.periodMode === 'Q2') months = [4, 5, 6];
   else if (col.periodMode === 'Q3') months = [7, 8, 9];
   else if (col.periodMode === 'Q4') months = [10, 11, 12];
   else if (col.periodMode === 'FY') months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-  else months = [parseInt(col.periodMode) || p];
+  else months = [parseInt(col.periodMode) || globalMonths[0]];
 
   if (col.yearMode === '-1') y -= 1;
   else if (col.yearMode === '+1') y += 1;

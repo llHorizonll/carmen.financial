@@ -85,6 +85,8 @@ describe('reportLogic helpers', () => {
   it('formats auto periods and indent classes', () => {
     expect(formatAutoPeriod(2025, 2, 'year_month')).toBe('2025-02');
     expect(formatAutoPeriod(2025, 2, 'end_of_month')).toBe('February 28, 2025');
+    expect(formatAutoPeriod(2025, 'Q1', 'year_month')).toBe('Q1 2025');
+    expect(formatAutoPeriod(2025, '-1', 'year_month')).toBe('Previous Period (2025)');
     expect(getIndentClass(3)).toBe('pl-16');
   });
 
@@ -96,6 +98,19 @@ describe('reportLogic helpers', () => {
     expect(resolveTime({ yearMode: '-1', periodMode: 'FY' }, '2025', '2')).toEqual({
       effYear: '2024',
       targetMonths: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+    });
+    // Custom quarters and previous month
+    expect(resolveTime({ yearMode: 'current', periodMode: 'current' }, '2025', 'Q1')).toEqual({
+      effYear: '2025',
+      targetMonths: [1, 2, 3],
+    });
+    expect(resolveTime({ yearMode: 'current', periodMode: 'current' }, '2025', 'Q4')).toEqual({
+      effYear: '2025',
+      targetMonths: [10, 11, 12],
+    });
+    expect(resolveTime({ yearMode: 'current', periodMode: 'current' }, '2025', '-1')).toEqual({
+      effYear: '2025',
+      targetMonths: [new Date().getMonth() === 0 ? 12 : new Date().getMonth()],
     });
   });
 

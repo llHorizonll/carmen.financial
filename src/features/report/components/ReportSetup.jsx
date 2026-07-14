@@ -9,9 +9,9 @@ import SetupSectionTabs from './SetupSectionTabs.jsx';
 import { THEMES } from '../lib/reportLogic.js';
 
 const themeBadgeClassMap = {
-  blue: 'border-stone-300 bg-stone-100 text-stone-800 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100',
-  green: 'border-stone-300 bg-stone-100 text-stone-800 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100',
-  gray: 'border-stone-300 bg-stone-100 text-stone-800 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100',
+  blue: 'border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150',
+  green: 'border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150',
+  gray: 'border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150',
 };
 
 export default function ReportSetup(props) {

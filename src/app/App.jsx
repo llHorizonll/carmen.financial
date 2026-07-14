@@ -69,9 +69,7 @@ import {
 import MultiSelectDropdown from "../features/report/components/MultiSelectDropdown.jsx";
 import usePersistentState from "../hooks/usePersistentState.js";
 import { getDefaultReports } from "../features/report/data/defaultReports.js";
-import {
-  createBlankReport,
-} from "../features/report/data/reportTemplates.js";
+import { createBlankReport } from "../features/report/data/reportTemplates.js";
 import {
   cloneCarmenReport,
   deleteCarmenReport,
@@ -195,16 +193,14 @@ const DEFAULT_REPORT_OPTIONS = {
     { id: "B", label: "Balance Sheet" },
   ],
   columnTypes: [
-    { id: "AC", label: "Actual Current" },
-    { id: "ACC", label: "Actual YTD" },
-    { id: "BUD", label: "Budget Current" },
-    { id: "BC", label: "Budget Current (BC)" },
-    { id: "BUDACC", label: "Budget YTD" },
-    { id: "BCC", label: "Budget YTD (BCC)" },
-    { id: "DAC", label: "Daily Actual Current" },
-    { id: "PTD", label: "Period To Date" },
-    { id: "DACBG", label: "Daily Budget Current" },
-    { id: "PTDBG", label: "Period To Date Budget" },
+    { id: "DAC", label: "DAC (Actual Daily)" },
+    { id: "PTD", label: "PTD" },
+    { id: "AC", label: "AC (Actual Month)" },
+    { id: "ACC", label: "ACC (Actual YTD)" },
+    { id: "DACBG", label: "DACBG" },
+    { id: "PTDBG", label: "PTDBG" },
+    { id: "BC", label: "BC (Budget Month)" },
+    { id: "BCC", label: "BCC (Budget YTD)" },
   ],
   yearModes: [
     { id: "current", label: "Current Year" },
@@ -213,9 +209,8 @@ const DEFAULT_REPORT_OPTIONS = {
     { id: "specific", label: "Specific Year" },
   ],
   periodModes: [
-    { id: "current", label: "Current Period" },
-    { id: "-1", label: "Previous Period" },
-    { id: "FY", label: "Fiscal Year" },
+    { id: "current", label: "Period (Parameter)" },
+    { id: "-1", label: "Period -1" },
     { id: "Q1", label: "Q1" },
     { id: "Q2", label: "Q2" },
     { id: "Q3", label: "Q3" },
@@ -233,8 +228,22 @@ const DEFAULT_REPORT_OPTIONS = {
 };
 
 const DAILY_COLUMN_TYPES = new Set(["DAC", "PTD", "DACBG", "PTDBG"]);
-const MONTHLY_COLUMN_TYPES = new Set(["AC", "ACC", "BUD", "BC", "BUDACC", "BCC"]);
-const BUDGET_COLUMN_TYPES = new Set(["BUD", "BC", "BUDACC", "BCC", "DACBG", "PTDBG"]);
+const MONTHLY_COLUMN_TYPES = new Set([
+  "AC",
+  "ACC",
+  "BUD",
+  "BC",
+  "BUDACC",
+  "BCC",
+]);
+const BUDGET_COLUMN_TYPES = new Set([
+  "BUD",
+  "BC",
+  "BUDACC",
+  "BCC",
+  "DACBG",
+  "PTDBG",
+]);
 const createCurrentYearValue = () => new Date().getFullYear().toString();
 const parseSelectedItems = (value) =>
   String(value || "")
@@ -281,15 +290,15 @@ const mergeReportOptions = (defaults, loaded) => ({
 
 const REPORT_STORAGE_KEY = "carmen_bi_reports_config_v5_16";
 const NEUTRAL_BUTTON_CLASS =
-  "border-stone-300 bg-stone-100 text-stone-800 hover:bg-stone-200 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100";
+  "border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150";
 const NEUTRAL_FILTER_TRIGGER_CLASS =
-  "border-stone-300 bg-stone-100 text-stone-800 hover:bg-stone-200 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100";
+  "border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150";
 const MODE_SWITCH_CLASS =
-  "inline-flex items-center rounded-xl border border-stone-300 bg-stone-100/80 p-1 shadow-inner dark:border-stone-700 dark:bg-stone-900/80";
+  "inline-flex items-center rounded-xl border border-border bg-muted/60 p-1 shadow-inner";
 const ACTIVE_MODE_CLASS =
-  "bg-stone-100 text-stone-900 shadow-sm ring-1 ring-stone-300 dark:bg-stone-900 dark:text-stone-100 dark:ring-stone-700";
+  "bg-primary text-primary-foreground shadow-sm ring-1 ring-primary/20 transition-all duration-150";
 const INACTIVE_MODE_CLASS =
-  "text-stone-600 hover:bg-stone-50 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100";
+  "text-muted-foreground hover:bg-background hover:text-foreground transition-all duration-150";
 
 const readStoredReports = () => {
   if (typeof window === "undefined" || !window.localStorage) return null;
@@ -504,7 +513,8 @@ export default function App({ onLogout = null }) {
         setAlertMsg(null);
         return apiData;
       } catch (error) {
-        const message = error.message || `Unable to load Carmen ${source} data.`;
+        const message =
+          error.message || `Unable to load Carmen ${source} data.`;
         setAlertMsg(message);
         throw error;
       } finally {
@@ -937,7 +947,11 @@ export default function App({ onLogout = null }) {
     }
 
     const newId = "rep-" + Date.now();
-    const clonedReport = cloneReport(activeReport, newId, currentUser?.id || "");
+    const clonedReport = cloneReport(
+      activeReport,
+      newId,
+      currentUser?.id || "",
+    );
     setReports((prev) => [...prev, clonedReport]);
     setCurrentReportId(newId);
   };
@@ -1211,8 +1225,6 @@ export default function App({ onLogout = null }) {
     visibleActiveTab === "setup"
       ? "flex h-full w-full min-h-0 flex-col"
       : "flex h-full w-full min-h-0 flex-col gap-3";
-  const headerPaddingClass =
-    visibleActiveTab === "report" ? "px-3 py-3" : "px-4 py-3 lg:px-6";
 
   const handleTabChange = (nextTab) => {
     if (nextTab === visibleActiveTab) return;
@@ -1446,7 +1458,7 @@ export default function App({ onLogout = null }) {
 
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <header className="border-b bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/80 print:hidden">
-          <div className={`flex flex-col gap-3 ${headerPaddingClass}`}>
+          <div className={`flex flex-col gap-3 px-3 py-3`}>
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                 {isMobile && (
@@ -1582,7 +1594,12 @@ export default function App({ onLogout = null }) {
                     </span>
                   </Button>
                   {typeof onLogout === "function" && (
-                    <Button variant="outline" size="sm" className={NEUTRAL_BUTTON_CLASS} onClick={onLogout}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={NEUTRAL_BUTTON_CLASS}
+                      onClick={onLogout}
+                    >
                       <LogOut />
                       Logout
                     </Button>
@@ -1803,42 +1820,44 @@ export default function App({ onLogout = null }) {
               </Card>
             )}
 
-            {visibleActiveTab === "setup" && canSetupReports && activeReport && (
-              <React.Suspense
-                fallback={
-                  <Card className="flex h-full min-h-0 items-center justify-center border border-border shadow-none ring-0">
-                    <CardContent className="py-16 text-center text-sm text-muted-foreground">
-                      Loading setup tools...
-                    </CardContent>
-                  </Card>
-                }
-              >
-                <ReportSetup
-                  themeMode={themeMode}
-                  masterData={masterData}
-                  reportOptions={reportOptions}
-                  activeReport={activeReport}
-                  activeCategories={activeCategories}
-                  updateActiveReport={updateActiveReport}
-                  onBusyTransition={triggerPageTransition}
-                  handleCloneReport={handleCloneReport}
-                  handleCreateBlankReport={handleCreateBlankReport}
-                  handleDeleteReport={handleDeleteReport}
-                  setIsAccessModalOpen={setIsAccessModalOpen}
-                  handleAddCol={handleAddCol}
-                  handleUpdateCol={handleUpdateCol}
-                  moveCol={moveCol}
-                  handleDeleteCol={handleDeleteCol}
-                  handleAddRow={handleAddRow}
-                  handleUpdateRow={handleUpdateRow}
-                  handleUpdateRowMulti={handleUpdateRowMulti}
-                  moveRow={moveRow}
-                  handleDeleteRow={handleDeleteRow}
-                  setEditingRow={setEditingRow}
-                  setConfirmAction={setConfirmAction}
-                />
-              </React.Suspense>
-            )}
+            {visibleActiveTab === "setup" &&
+              canSetupReports &&
+              activeReport && (
+                <React.Suspense
+                  fallback={
+                    <Card className="flex h-full min-h-0 items-center justify-center border border-border shadow-none ring-0">
+                      <CardContent className="py-16 text-center text-sm text-muted-foreground">
+                        Loading setup tools...
+                      </CardContent>
+                    </Card>
+                  }
+                >
+                  <ReportSetup
+                    themeMode={themeMode}
+                    masterData={masterData}
+                    reportOptions={reportOptions}
+                    activeReport={activeReport}
+                    activeCategories={activeCategories}
+                    updateActiveReport={updateActiveReport}
+                    onBusyTransition={triggerPageTransition}
+                    handleCloneReport={handleCloneReport}
+                    handleCreateBlankReport={handleCreateBlankReport}
+                    handleDeleteReport={handleDeleteReport}
+                    setIsAccessModalOpen={setIsAccessModalOpen}
+                    handleAddCol={handleAddCol}
+                    handleUpdateCol={handleUpdateCol}
+                    moveCol={moveCol}
+                    handleDeleteCol={handleDeleteCol}
+                    handleAddRow={handleAddRow}
+                    handleUpdateRow={handleUpdateRow}
+                    handleUpdateRowMulti={handleUpdateRowMulti}
+                    moveRow={moveRow}
+                    handleDeleteRow={handleDeleteRow}
+                    setEditingRow={setEditingRow}
+                    setConfirmAction={setConfirmAction}
+                  />
+                </React.Suspense>
+              )}
           </div>
         </div>
       </main>
@@ -1908,7 +1927,9 @@ export default function App({ onLogout = null }) {
             title={detailSelecting.title}
             subTitle={detailSelecting.subTitle || "Select Items"}
             availableItems={detailSelecting.items}
-            selectedItems={parseSelectedItems(editingRow[detailSelecting.field])}
+            selectedItems={parseSelectedItems(
+              editingRow[detailSelecting.field],
+            )}
             onCancel={() => setDetailSelecting(null)}
             onSave={(newSelection) => {
               setEditingRow({

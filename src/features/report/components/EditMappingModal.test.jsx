@@ -40,7 +40,7 @@ describe('EditMappingModal', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Select departments/i }));
     expect(onOpenDetailSelector).toHaveBeenCalledWith(expect.objectContaining({ field: 'dept' }));
-    expect(screen.getByRole('button', { name: /Select departments/i }).className).toMatch(/bg-stone|border-stone|text-stone/);
+    expect(screen.getByRole('button', { name: /Select departments/i }).className).toMatch(/bg-stone|border-stone|text-stone|bg-muted|border-border|text-muted/);
 
     fireEvent.click(screen.getAllByRole('combobox')[2]);
     fireEvent.click(await screen.findByText('Balance Sheet'));
@@ -48,7 +48,7 @@ describe('EditMappingModal', () => {
 
     fireEvent.click(screen.getByText('Apply Mapping'));
     expect(onApply).toHaveBeenCalledTimes(1);
-    expect(screen.getByText('Apply Mapping').className).toMatch(/bg-stone|border-stone|text-stone/);
+    expect(screen.getByText('Apply Mapping').className).toMatch(/bg-stone|border-stone|text-stone|bg-muted|border-border|text-muted/);
 
     fireEvent.click(screen.getByText('Cancel'));
     expect(onClose).toHaveBeenCalledTimes(1);

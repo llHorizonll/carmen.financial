@@ -24,7 +24,7 @@ const getUserRoleLabel = (user) => (isSetupAdmin(user) ? 'Admin' : 'User');
 
 export default function AccessModal({ isOpen, masterData, activeReport, onClose, onUpdateUsers }) {
   if (!activeReport) return null;
-  const friendlyButtonClassName = 'border-stone-300 bg-stone-100 text-stone-800 hover:bg-stone-200 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100';
+  const friendlyButtonClassName = 'border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150';
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>

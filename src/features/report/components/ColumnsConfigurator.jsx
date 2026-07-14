@@ -42,23 +42,41 @@ export default function ColumnsConfigurator({
   moveCol,
   handleDeleteCol,
 }) {
+  const columnsCountRef = React.useRef(activeReport.columns.length);
+
+  React.useEffect(() => {
+    if (activeReport.columns.length > columnsCountRef.current) {
+      setTimeout(() => {
+        const cards = document.querySelectorAll('.column-card');
+        if (cards.length > 0) {
+          const lastCard = cards[cards.length - 1];
+          lastCard.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'end' });
+          const input = lastCard.querySelector('input');
+          if (input) {
+            input.focus();
+            input.select();
+          }
+        }
+      }, 50);
+    }
+    columnsCountRef.current = activeReport.columns.length;
+  }, [activeReport.columns.length]);
+
   const reportType = activeReport?.reportType || 'Monthly';
   const allowedColumnTypes = reportType === 'Daily'
     ? new Set(['DAC', 'PTD', 'DACBG', 'PTDBG'])
-    : new Set(['AC', 'ACC', 'BUD', 'BC', 'BUDACC', 'BCC']);
+    : new Set(['AC', 'ACC', 'BC', 'BCC', 'BUD', 'BUDACC']); // Keep BUD and BUDACC internally allowed for backward compatibility
   const columnTypeOptions = (reportOptions.columnTypes?.length > 0
     ? reportOptions.columnTypes
     : [
-        { id: 'AC', label: 'AC' },
-        { id: 'ACC', label: 'ACC' },
-        { id: 'BUD', label: 'BUD' },
-        { id: 'BC', label: 'BC' },
-        { id: 'BUDACC', label: 'BUDACC' },
-        { id: 'BCC', label: 'BCC' },
         { id: 'DAC', label: 'DAC' },
         { id: 'PTD', label: 'PTD' },
+        { id: 'AC', label: 'AC' },
+        { id: 'ACC', label: 'ACC' },
         { id: 'DACBG', label: 'DACBG' },
         { id: 'PTDBG', label: 'PTDBG' },
+        { id: 'BC', label: 'BC' },
+        { id: 'BCC', label: 'BCC' },
       ]).filter((option) => allowedColumnTypes.has(option.id));
   const yearModeOptions = reportOptions.yearModes?.length > 0
     ? reportOptions.yearModes
@@ -71,9 +89,8 @@ export default function ColumnsConfigurator({
   const periodModeOptions = reportOptions.periodModes?.length > 0
     ? reportOptions.periodModes
     : [
-        { id: 'current', label: 'Current' },
-        { id: '-1', label: 'Prev' },
-        { id: 'FY', label: 'FY' },
+        { id: 'current', label: 'Period (Parameter)' },
+        { id: '-1', label: 'Period -1' },
         { id: 'Q1', label: 'Q1' },
         { id: 'Q2', label: 'Q2' },
         { id: 'Q3', label: 'Q3' },
@@ -81,8 +98,10 @@ export default function ColumnsConfigurator({
       ];
   const hasIncompatibleColumns = activeReport.columns.some((col) => col.type && !allowedColumnTypes.has(String(col.type).trim().toUpperCase()));
   const brokenColumnReferences = findBrokenReferences(activeReport).filter((issue) => issue.scope === 'column');
-  const headerActionClassName = 'w-full justify-center rounded-xl border shadow-sm transition-colors';
-  const friendlyActionClassName = 'border-stone-300 bg-stone-100 text-stone-800 hover:bg-stone-200 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100';
+  const headerActionClassName = 'w-full justify-center rounded-xl border shadow-sm transition-colors transition-all duration-150';
+  const dataActionClassName = 'border-blue-200 bg-blue-50/50 text-blue-700 hover:bg-blue-100/60 dark:border-blue-900/30 dark:bg-blue-950/20 dark:text-blue-400 dark:hover:bg-blue-950/40';
+  const formulaActionClassName = 'border-purple-200 bg-purple-50/50 text-purple-700 hover:bg-purple-100/60 dark:border-purple-900/30 dark:bg-purple-950/20 dark:text-purple-400 dark:hover:bg-purple-950/40';
+  const percentActionClassName = 'border-emerald-200 bg-emerald-50/50 text-emerald-700 hover:bg-emerald-100/60 dark:border-emerald-900/30 dark:bg-emerald-950/20 dark:text-emerald-400 dark:hover:bg-emerald-950/40';
 
   return (
     <Card className="w-full max-w-full min-h-0 overflow-hidden border border-border bg-card/95 shadow-none ring-0">
@@ -93,10 +112,10 @@ export default function ColumnsConfigurator({
             <CardDescription className="text-sm text-muted-foreground">Set column types, formulas, percentages, and widths.</CardDescription>
           </div>
           <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[24rem]">
-            <Button variant="outline" size="sm" className={`${headerActionClassName} ${friendlyActionClassName}`} onClick={() => handleAddCol('data')}>+ Data</Button>
-            <Button variant="outline" size="sm" className={`${headerActionClassName} ${friendlyActionClassName}`} onClick={() => handleAddCol('formula')}>+ Formula</Button>
-            <Button variant="outline" size="sm" className={`${headerActionClassName} ${friendlyActionClassName}`} onClick={() => handleAddCol('percent')}>
-              <Percent />
+            <Button variant="outline" size="sm" className={`${headerActionClassName} ${dataActionClassName}`} onClick={() => handleAddCol('data')}>+ Data</Button>
+            <Button variant="outline" size="sm" className={`${headerActionClassName} ${formulaActionClassName}`} onClick={() => handleAddCol('formula')}>+ Formula</Button>
+            <Button variant="outline" size="sm" className={`${headerActionClassName} ${percentActionClassName}`} onClick={() => handleAddCol('percent')}>
+              <Percent className="size-4" />
               Mix %
             </Button>
           </div>
@@ -122,8 +141,8 @@ export default function ColumnsConfigurator({
               const colClassy = col.isFormula 
                 ? COLUMN_CLASY_MAP.formula 
                 : col.isPercent 
-                  ? COLUMN_CLASY_MAP.percent 
-                  : COLUMN_CLASY_MAP.data;
+                ? COLUMN_CLASY_MAP.percent 
+                : COLUMN_CLASY_MAP.data;
 
               return (
                 <div
@@ -137,7 +156,7 @@ export default function ColumnsConfigurator({
                       <Badge variant="secondary" className="font-mono text-xs font-semibold px-2 py-0.5 shrink-0">
                         C{idx + 1}
                       </Badge>
-                      <Badge className={`text-[10px] font-medium px-1.5 py-0 rounded-md shrink-0 ${colClassy.badgeClass}`}>
+                      <Badge variant="outline" className={`text-[10px] font-medium px-1.5 py-0 rounded-md shrink-0 ${colClassy.badgeClass}`}>
                         {colClassy.label}
                       </Badge>
                       <span className="text-[10px] text-muted-foreground font-mono font-medium truncate" title={col.id}>{col.id}</span>
@@ -174,7 +193,7 @@ export default function ColumnsConfigurator({
                       size="icon-sm"
                       className={
                         col.isActive !== false
-                          ? 'h-7 w-7 border-stone-300 bg-stone-100 text-stone-800 hover:bg-stone-200 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100'
+                          ? 'h-7 w-7 border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150'
                           : 'h-7 w-7 border-border bg-background text-muted-foreground hover:bg-muted'
                       }
                       aria-label={`${col.isActive !== false ? 'Hide' : 'Show'} column ${col.id}`}

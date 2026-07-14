@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils.js';
 export default function MultiSelectDropdown({ options, selected, onChange, label, testIdPrefix }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const friendlyButtonClassName = 'border-stone-300 bg-stone-100 text-stone-800 hover:bg-stone-200 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100';
+  const friendlyButtonClassName = 'border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150';
 
   const validOptions = useMemo(() => {
     const unique = [];

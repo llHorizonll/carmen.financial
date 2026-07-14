@@ -30,8 +30,8 @@ describe('ColumnsConfigurator', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '+ Formula' }));
     expect(handleAddCol).toHaveBeenCalledWith('formula');
-    expect(screen.getByRole('button', { name: '+ Data' }).className).toMatch(/bg-stone|border-stone|text-stone/);
-    expect(screen.getByRole('button', { name: '+ Formula' }).className).toMatch(/bg-stone|border-stone|text-stone/);
+    expect(screen.getByRole('button', { name: '+ Data' }).className).toMatch(/bg-stone|border-stone|text-stone|bg-muted|border-border|text-muted|bg-blue|border-blue|text-blue/);
+    expect(screen.getByRole('button', { name: '+ Formula' }).className).toMatch(/bg-stone|border-stone|text-stone|bg-muted|border-border|text-muted|bg-purple|border-purple|text-purple/);
 
     fireEvent.click(screen.getByRole('button', { name: /Mix %/i }));
     expect(handleAddCol).toHaveBeenCalledWith('percent');
@@ -57,16 +57,16 @@ describe('ColumnsConfigurator', () => {
     expect(moveCol).toHaveBeenCalledWith(0, 'right');
 
     fireEvent.click(within(row).getAllByRole('combobox')[0]);
-    fireEvent.click(await screen.findByText('BUDACC'));
-    expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'type', 'BUDACC');
+    fireEvent.click(await screen.findByText('BCC'));
+    expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'type', 'BCC');
 
     fireEvent.click(within(row).getAllByRole('combobox')[2]);
     fireEvent.click(await screen.findByText('Prev'));
     expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'yearMode', '-1');
 
     fireEvent.click(within(row).getAllByRole('combobox')[3]);
-    fireEvent.click(await screen.findByText('FY'));
-    expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'periodMode', 'FY');
+    fireEvent.click(await screen.findByText('Period -1'));
+    expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'periodMode', '-1');
   });
 
   it('toggles column visibility from the eye action', () => {

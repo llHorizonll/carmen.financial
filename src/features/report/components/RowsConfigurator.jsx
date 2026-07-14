@@ -28,7 +28,27 @@ export default function RowsConfigurator({
 }) {
   const brokenRowReferences = findBrokenReferences(activeReport).filter((issue) => issue.scope === 'row');
   const headerActionClassName = 'w-full justify-center rounded-xl border shadow-sm transition-colors';
-  const friendlyActionClassName = 'border-stone-300 bg-stone-100 text-stone-800 hover:bg-stone-200 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100';
+  const friendlyActionClassName = 'border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150';
+
+  const rowsCountRef = React.useRef(activeReport.rows.length);
+
+  React.useEffect(() => {
+    if (activeReport.rows.length > rowsCountRef.current) {
+      setTimeout(() => {
+        const rows = document.querySelectorAll('.row-configurator-row');
+        if (rows.length > 0) {
+          const lastRow = rows[rows.length - 1];
+          lastRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          const input = lastRow.querySelector('input');
+          if (input) {
+            input.focus();
+            input.select();
+          }
+        }
+      }, 50);
+    }
+    rowsCountRef.current = activeReport.rows.length;
+  }, [activeReport.rows.length]);
 
   return (
     <Card className="min-h-0 overflow-hidden border border-border bg-card/95 shadow-none ring-0">
@@ -82,7 +102,7 @@ export default function RowsConfigurator({
                 const rowWarnings = getRowMappingWarnings(row, activeReport.rows, masterData);
 
                 return (
-                  <TableRow key={row.id} className={isTotal ? 'bg-muted/30' : isHeader ? 'bg-muted/10' : ''}>
+                  <TableRow key={row.id} className={`row-configurator-row ${isTotal ? 'bg-muted/30' : isHeader ? 'bg-muted/10' : ''}`}>
                   <TableCell className="px-2 py-2 align-middle">
                     <Button
                       variant="destructive"

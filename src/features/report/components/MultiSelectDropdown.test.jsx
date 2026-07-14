@@ -21,7 +21,7 @@ describe('MultiSelectDropdown', () => {
     );
 
     expect(screen.getByTestId('selected-value-dept')).toHaveTextContent('101 - Front Office');
-    expect(screen.getByRole('button', { name: /DEPT/i }).className).toMatch(/bg-stone|border-stone|text-stone/);
+    expect(screen.getByRole('button', { name: /DEPT/i }).className).toMatch(/bg-stone|border-stone|text-stone|bg-muted|border-border|text-muted/);
     fireEvent.click(screen.getByRole('button', { name: /DEPT/i }));
     fireEvent.click(screen.getByRole('button', { name: '102 - Food & Beverage' }));
     expect(onChange).toHaveBeenCalledWith(['101', '102']);
