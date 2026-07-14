@@ -100,8 +100,8 @@ export default function RowsConfigurator({
                       value={rowType}
                       onValueChange={(value) => {
                         if (value === 'D') handleUpdateRowMulti(row.id, { isTotal: false, isHeader: false });
-                        else if (value === 'H') handleUpdateRowMulti(row.id, { isTotal: false, isHeader: true, formula: '', percentBase: '', dept: '', accCodes: '', groups: '' });
-                        else if (value === 'F') handleUpdateRowMulti(row.id, { isTotal: true, isHeader: false, dept: '', accCodes: '', groups: '' });
+                        else if (value === 'H') handleUpdateRowMulti(row.id, { isTotal: false, isHeader: true, formula: '', percentBase: '', dept: '', deptGroup: '', accCodes: '', groups: '' });
+                        else if (value === 'F') handleUpdateRowMulti(row.id, { isTotal: true, isHeader: false, dept: '', deptGroup: '', accCodes: '', groups: '' });
                       }}
                     >
                       <SelectTrigger className="mx-auto h-8 w-full max-w-[10rem] rounded-lg text-center">
@@ -184,6 +184,7 @@ export default function RowsConfigurator({
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0 flex-1 space-y-1 text-sm text-muted-foreground">
                             <div className="truncate"><span className="font-medium text-foreground">DEPT:</span> {row.dept || '-'}</div>
+                            <div className="truncate"><span className="font-medium text-foreground">DEPT GRP:</span> {row.deptGroup || '-'}</div>
                             <div className="truncate"><span className="font-medium text-foreground">GRP ({row.groupLevel || 'L4'}):</span> {row.groups || '-'}</div>
                             <div className="truncate"><span className="font-medium text-foreground">CODE:</span> {row.accCodes || '-'}</div>
                             <div className="truncate"><span className="font-medium text-foreground">DIM:</span> {[row.dim1, row.dim2].filter(Boolean).join(', ') || '-'}</div>

@@ -89,12 +89,36 @@ export default function EditMappingModal({
             </div>
             <Input
               value={editingRow.dept}
-              onChange={(e) => setEditingRow({ ...editingRow, dept: e.target.value })}
+              onChange={(e) => setEditingRow({ ...editingRow, dept: e.target.value, deptGroup: '' })}
               placeholder="e.g. 101, 102"
               />
           </div>
 
           <div className="space-y-3 rounded-xl border border-border bg-background p-4">
+            <div className="space-y-2">
+              <Label>Department Group</Label>
+              <Select
+                value={editingRow.deptGroup || '__none__'}
+                onValueChange={(value) => setEditingRow({
+                  ...editingRow,
+                  deptGroup: value === '__none__' ? '' : value,
+                  dept: value === '__none__' ? editingRow.dept : '',
+                })}
+              >
+                <SelectTrigger className="h-10 w-full rounded-xl">
+                  <SelectValue placeholder="Select department group" />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  <SelectItem value="__none__">No department group</SelectItem>
+                  {(masterData.deptGroups || []).map((group) => (
+                    <SelectItem key={group.id} value={group.id}>
+                      {group.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <Label>Group Level Target</Label>
               <Select

@@ -3,7 +3,9 @@
 const arrCompany = [
   {
     name: "Carmen.dev (localhost)",
-    apiUrl: `http://localhost/Carmen.WebApi`,
+    apiUrl: import.meta.env.DEV
+      ? `/Carmen.WebApi`
+      : `http://localhost/Carmen.WebApi`,
     adminToken: "f9ebce3d77f2f445dee52ba252cc53ee",
   },
   // {

@@ -9,7 +9,6 @@ describe('ReportDetailsPanel', () => {
     const handleCloneReport = vi.fn();
     const handleCreateBlankReport = vi.fn();
     const handleDeleteReport = vi.fn();
-    const handleOCRUpload = vi.fn();
     const setIsAccessModalOpen = vi.fn();
 
     render(
@@ -31,7 +30,6 @@ describe('ReportDetailsPanel', () => {
         handleCloneReport={handleCloneReport}
         handleCreateBlankReport={handleCreateBlankReport}
         handleDeleteReport={handleDeleteReport}
-        handleOCRUpload={handleOCRUpload}
         setIsAccessModalOpen={setIsAccessModalOpen}
       />
     );
@@ -48,6 +46,7 @@ describe('ReportDetailsPanel', () => {
     fireEvent.click(screen.getAllByRole('combobox')[1]);
     fireEvent.click(await screen.findByRole('option', { name: /Short Month \+ YYYY/i }));
     expect(updateActiveReport).toHaveBeenCalledWith({ periodFormat: 'short' });
+    expect(screen.getByPlaceholderText('u1')).toHaveAttribute('readonly');
 
     fireEvent.click(screen.getByRole('button', { name: /Clone/i }));
     expect(handleCloneReport).toHaveBeenCalledTimes(1);
@@ -61,10 +60,6 @@ describe('ReportDetailsPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Delete/i }));
     expect(handleDeleteReport).toHaveBeenCalledTimes(1);
-
-    const fileInput = screen.getByLabelText(/OCR/i);
-    fireEvent.change(fileInput, { target: { files: [new File(['x'], 'scan.png', { type: 'image/png' })] } });
-    expect(handleOCRUpload).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole('button', { name: 'Manage access' }));
     expect(setIsAccessModalOpen).toHaveBeenCalledWith(true);

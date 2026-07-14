@@ -12,7 +12,6 @@ import {
   resolveTime,
   getIndentClass,
   createBlankReport,
-  createOcrReport,
   cloneReport,
   buildReportData,
   findBrokenReferences,
@@ -160,14 +159,12 @@ describe('reportLogic helpers', () => {
     expect(result[0].results.C1).toBe(30);
   });
 
-  it('creates clone, blank, and OCR starter reports', () => {
+  it('creates and clones blank reports', () => {
     const blank = createBlankReport('Carmen', ['u1'], 'rep-1');
     const cloned = cloneReport(blank, 'rep-2');
-    const ocr = createOcrReport('scan.pdf', 'Carmen', ['u1'], 'rep-3');
 
     expect(blank.name).toBe('New Custom Report');
     expect(cloned.name).toBe('New Custom Report (Copy)');
-    expect(ocr.name).toBe('Imported from scan.pdf');
     expect(blank.assignedUsers).toEqual(['u1']);
   });
 
@@ -209,34 +206,6 @@ describe('reportLogic helpers', () => {
       expect.objectContaining({ scope: 'row', id: 'r2', field: 'mapping' }),
       expect.objectContaining({ scope: 'row', id: 'r3', field: 'mapping' }),
     ]));
-  });
-
-  it('creates an OCR starter report scaffold with the expected defaults', () => {
-    const userIds = ['u1', 'u2'];
-    const ocr = createOcrReport('invoice.png', 'Carmen Hotel', userIds, 'rep-ocr-1');
-
-    expect(ocr).toMatchObject({
-      id: 'rep-ocr-1',
-      name: 'Imported from invoice.png',
-      companyName: 'Carmen Hotel',
-      category: ['ALL'],
-      assignedUsers: ['u1', 'u2'],
-      isActive: true,
-      periodFormat: 'standard',
-      theme: 'blue',
-    });
-    expect(ocr.columns).toHaveLength(1);
-    expect(ocr.columns[0]).toMatchObject({
-      id: 'C1',
-      label: 'Extracted Value',
-      isActive: true,
-      type: 'AC',
-    });
-    expect(ocr.rows).toHaveLength(2);
-    expect(ocr.rows[0]).toMatchObject({ desc: 'Sales (OCR)', isHeader: false, isTotal: false });
-    expect(ocr.rows[1]).toMatchObject({ desc: 'Cost (OCR)', isHeader: false, isTotal: false });
-    expect(userIds).toEqual(['u1', 'u2']);
-    expect(ocr.assignedUsers).not.toBe(userIds);
   });
 
   it('keeps theme and master data constants stable', () => {
@@ -483,11 +452,12 @@ describe('buildReportData', () => {
       columns: [
         { id: 'C1', formula: '' },
         { id: 'C2', formula: '' },
-        { id: 'C3', formula: 'C1+C2' },
+        { id: 'C3', formula: 'C1+C2', targetCol: 'C2' },
       ],
       rows: [],
     }, 'C2');
     expect(colDelete.columns[1].formula).toContain('!REF!');
+    expect(colDelete.columns[1].targetCol).toContain('!REF!');
 
     const colDeleteNoop = deleteColAndRewriteReferences({
       columns: [{ id: 'C1', formula: 'C1+C1' }],
@@ -527,6 +497,68 @@ describe('buildReportData', () => {
     }, 0, 'up');
     expect(moveRowsNoop.rows[0].formula).toBe('R1');
     expect(moveRowsNoop.rows[0].percentBase).toBe('R1');
+  });
+
+  it('calculates daily actual and budget windows and supports BC/BCC aliases', () => {
+    const result = buildReportData({
+      activeReport: {
+        category: ['ALL'],
+        rows: [{ id: 'r1', desc: 'Daily', dept: '101', deptGroup: '', accCodes: '4001', groupLevel: 'L4', groups: '', isHeader: false, isTotal: false }],
+        columns: [
+          { id: 'C1', type: 'DAC', yearMode: 'current', periodMode: 'current' },
+          { id: 'C2', type: 'PTD', yearMode: 'current', periodMode: 'current' },
+          { id: 'C3', type: 'DACBG', yearMode: 'current', periodMode: 'current' },
+          { id: 'C4', type: 'PTDBG', yearMode: 'current', periodMode: 'current' },
+          { id: 'C5', type: 'BC', yearMode: 'current', periodMode: 'current' },
+          { id: 'C6', type: 'BCC', yearMode: 'current', periodMode: 'current' },
+        ],
+      },
+      engineData: [
+        { year: '2025', period: '2', day: '1', deptcode: '101', acccode: '4001', amount: '10', amt2: '10' },
+        { year: '2025', period: '2', day: '2', deptcode: '101', acccode: '4001', amount: '20', amt2: '20' },
+      ],
+      budgetData: [
+        { year: '2025', revision: '0', period: '2', day: '1', deptcode: '101', acccode: '4001', amount: '3', amt1: '1', amt2: '3' },
+        { year: '2025', revision: '0', period: '2', day: '2', deptcode: '101', acccode: '4001', amount: '4', amt1: '2', amt2: '4' },
+      ],
+      appliedDepts: [],
+      appliedYear: '2025',
+      appliedPeriod: '2',
+      appliedDay: '2',
+      appliedRevision: '0',
+      masterData,
+    });
+
+    expect(result[0].results).toMatchObject({
+      C1: 20,
+      C2: 30,
+      C3: 4,
+      C4: 7,
+      C5: 7,
+      C6: 10,
+    });
+  });
+
+  it('expands mock department groups into department filters', () => {
+    const result = buildReportData({
+      activeReport: {
+        category: ['ALL'],
+        rows: [{ id: 'r1', dept: '', deptGroup: 'ROOMS', accCodes: '4001', groupLevel: 'L4', groups: '' }],
+        columns: [{ id: 'C1', type: 'AC', yearMode: 'current', periodMode: 'current' }],
+      },
+      engineData: [
+        { year: '2025', deptcode: '101', acccode: '4001', amt2: '10' },
+        { year: '2025', deptcode: '201', acccode: '4001', amt2: '90' },
+      ],
+      budgetData: [],
+      appliedDepts: [],
+      appliedYear: '2025',
+      appliedPeriod: '2',
+      appliedRevision: '0',
+      masterData,
+    });
+
+    expect(result[0].results.C1).toBe(10);
   });
 
   it('builds excel html output', () => {

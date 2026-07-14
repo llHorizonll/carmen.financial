@@ -47,12 +47,15 @@ export const getBusinessUnitDisplayName = (item) =>
 const buildUrl = (path, { useTenant = true, query = {} } = {}) => {
   const { baseUrl } = getCarmenApiConfig();
   const session = getStoredCarmenSession();
-  const url = new URL(joinUrl(baseUrl, path));
+  const requestUrl = joinUrl(baseUrl, path);
+  const url = new URL(requestUrl, typeof window !== 'undefined' ? window.location.origin : 'http://localhost');
   if (useTenant && session?.businessUnit?.tenant) url.searchParams.set('useTenant', session.businessUnit.tenant);
   Object.entries(query).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, value);
   });
-  return url.toString();
+  return /^https?:\/\//i.test(requestUrl)
+    ? url.toString()
+    : `${url.pathname}${url.search}`;
 };
 
 export const getStoredCarmenSession = () => {

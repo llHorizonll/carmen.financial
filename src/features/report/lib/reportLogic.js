@@ -42,6 +42,11 @@ export const INITIAL_MASTER_DATA = {
     { id: 'u3', name: 'F&B Director', role: 'User' }
   ],
   depts: [],
+  deptGroups: [
+    { id: 'ROOMS', name: 'Rooms Division', deptIds: ['101'] },
+    { id: 'FOOD_BEVERAGE', name: 'Food & Beverage', deptIds: ['201', '202'] },
+    { id: 'ADMIN', name: 'Administration', deptIds: ['301', '302'] },
+  ],
   groups: { L1: [], L2: [], L3: [], L4: [] },
   accCodes: []
 };
@@ -261,6 +266,8 @@ export const resolveTime = (col, appliedYear, appliedPeriod, periodOptions = [])
     else months = [parseInt(col.periodMode) || currentPosition];
 
     if (col.yearMode === '-1') y -= 1;
+    else if (col.yearMode === '+1') y += 1;
+    else if (col.yearMode === 'specific' && /^\d{4}$/.test(String(col.specificYear || ''))) y = Number(col.specificYear);
     return { effYear: y.toString(), targetMonths: months };
   }
 
@@ -274,15 +281,17 @@ export const resolveTime = (col, appliedYear, appliedPeriod, periodOptions = [])
   else months = [parseInt(col.periodMode) || p];
 
   if (col.yearMode === '-1') y -= 1;
+  else if (col.yearMode === '+1') y += 1;
+  else if (col.yearMode === 'specific' && /^\d{4}$/.test(String(col.specificYear || ''))) y = Number(col.specificYear);
   return { effYear: y.toString(), targetMonths: months };
 };
 
-const DAILY_COLUMN_TYPES = new Set(['DAC', 'PTD', 'DACBG', 'PTDBG']);
+const BUDGET_COLUMN_TYPES = new Set(['BUD', 'BC', 'BUDACC', 'BCC', 'DACBG', 'PTDBG']);
 
 const getColumnValueMode = (colType) => {
   const type = String(colType || '').trim().toUpperCase();
-  if (type === 'ACC' || type === 'PTD' || type === 'BUDACC' || type === 'PTDBG') return 'acc';
-  if (type === 'BUD' || type === 'DACBG') return 'bud';
+  if (['ACC', 'PTD', 'BUDACC', 'BCC', 'PTDBG'].includes(type)) return 'acc';
+  if (['BUD', 'BC', 'DACBG'].includes(type)) return 'bud';
   return 'ac';
 };
 
@@ -398,11 +407,12 @@ const matchesRowDimensions = (row, sourceRow) => {
 
 export const getIndentClass = (level) => level === 1 ? 'pl-8' : level === 2 ? 'pl-12' : level === 3 ? 'pl-16' : 'pl-4';
 
-export { createBlankReport, createOcrReport } from '../data/reportTemplates.js';
+export { createBlankReport } from '../data/reportTemplates.js';
 
-export const cloneReport = (report, newId = createReportId()) => {
+export const cloneReport = (report, newId = createReportId(), owner = report.owner) => {
   const cloned = structuredClone(report);
   cloned.id = newId;
+  cloned.owner = owner;
   cloned.name = `${report.name} (Copy)`;
   return cloned;
 };
@@ -466,6 +476,7 @@ const buildRowMappingSignature = (row) => {
   if (!row) return '';
 
   const parts = [];
+  const deptGroup = String(row.deptGroup || row.DeptGroup || '').trim().toUpperCase();
   const depts = row.dept ? String(row.dept).split(',').map(normalizeDeptLookupCode).filter(Boolean).sort() : [];
   const accs = row.accCodes ? String(row.accCodes).split(',').map(normalizeAccLookupCode).filter(Boolean).sort() : [];
   const grps = row.groups ? String(row.groups).split(',').map((value) => String(value).trim().toUpperCase()).filter(Boolean).sort() : [];
@@ -478,6 +489,8 @@ const buildRowMappingSignature = (row) => {
   if (accs.length > 0) parts.push(`acc=${accs.join('|')}`);
   if (grps.length > 0) parts.push(`grp=${grps.join('|')}`);
   if (dimensions.length > 0) parts.push(`dim=${dimensions.join('|')}`);
+
+  if (deptGroup) parts.push('deptGroup=' + deptGroup);
 
   const groupLevel = String(row.groupLevel || '').trim().toUpperCase();
   if (groupLevel) parts.push(`lvl=${groupLevel}`);
@@ -495,11 +508,14 @@ export const getRowMappingWarnings = (row, allRows = [], masterData = null) => {
   if (!row) return warnings;
 
   const hasDept = Boolean(String(row.dept || '').trim());
+  const deptGroup = String(row.deptGroup || row.DeptGroup || '').trim().toUpperCase();
+  const hasDeptGroup = Boolean(deptGroup);
   const hasAccCodes = Boolean(String(row.accCodes || '').trim());
   const hasGroups = Boolean(String(row.groups || '').trim());
   const groupLevel = String(row.groupLevel || 'L4').trim().toUpperCase();
 
   if (hasDept && hasAccCodes) warnings.push('Dept and account code are both set.');
+  if (hasDept && hasDeptGroup) warnings.push('Department and department group are both set.');
   if (hasDept && hasGroups) warnings.push('Dept and group mapping are both set.');
   if (hasAccCodes && hasGroups) warnings.push('Account code and group mapping are both set.');
   if (groupLevel !== 'L4' && hasAccCodes) warnings.push('Grouped rows should not mix with explicit account codes.');
@@ -531,6 +547,10 @@ export const getRowMappingWarnings = (row, allRows = [], masterData = null) => {
   }
 
   const masterAccIds = getMasterListIds(masterData?.accCodes);
+  if (hasDeptGroup && Array.isArray(masterData?.deptGroups) && !masterData.deptGroups.some((group) => String(group?.id || '').trim().toUpperCase() === deptGroup)) {
+    warnings.push('unknown department group: ' + deptGroup + '.');
+  }
+
   if (masterAccIds.length > 0 && hasAccCodes) {
     const invalidAccs = String(row.accCodes || '')
       .split(',')
@@ -559,8 +579,12 @@ export const findRowMappingConflicts = (report, masterData = null) => {
   return issues;
 };
 
-const filterEngineRows = (row) => {
-  const depts = row.dept ? String(row.dept).split(',').map(normalizeDeptLookupCode).filter(Boolean) : [];
+const filterEngineRows = (row, masterData) => {
+  const deptGroupId = String(row.deptGroup || row.DeptGroup || '').trim().toUpperCase();
+  const deptGroup = (masterData?.deptGroups || []).find((group) => String(group?.id || '').trim().toUpperCase() === deptGroupId);
+  const depts = deptGroupId
+    ? (deptGroup?.deptIds || []).map(normalizeDeptLookupCode).filter(Boolean)
+    : row.dept ? String(row.dept).split(',').map(normalizeDeptLookupCode).filter(Boolean) : [];
   const accs = row.accCodes ? String(row.accCodes).split(',').map(normalizeAccLookupCode).filter(Boolean) : [];
   const grps = row.groups ? String(row.groups).split(',').map(s => s.trim().toUpperCase()).filter(Boolean) : [];
   const dimensions = Array.isArray(row.dimensions)
@@ -600,17 +624,24 @@ const matchesReportCategory = ({ reportCategories, dAccType, hasAccMap, dAccCode
 const sumActuals = ({ col, rowConfig, engineData, appliedDepts, appliedYear, appliedPeriod, appliedDay, periodOptions, reportCategories, masterData }) => {
   const { effYear, targetMonths } = resolveTime(col, appliedYear, appliedPeriod, periodOptions);
   const normalizedAppliedDepts = appliedDepts.map(normalizeDeptLookupCode).filter(Boolean);
-  const monthsToEvaluate = col.type === 'BUDACC' && col.periodMode === 'FY' ? [targetMonths[0]] : targetMonths;
-  const needsDayFilter = DAILY_COLUMN_TYPES.has(String(col.type || '').toUpperCase()) && String(appliedDay || '').trim();
+  const type = String(col.type || '').trim().toUpperCase();
+  const monthsToEvaluate = ['BUDACC', 'BCC'].includes(type) && col.periodMode === 'FY' ? [targetMonths[0]] : targetMonths;
+  const targetDay = Number.parseInt(appliedDay, 10);
   let sum = 0;
 
   monthsToEvaluate.forEach(m => {
     engineData.forEach(d => {
       const dYear = (d.year || d.yr || '').toString().trim();
       if (dYear && dYear !== effYear) return;
-      if (needsDayFilter) {
-        const dDay = (d.day || d.Day || d.docDay || d.transactionDay || '').toString().trim();
-        if (dDay && dDay !== String(appliedDay).trim()) return;
+      if (type === 'DAC' || type === 'PTD') {
+        const dPeriod = Number.parseInt(d.period || d.month || d.period_no, 10);
+        const dDay = Number.parseInt(d.day || d.Day || d.docDay || d.transactionDay || d.date_day || d.day_no, 10);
+        if (Number.isInteger(dPeriod) && dPeriod !== m) return;
+        if (Number.isInteger(targetDay)) {
+          if (!Number.isInteger(dDay)) return;
+          if (type === 'DAC' && dDay !== targetDay) return;
+          if (type === 'PTD' && (dDay < 1 || dDay > targetDay)) return;
+        }
       }
 
       const dDeptCode = normalizeDeptLookupCode(d.deptcode || d.dept || d.department || '');
@@ -630,7 +661,9 @@ const sumActuals = ({ col, rowConfig, engineData, appliedDepts, appliedYear, app
       const bfAmtM = d['bfamt' + m] !== undefined && d['bfamt' + m] !== '' ? d['bfamt' + m] : (d['bfamt0' + m] !== undefined && d['bfamt0' + m] !== '' ? d['bfamt0' + m] : 0);
 
       const valueMode = getColumnValueMode(col.type);
-      if (valueMode === 'ac') sum += parseAmount(amtM);
+      if (type === 'DAC' || type === 'PTD') {
+        sum += parseAmount(d.amount ?? d.amt ?? d.val ?? amtM);
+      } else if (valueMode === 'ac') sum += parseAmount(amtM);
       else if (valueMode === 'acc') sum += parseAmount(bfAmtM) + parseAmount(amtM);
     });
   });
@@ -641,17 +674,24 @@ const sumActuals = ({ col, rowConfig, engineData, appliedDepts, appliedYear, app
 const sumBudget = ({ col, rowConfig, budgetData, appliedDepts, appliedYear, appliedPeriod, appliedDay, appliedRevision, periodOptions, reportCategories, masterData }) => {
   const { effYear, targetMonths } = resolveTime(col, appliedYear, appliedPeriod, periodOptions);
   const normalizedAppliedDepts = appliedDepts.map(normalizeDeptLookupCode).filter(Boolean);
-  const monthsToEvaluate = col.type === 'BUDACC' && col.periodMode === 'FY' ? [targetMonths[0]] : targetMonths;
-  const needsDayFilter = DAILY_COLUMN_TYPES.has(String(col.type || '').toUpperCase()) && String(appliedDay || '').trim();
+  const type = String(col.type || '').trim().toUpperCase();
+  const monthsToEvaluate = ['BUDACC', 'BCC'].includes(type) && col.periodMode === 'FY' ? [targetMonths[0]] : targetMonths;
+  const targetDay = Number.parseInt(appliedDay, 10);
   let sum = 0;
 
   monthsToEvaluate.forEach(m => {
     budgetData.forEach(d => {
       const dYear = (d.year || d.yr || '').toString().trim();
       if (dYear && dYear !== effYear) return;
-      if (needsDayFilter) {
-        const dDay = (d.day || d.Day || d.docDay || d.transactionDay || '').toString().trim();
-        if (dDay && dDay !== String(appliedDay).trim()) return;
+      if (type === 'DACBG' || type === 'PTDBG') {
+        const dPeriod = Number.parseInt(d.period || d.month || d.period_no, 10);
+        const dDay = Number.parseInt(d.day || d.Day || d.docDay || d.transactionDay || d.date_day || d.day_no, 10);
+        if (Number.isInteger(dPeriod) && dPeriod !== m) return;
+        if (Number.isInteger(targetDay)) {
+          if (!Number.isInteger(dDay)) return;
+          if (type === 'DACBG' && dDay !== targetDay) return;
+          if (type === 'PTDBG' && (dDay < 1 || dDay > targetDay)) return;
+        }
       }
 
       const dRev = (d.revision || d.rev || '0').toString().trim();
@@ -671,7 +711,10 @@ const sumBudget = ({ col, rowConfig, budgetData, appliedDepts, appliedYear, appl
       if (!matchesReportCategory({ reportCategories, dAccType, hasAccMap: rowConfig.hasAccMap, dAccCode, accs: rowConfig.accs })) return;
 
       const valueMode = getColumnValueMode(col.type);
-      if (valueMode === 'bud') {
+      if (type === 'DACBG' || type === 'PTDBG') {
+        const amtM = d['amt' + m] !== undefined && d['amt' + m] !== '' ? d['amt' + m] : (d['amt0' + m] !== undefined && d['amt0' + m] !== '' ? d['amt0' + m] : 0);
+        sum += parseAmount(d.amount ?? d.amt ?? d.val ?? amtM);
+      } else if (valueMode === 'bud') {
         const amtM = d['amt' + m] !== undefined && d['amt' + m] !== '' ? d['amt' + m] : (d['amt0' + m] !== undefined && d['amt0' + m] !== '' ? d['amt0' + m] : 0);
         sum += parseAmount(amtM);
       } else if (valueMode === 'acc') {
@@ -758,7 +801,7 @@ export const buildReportData = ({
   const reportCategories = Array.isArray(activeReport?.category) ? activeReport.category : ['ALL'];
 
   rows.filter(r => !r.isTotal && !r.isHeader).forEach((row) => {
-    const rowConfig = filterEngineRows(row);
+    const rowConfig = filterEngineRows(row, masterData);
 
     if (rowConfig.depts.length === 0 && rowConfig.accs.length === 0 && rowConfig.grps.length === 0) {
       columns.forEach(col => rowRefMap[row.id][col.id] = 0);
@@ -778,7 +821,7 @@ export const buildReportData = ({
           reportCategories,
           masterData,
         });
-      if (col.type === 'BUD' || col.type === 'BUDACC') {
+      if (BUDGET_COLUMN_TYPES.has(String(col.type || '').trim().toUpperCase())) {
         rowRefMap[row.id][col.id] = sumBudget({
           col,
           rowConfig,
@@ -855,7 +898,8 @@ export const deleteColAndRewriteReferences = (activeReport, colId) => {
     ...activeReport,
     columns: newCols.map(c => ({
       ...c,
-      formula: c.formula ? c.formula.toUpperCase().replace(regex, m => map[m.toUpperCase()]) : c.formula
+      formula: c.formula ? c.formula.toUpperCase().replace(regex, m => map[m.toUpperCase()]) : c.formula,
+      targetCol: c.targetCol ? c.targetCol.toUpperCase().replace(regex, m => map[m.toUpperCase()]) : c.targetCol
     }))
   };
 };

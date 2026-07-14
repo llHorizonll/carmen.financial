@@ -260,6 +260,7 @@ const normalizeReportRow = (row) => {
     ...row,
     desc: row.desc || row.Description || row.Desc || row.description || row.name || '',
     dept: normalizeRowStringList(row.dept || row.DeptCode || row.Department || row.department),
+    deptGroup: String(row.deptGroup || row.DeptGroup || '').trim(),
     accCodes: normalizeRowStringList(row.accCodes || row.AccCode || row.AccCodes || row.AccountCode || row.AccountCodes),
     groupLevel: String(row.groupLevel || row.GroupLevel || 'L4').trim().toUpperCase() || 'L4',
     groups: normalizeRowStringList(row.groups || row.Groups || row.Group || row.group),

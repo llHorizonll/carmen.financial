@@ -5,7 +5,6 @@ import {
   EyeOff,
   FilePlus,
   Palette,
-  ScanText,
   Settings2,
   ShieldCheck,
   Trash2,
@@ -36,7 +35,6 @@ function ReportActionButtons({
   handleCloneReport,
   handleCreateBlankReport,
   handleDeleteReport,
-  handleOCRUpload,
   setIsAccessModalOpen,
 }) {
   return (
@@ -49,18 +47,6 @@ function ReportActionButtons({
         <FilePlus />
         Blank
       </Button>
-      <Button variant="outline" className={`w-full sm:w-auto ${friendlyButtonClassName}`} type="button" onClick={() => document.getElementById('report-ocr-upload')?.click()}>
-        <ScanText />
-        OCR
-      </Button>
-      <input
-        id="report-ocr-upload"
-        aria-label="OCR"
-        type="file"
-        accept="image/*,.pdf"
-        onChange={handleOCRUpload}
-        className="hidden"
-      />
       <Button type="button" variant="outline" className={`w-full sm:w-auto ${friendlyButtonClassName}`} onClick={() => setIsAccessModalOpen(true)}>
         <UserCheck />
         Access
@@ -141,7 +127,6 @@ export default function ReportDetailsPanel({
   handleCloneReport,
   handleCreateBlankReport,
   handleDeleteReport,
-  handleOCRUpload,
   setIsAccessModalOpen,
   onBusyTransition,
 }) {
@@ -301,8 +286,9 @@ export default function ReportDetailsPanel({
             <Label className="text-foreground">Owner</Label>
             <Input
               value={activeReport.owner || ''}
-              onChange={(e) => updateActiveReport({ owner: e.target.value })}
               placeholder={masterData?.users?.[0]?.id || 'Creator user id'}
+              readOnly
+              aria-readonly="true"
             />
           </div>
         </div>
@@ -352,7 +338,6 @@ export default function ReportDetailsPanel({
           handleCloneReport={handleCloneReport}
           handleCreateBlankReport={handleCreateBlankReport}
           handleDeleteReport={handleDeleteReport}
-          handleOCRUpload={handleOCRUpload}
           setIsAccessModalOpen={setIsAccessModalOpen}
         />
 

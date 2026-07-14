@@ -42,7 +42,7 @@ describe('EditMappingModal', () => {
     expect(onOpenDetailSelector).toHaveBeenCalledWith(expect.objectContaining({ field: 'dept' }));
     expect(screen.getByRole('button', { name: /Select departments/i }).className).toMatch(/bg-stone|border-stone|text-stone/);
 
-    fireEvent.click(screen.getAllByRole('combobox')[1]);
+    fireEvent.click(screen.getAllByRole('combobox')[2]);
     fireEvent.click(await screen.findByText('Balance Sheet'));
     expect(setModalAccCategory).toHaveBeenCalledWith('B');
 

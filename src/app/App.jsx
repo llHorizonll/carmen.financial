@@ -71,7 +71,6 @@ import usePersistentState from "../hooks/usePersistentState.js";
 import { getDefaultReports } from "../features/report/data/defaultReports.js";
 import {
   createBlankReport,
-  createOcrReport,
 } from "../features/report/data/reportTemplates.js";
 import {
   cloneCarmenReport,
@@ -199,7 +198,9 @@ const DEFAULT_REPORT_OPTIONS = {
     { id: "AC", label: "Actual Current" },
     { id: "ACC", label: "Actual YTD" },
     { id: "BUD", label: "Budget Current" },
+    { id: "BC", label: "Budget Current (BC)" },
     { id: "BUDACC", label: "Budget YTD" },
+    { id: "BCC", label: "Budget YTD (BCC)" },
     { id: "DAC", label: "Daily Actual Current" },
     { id: "PTD", label: "Period To Date" },
     { id: "DACBG", label: "Daily Budget Current" },
@@ -209,6 +210,7 @@ const DEFAULT_REPORT_OPTIONS = {
     { id: "current", label: "Current Year" },
     { id: "-1", label: "Previous Year" },
     { id: "+1", label: "Next Year" },
+    { id: "specific", label: "Specific Year" },
   ],
   periodModes: [
     { id: "current", label: "Current Period" },
@@ -231,7 +233,8 @@ const DEFAULT_REPORT_OPTIONS = {
 };
 
 const DAILY_COLUMN_TYPES = new Set(["DAC", "PTD", "DACBG", "PTDBG"]);
-const MONTHLY_COLUMN_TYPES = new Set(["AC", "ACC", "BUD", "BUDACC"]);
+const MONTHLY_COLUMN_TYPES = new Set(["AC", "ACC", "BUD", "BC", "BUDACC", "BCC"]);
+const BUDGET_COLUMN_TYPES = new Set(["BUD", "BC", "BUDACC", "BCC", "DACBG", "PTDBG"]);
 const createCurrentYearValue = () => new Date().getFullYear().toString();
 const parseSelectedItems = (value) =>
   String(value || "")
@@ -277,6 +280,16 @@ const mergeReportOptions = (defaults, loaded) => ({
 });
 
 const REPORT_STORAGE_KEY = "carmen_bi_reports_config_v5_16";
+const NEUTRAL_BUTTON_CLASS =
+  "border-stone-300 bg-stone-100 text-stone-800 hover:bg-stone-200 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100";
+const NEUTRAL_FILTER_TRIGGER_CLASS =
+  "border-stone-300 bg-stone-100 text-stone-800 hover:bg-stone-200 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100";
+const MODE_SWITCH_CLASS =
+  "inline-flex items-center rounded-xl border border-stone-300 bg-stone-100/80 p-1 shadow-inner dark:border-stone-700 dark:bg-stone-900/80";
+const ACTIVE_MODE_CLASS =
+  "bg-stone-100 text-stone-900 shadow-sm ring-1 ring-stone-300 dark:bg-stone-900 dark:text-stone-100 dark:ring-stone-700";
+const INACTIVE_MODE_CLASS =
+  "text-stone-600 hover:bg-stone-50 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100";
 
 const readStoredReports = () => {
   if (typeof window === "undefined" || !window.localStorage) return null;
@@ -367,17 +380,6 @@ export default function App({ onLogout = null }) {
   const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
   const [modalAccCategory, setModalAccCategory] = useState("ALL");
   const isMobile = useIsMobile();
-  const friendlyButtonClassName =
-    "border-stone-300 bg-stone-100 text-stone-800 hover:bg-stone-200 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100";
-  const friendlyFilterTriggerClassName =
-    "border-stone-300 bg-stone-100 text-stone-800 hover:bg-stone-200 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100";
-  const friendlyTabShellClassName =
-    "inline-flex items-center rounded-xl border border-stone-300 bg-stone-100/80 p-1 shadow-inner dark:border-stone-700 dark:bg-stone-900/80";
-  const friendlyActiveTabClassName =
-    "bg-stone-100 text-stone-900 shadow-sm ring-1 ring-stone-300 dark:bg-stone-900 dark:text-stone-100 dark:ring-stone-700";
-  const friendlyInactiveTabClassName =
-    "text-stone-600 hover:bg-stone-50 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100";
-
   const canSetupReports = canSetupFinancialReports(currentUser);
   const accessibleReports = useMemo(
     () => getAccessibleReports(reports, currentUser),
@@ -425,7 +427,7 @@ export default function App({ onLogout = null }) {
           const type = String(col?.type || "")
             .trim()
             .toUpperCase();
-          return ["BUD", "BUDACC", "DACBG", "PTDBG"].includes(type);
+          return BUDGET_COLUMN_TYPES.has(type);
         }),
       ),
     [activeReport],
@@ -935,7 +937,7 @@ export default function App({ onLogout = null }) {
     }
 
     const newId = "rep-" + Date.now();
-    const clonedReport = cloneReport(activeReport, newId);
+    const clonedReport = cloneReport(activeReport, newId, currentUser?.id || "");
     setReports((prev) => [...prev, clonedReport]);
     setCurrentReportId(newId);
   };
@@ -980,27 +982,6 @@ export default function App({ onLogout = null }) {
         }
       },
     });
-  };
-
-  const handleOCRUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setIsLoading(true);
-    setTimeout(() => {
-      const newId = "rep-ocr-" + Date.now();
-      const newReport = createOcrReport(
-        file.name,
-        masterData.companyProfile.name,
-        reportUsers.map((u) => u.id),
-        newId,
-        currentUser?.id || "",
-      );
-      setReports((prev) => [...prev, newReport]);
-      setCurrentReportId(newId);
-      setIsLoading(false);
-      setAlertMsg("ดำเนินการอ่านภาพ OCR และสร้างรายงานเรียบร้อยแล้ว!");
-    }, 2000);
-    e.target.value = null;
   };
 
   // --- ENGINE ---
@@ -1094,6 +1075,7 @@ export default function App({ onLogout = null }) {
       isTotal: type === "formula",
       isHeader: type === "header",
       dept: "",
+      deptGroup: "",
       accCodes: "",
       groupLevel: "L4",
       groups: "",
@@ -1478,11 +1460,11 @@ export default function App({ onLogout = null }) {
                   </Button>
                 )}
 
-                <div className={friendlyTabShellClassName}>
+                <div className={MODE_SWITCH_CLASS}>
                   <Button
                     type="button"
                     variant="ghost"
-                    className={`h-8 px-4 ${visibleActiveTab === "report" ? friendlyActiveTabClassName : friendlyInactiveTabClassName}`}
+                    className={`h-8 px-4 ${visibleActiveTab === "report" ? ACTIVE_MODE_CLASS : INACTIVE_MODE_CLASS}`}
                     onClick={() => handleTabChange("report")}
                     aria-current={
                       visibleActiveTab === "report" ? "page" : undefined
@@ -1494,7 +1476,7 @@ export default function App({ onLogout = null }) {
                     <Button
                       type="button"
                       variant="ghost"
-                      className={`h-8 px-4 ${visibleActiveTab === "setup" ? friendlyActiveTabClassName : friendlyInactiveTabClassName}`}
+                      className={`h-8 px-4 ${visibleActiveTab === "setup" ? ACTIVE_MODE_CLASS : INACTIVE_MODE_CLASS}`}
                       onClick={() => handleTabChange("setup")}
                       aria-current={
                         visibleActiveTab === "setup" ? "page" : undefined
@@ -1519,13 +1501,7 @@ export default function App({ onLogout = null }) {
                     <Badge
                       variant="destructive"
                       title={masterDataError}
-                      className="rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.12em]"
-                      style={{
-                        backgroundColor:
-                          "color-mix(in oklch, var(--destructive) 16%, transparent)",
-                        borderColor:
-                          "color-mix(in oklch, var(--destructive) 30%, transparent)",
-                      }}
+                      className="rounded-full border-destructive/30 bg-destructive/15 px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-destructive"
                     >
                       Carmen API unavailable
                     </Badge>
@@ -1534,13 +1510,7 @@ export default function App({ onLogout = null }) {
                     <Badge
                       variant="destructive"
                       title={reportCatalogError}
-                      className="rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.12em]"
-                      style={{
-                        backgroundColor:
-                          "color-mix(in oklch, var(--destructive) 16%, transparent)",
-                        borderColor:
-                          "color-mix(in oklch, var(--destructive) 30%, transparent)",
-                      }}
+                      className="rounded-full border-destructive/30 bg-destructive/15 px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-destructive"
                     >
                       Report catalog error
                     </Badge>
@@ -1595,7 +1565,7 @@ export default function App({ onLogout = null }) {
                     type="button"
                     variant="outline"
                     size="sm"
-                    className={friendlyButtonClassName}
+                    className={NEUTRAL_BUTTON_CLASS}
                     onClick={() => {
                       setThemeMode(themeMode === "light" ? "dark" : "light");
                     }}
@@ -1612,7 +1582,7 @@ export default function App({ onLogout = null }) {
                     </span>
                   </Button>
                   {typeof onLogout === "function" && (
-                    <Button variant="outline" size="sm" className={friendlyButtonClassName} onClick={onLogout}>
+                    <Button variant="outline" size="sm" className={NEUTRAL_BUTTON_CLASS} onClick={onLogout}>
                       <LogOut />
                       Logout
                     </Button>
@@ -1660,7 +1630,7 @@ export default function App({ onLogout = null }) {
                         >
                           <SelectTrigger
                             size="sm"
-                            className={`h-8 min-w-0 rounded-lg px-2.5 text-sm ${friendlyFilterTriggerClassName}`}
+                            className={`h-8 min-w-0 rounded-lg px-2.5 text-sm ${NEUTRAL_FILTER_TRIGGER_CLASS}`}
                           >
                             <SelectValue placeholder="Period" />
                           </SelectTrigger>
@@ -1697,7 +1667,7 @@ export default function App({ onLogout = null }) {
                         >
                           <SelectTrigger
                             size="sm"
-                            className={`h-8 w-full min-w-0 rounded-lg px-2.5 text-sm ${friendlyFilterTriggerClassName}`}
+                            className={`h-8 w-full min-w-0 rounded-lg px-2.5 text-sm ${NEUTRAL_FILTER_TRIGGER_CLASS}`}
                           >
                             <SelectValue placeholder="Revision" />
                           </SelectTrigger>
@@ -1716,7 +1686,7 @@ export default function App({ onLogout = null }) {
 
                       <Button
                         size="sm"
-                        className={`h-8 w-full self-end border px-3 text-xs xl:w-auto ${friendlyButtonClassName}`}
+                        className={`h-8 w-full self-end border px-3 text-xs xl:w-auto ${NEUTRAL_BUTTON_CLASS}`}
                         onClick={handleApplyFilters}
                       >
                         Apply
@@ -1728,7 +1698,7 @@ export default function App({ onLogout = null }) {
                         type="button"
                         variant="outline"
                         size="sm"
-                        className={`h-8 w-full sm:w-auto ${friendlyButtonClassName}`}
+                        className={`h-8 w-full sm:w-auto ${NEUTRAL_BUTTON_CLASS}`}
                         onClick={() => handleSyncReportData("gl")}
                         title={
                           apiConfigured
@@ -1743,7 +1713,7 @@ export default function App({ onLogout = null }) {
                         type="button"
                         variant="outline"
                         size="sm"
-                        className={`h-8 w-full sm:w-auto ${friendlyButtonClassName}`}
+                        className={`h-8 w-full sm:w-auto ${NEUTRAL_BUTTON_CLASS}`}
                         onClick={() => handleSyncReportData("bud")}
                         title={
                           apiConfigured
@@ -1773,7 +1743,7 @@ export default function App({ onLogout = null }) {
                       <Button
                         variant="outline"
                         size="sm"
-                        className={`h-8 w-full px-3 text-xs sm:w-auto ${friendlyButtonClassName}`}
+                        className={`h-8 w-full px-3 text-xs sm:w-auto ${NEUTRAL_BUTTON_CLASS}`}
                         onClick={exportToExcel}
                         title="Export to Excel"
                       >
@@ -1781,7 +1751,7 @@ export default function App({ onLogout = null }) {
                         Excel
                       </Button>
                       <Button
-                        className={`h-8 w-full px-3 text-xs sm:w-auto ${friendlyButtonClassName}`}
+                        className={`h-8 w-full px-3 text-xs sm:w-auto ${NEUTRAL_BUTTON_CLASS}`}
                         size="sm"
                         variant="outline"
                         onClick={() => window.print()}
@@ -1854,7 +1824,6 @@ export default function App({ onLogout = null }) {
                   handleCloneReport={handleCloneReport}
                   handleCreateBlankReport={handleCreateBlankReport}
                   handleDeleteReport={handleDeleteReport}
-                  handleOCRUpload={handleOCRUpload}
                   setIsAccessModalOpen={setIsAccessModalOpen}
                   handleAddCol={handleAddCol}
                   handleUpdateCol={handleUpdateCol}
@@ -1905,6 +1874,7 @@ export default function App({ onLogout = null }) {
                     ...row,
                     desc: editingRow.desc,
                     dept: editingRow.dept,
+                    deptGroup: editingRow.deptGroup,
                     accCodes: editingRow.accCodes,
                     groupLevel: editingRow.groupLevel,
                     groups: editingRow.groups,
@@ -1917,6 +1887,7 @@ export default function App({ onLogout = null }) {
             handleUpdateRowMulti(editingRow.id, {
               desc: editingRow.desc,
               dept: editingRow.dept,
+              deptGroup: editingRow.deptGroup,
               accCodes: editingRow.accCodes,
               groupLevel: editingRow.groupLevel,
               groups: editingRow.groups,
@@ -1943,6 +1914,7 @@ export default function App({ onLogout = null }) {
               setEditingRow({
                 ...editingRow,
                 [detailSelecting.field]: newSelection.join(", "),
+                ...(detailSelecting.field === "dept" ? { deptGroup: "" } : {}),
               });
               setDetailSelecting(null);
             }}

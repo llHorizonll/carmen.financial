@@ -225,7 +225,7 @@ export default function LoginShell() {
                   A calm workspace for reports, setup, and access control.
                 </h1>
                 <p className="max-w-xl text-sm leading-6 text-muted-foreground sm:text-base">
-                  Sign in to review financial reports, adjust report structure, and keep GL, budget, and OCR workflows in one place.
+                  Sign in to review financial reports, adjust report structure, and keep GL and budget workflows in one place.
                 </p>
               </div>
             </div>

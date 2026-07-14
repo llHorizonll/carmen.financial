@@ -45,14 +45,16 @@ export default function ColumnsConfigurator({
   const reportType = activeReport?.reportType || 'Monthly';
   const allowedColumnTypes = reportType === 'Daily'
     ? new Set(['DAC', 'PTD', 'DACBG', 'PTDBG'])
-    : new Set(['AC', 'ACC', 'BUD', 'BUDACC']);
+    : new Set(['AC', 'ACC', 'BUD', 'BC', 'BUDACC', 'BCC']);
   const columnTypeOptions = (reportOptions.columnTypes?.length > 0
     ? reportOptions.columnTypes
     : [
         { id: 'AC', label: 'AC' },
         { id: 'ACC', label: 'ACC' },
         { id: 'BUD', label: 'BUD' },
+        { id: 'BC', label: 'BC' },
         { id: 'BUDACC', label: 'BUDACC' },
+        { id: 'BCC', label: 'BCC' },
         { id: 'DAC', label: 'DAC' },
         { id: 'PTD', label: 'PTD' },
         { id: 'DACBG', label: 'DACBG' },
@@ -63,6 +65,8 @@ export default function ColumnsConfigurator({
     : [
         { id: 'current', label: 'Current' },
         { id: '-1', label: 'Prev' },
+        { id: '+1', label: 'Next' },
+        { id: 'specific', label: 'Specific' },
       ];
   const periodModeOptions = reportOptions.periodModes?.length > 0
     ? reportOptions.periodModes
@@ -339,6 +343,16 @@ export default function ColumnsConfigurator({
                             ))}
                           </SelectContent>
                         </Select>
+                        {col.yearMode === 'specific' && (
+                          <Input
+                            aria-label={'Specific year for ' + col.id}
+                            type="number"
+                            value={col.specificYear || ''}
+                            onChange={(event) => handleUpdateCol(col.id, 'specificYear', event.target.value)}
+                            placeholder="2026"
+                            className="mt-2 h-8.5 text-xs"
+                          />
+                        )}
                       </div>
 
                       {/* Period */}
