@@ -73,7 +73,7 @@ export default function DetailSelectorModal({
   return (
     <Dialog open onOpenChange={(open) => !open && onCancel()}>
       <DialogContent
-        className="w-[calc(100vw-1rem)] max-w-6xl"
+        className="max-h-[calc(100vh-1rem)] w-[calc(100vw-1rem)] max-w-6xl overflow-y-auto"
         style={{ width: 'min(98vw, 90rem)', maxWidth: 'min(98vw, 90rem)' }}
       >
         <DialogHeader>
@@ -113,7 +113,7 @@ export default function DetailSelectorModal({
               <Button
                 type="button"
                 variant="destructive"
-                className="w-full sm:w-auto border-destructive/30 bg-destructive/10 text-destructive hover:border-destructive/40 hover:bg-destructive/20"
+                className="border-destructive/30 bg-destructive/10 text-destructive hover:border-destructive/40 hover:bg-destructive/20"
                 onClick={handleRemoveAll}
               >
                 Remove all
@@ -149,7 +149,7 @@ export default function DetailSelectorModal({
 
         <DialogFooter className="flex-col-reverse sm:flex-row">
           <Button variant="outline" className={`w-full sm:w-auto ${friendlyButtonClassName}`} onClick={onCancel}>Cancel</Button>
-          <Button className={`w-full sm:w-auto border ${friendlyButtonClassName}`} onClick={() => onSave(tempSelected)}>Save selection</Button>
+          <Button className="w-full sm:w-auto" onClick={() => onSave(tempSelected)}>Save selection</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

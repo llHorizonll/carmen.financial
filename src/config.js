@@ -1,18 +1,18 @@
 /* eslint-disable no-unused-vars */
 
 const arrCompany = [
-  {
-    name: "Carmen.dev (localhost)",
-    apiUrl: import.meta.env.DEV
-      ? `/Carmen.WebApi`
-      : `http://localhost/Carmen.WebApi`,
-    adminToken: "f9ebce3d77f2f445dee52ba252cc53ee",
-  },
   // {
-  //   name: "Carmen.dev (Server)",
-  //   apiUrl: `https://dev.carmen4.com/carmen.api`,
+  //   name: "Carmen.dev (localhost)",
+  //   apiUrl: import.meta.env.DEV
+  //     ? `/Carmen.WebApi`
+  //     : `http://localhost/Carmen.WebApi`,
   //   adminToken: "f9ebce3d77f2f445dee52ba252cc53ee",
   // },
+  {
+    name: "Carmen.dev (Server)",
+    apiUrl: `https://dev.carmen4.com/carmen.api2`,
+    adminToken: "f9ebce3d77f2f445dee52ba252cc53ee",
+  },
   {
     name: "deevana",
     apiUrl: `https://deevanaphuket.carmen.blue/carmen.api`,

@@ -8,8 +8,8 @@ export default defineConfig({
   base: '/financial2/',
   server: {
     proxy: {
-      '/Carmen.WebApi': {
-        target: 'http://localhost',
+      '/Carmen.Api2': {
+        target: 'https://dev.carmen4.com',
         changeOrigin: true,
       },
     },

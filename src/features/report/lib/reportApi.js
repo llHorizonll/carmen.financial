@@ -9,7 +9,7 @@ import {
   adaptCarmenLoginUser,
 } from './reportAdapters.js';
 
-const DEFAULT_BASE_URL = 'http://localhost/Carmen.WebApi';
+const DEFAULT_BASE_URL = 'https://dev.carmen4.com/carmen.api2';
 const SESSION_KEYS = {
   token: 'carmen_access_token',
   username: 'carmen_username',

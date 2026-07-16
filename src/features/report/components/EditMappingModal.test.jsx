@@ -48,7 +48,8 @@ describe('EditMappingModal', () => {
 
     fireEvent.click(screen.getByText('Apply Mapping'));
     expect(onApply).toHaveBeenCalledTimes(1);
-    expect(screen.getByText('Apply Mapping').className).toMatch(/bg-stone|border-stone|text-stone|bg-muted|border-border|text-muted/);
+    expect(screen.getByText('Apply Mapping')).toHaveAttribute('data-variant', 'default');
+    expect(screen.getByText('Cancel')).toHaveAttribute('data-variant', 'outline');
 
     fireEvent.click(screen.getByText('Cancel'));
     expect(onClose).toHaveBeenCalledTimes(1);

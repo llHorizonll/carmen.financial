@@ -234,7 +234,7 @@ export default function EditMappingModal({
           <Button variant="outline" size="sm" className={`w-full sm:w-auto ${friendlyButtonClassName}`} onClick={onClose}>
             Cancel
           </Button>
-          <Button size="sm" className={`w-full border shadow-sm sm:w-auto ${friendlyButtonClassName}`} onClick={onApply}>
+          <Button size="sm" className="w-full sm:w-auto" onClick={onApply}>
             Apply Mapping
           </Button>
         </DialogFooter>
