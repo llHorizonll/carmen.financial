@@ -9,7 +9,7 @@ import {
   adaptCarmenLoginUser,
 } from './reportAdapters.js';
 
-const DEFAULT_BASE_URL = 'https://dev.carmen4.com/carmen.api2';
+const DEFAULT_BASE_URL = 'http://localhost/Carmen.WebApi';
 const SESSION_KEYS = {
   token: 'carmen_access_token',
   username: 'carmen_username',
@@ -398,6 +398,18 @@ export const saveCarmenReport = async (report) => {
   });
 
   return response;
+};
+
+export const saveCarmenReports = async (reports) => {
+  if (!isCarmenApiConfigured()) {
+    throw new Error('Carmen API session is not configured.');
+  }
+  if (!Array.isArray(reports) || reports.length === 0) return [];
+
+  return requestCarmenJson('/api/reports/batch', {
+    method: 'POST',
+    body: reports.map(buildReportDefinitionPayload),
+  });
 };
 
 export const deleteCarmenReport = async (id) => {

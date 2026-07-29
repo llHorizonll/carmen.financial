@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildReportDefinitionPayload, cloneCarmenReport, deleteCarmenReport, fetchCarmenDimensions, fetchCarmenReport, fetchCarmenReportOptions, loginWithCarmenCredentials, saveCarmenReport } from './reportApi.js';
+import { buildReportDefinitionPayload, cloneCarmenReport, deleteCarmenReport, fetchCarmenDimensions, fetchCarmenReport, fetchCarmenReportOptions, loginWithCarmenCredentials, saveCarmenReport, saveCarmenReports } from './reportApi.js';
 
 const createSessionStorageMock = (session = {}) => {
   const storage = new Map();
@@ -282,6 +282,32 @@ describe('reportApi helpers', () => {
     expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining('/api/reports/rep-1'), expect.objectContaining({
       method: 'PUT',
     }));
+  });
+
+  it('saves multiple imported reports with one batch request', async () => {
+    createSessionStorageMock({
+      accessToken: 'token',
+      businessUnit: { tenant: 'tenant-1' },
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [{ id: 'rep-1' }, { id: 'rep-2' }],
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await saveCarmenReports([
+      { id: 'rep-1', name: 'Sheet 1', rows: [], columns: [] },
+      { id: 'rep-2', name: 'Sheet 2', rows: [], columns: [] },
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/reports/batch'),
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"id":"rep-2"'),
+      }),
+    );
   });
 
   it('normalizes login language codes before calling the auth API', async () => {

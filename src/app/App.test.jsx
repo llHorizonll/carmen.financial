@@ -13,6 +13,7 @@ const reportApiMocks = vi.hoisted(() => ({
   fetchCarmenReports: vi.fn(),
   fetchCarmenReportData: vi.fn(),
   saveCarmenReport: vi.fn(() => Promise.resolve()),
+  saveCarmenReports: vi.fn(() => Promise.resolve()),
   cloneCarmenReport: vi.fn(),
   deleteCarmenReport: vi.fn(),
 }));
@@ -68,6 +69,7 @@ describe('App shell', () => {
     reportApiMocks.fetchCarmenReportData.mockResolvedValue({ actualRows: [], budgetRows: [] });
 
     reportApiMocks.saveCarmenReport.mockClear();
+    reportApiMocks.saveCarmenReports.mockClear();
     reportApiMocks.cloneCarmenReport.mockClear();
     reportApiMocks.deleteCarmenReport.mockClear();
     delete document.documentElement.dataset.shellTemplate;
@@ -94,6 +96,21 @@ describe('App shell', () => {
 
     await waitFor(() => expect(screen.getByText(/Configuration Mode/i)).toBeInTheDocument(), { timeout: 5000 });
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument(), { timeout: 5000 });
+  });
+
+  it('opens the Excel template wizard as a separate admin page', async () => {
+    render(<App />);
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Import Excel templates' }),
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'Excel template import' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/without changing the existing GL, budget, or OCR import flows/i),
+    ).toBeInTheDocument();
   });
 
   it('updates the setup theme badge when the report theme changes', async () => {

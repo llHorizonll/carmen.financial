@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import {
   FileText,
+  FileSpreadsheet,
   Menu,
   BarChart3,
   ShieldCheck,
@@ -82,6 +83,7 @@ import {
   getStoredCarmenSession,
   isCarmenApiConfigured,
   saveCarmenReport,
+  saveCarmenReports,
 } from "../features/report/lib/reportApi.js";
 import {
   THEMES,
@@ -107,6 +109,12 @@ const ReportView = React.lazy(
 );
 const ReportSetup = React.lazy(
   () => import("../features/report/components/ReportSetup.jsx"),
+);
+const ExcelTemplateImportWizard = React.lazy(
+  () =>
+    import(
+      "../features/report/components/ExcelTemplateImportWizard.jsx"
+    ),
 );
 const AccessModal = React.lazy(
   () => import("../features/report/components/AccessModal.jsx"),
@@ -992,6 +1000,15 @@ export default function App({ onLogout = null }) {
     }
   };
 
+  const handleImportExcelTemplates = async (importedReports) => {
+    if (!Array.isArray(importedReports) || importedReports.length === 0) return;
+    if (apiConfigured) {
+      await saveCarmenReports(importedReports);
+    }
+    setReports((currentReports) => [...currentReports, ...importedReports]);
+    setCurrentReportId(importedReports[0].id);
+  };
+
   const handleDeleteReport = () => {
     setConfirmAction({
       msg: "Are you sure you want to completely delete this report?",
@@ -1232,19 +1249,22 @@ export default function App({ onLogout = null }) {
   const activeTabMotionClass =
     tabMotionDirection === null
       ? ""
-      : visibleActiveTab === "setup"
-        ? "app-pane-enter-from-right"
-        : "app-pane-enter-from-left";
+      : visibleActiveTab === "report"
+        ? "app-pane-enter-from-left"
+        : "app-pane-enter-from-right";
   const mainContentPaddingClass = "p-3";
   const mainContentWidthClass =
-    visibleActiveTab === "setup"
+    visibleActiveTab === "setup" || visibleActiveTab === "import"
       ? "flex h-full w-full min-h-0 flex-col"
       : "flex h-full w-full min-h-0 flex-col gap-3";
 
   const handleTabChange = (nextTab) => {
     if (nextTab === visibleActiveTab) return;
-    if (nextTab === "setup" && !canSetupReports) return;
-    setTabMotionDirection(nextTab === "setup" ? "forward" : "backward");
+    if ((nextTab === "setup" || nextTab === "import") && !canSetupReports)
+      return;
+    setTabMotionDirection(
+      nextTab === "report" ? "backward" : "forward",
+    );
     setActiveTab(nextTab);
   };
 
@@ -1336,6 +1356,24 @@ export default function App({ onLogout = null }) {
 
       <ScrollArea className="flex-1">
         <div className="p-3">
+          {canSetupReports && (
+            <>
+              <div className="mb-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                Template tools
+              </div>
+              <Button
+                variant={visibleActiveTab === "import" ? "secondary" : "ghost"}
+                className="mb-4 w-full justify-start gap-2"
+                onClick={() => {
+                  handleTabChange("import");
+                  setIsSidebarOpen(false);
+                }}
+              >
+                <FileSpreadsheet className="size-4" />
+                <span className="truncate">Import Excel templates</span>
+              </Button>
+            </>
+          )}
           <div className="mb-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
             Reports
           </div>
@@ -1347,7 +1385,11 @@ export default function App({ onLogout = null }) {
                   resolvedCurrentReportId === report.id ? "secondary" : "ghost"
                 }
                 className="w-full justify-start gap-2"
-                onClick={() => setCurrentReportId(report.id)}
+                onClick={() => {
+                  setCurrentReportId(report.id);
+                  handleTabChange("report");
+                  setIsSidebarOpen(false);
+                }}
               >
                 <FileText className="size-4" />
                 <span className="truncate">{report.name}</span>
@@ -1512,11 +1554,27 @@ export default function App({ onLogout = null }) {
                       SETUP
                     </Button>
                   )}
+                  {canSetupReports && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className={`h-8 px-4 ${visibleActiveTab === "import" ? ACTIVE_MODE_CLASS : INACTIVE_MODE_CLASS}`}
+                      onClick={() => handleTabChange("import")}
+                      aria-current={
+                        visibleActiveTab === "import" ? "page" : undefined
+                      }
+                    >
+                      IMPORT
+                    </Button>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
                   {visibleActiveTab === "setup" && (
                     <Badge variant="secondary">Configuration</Badge>
+                  )}
+                  {visibleActiveTab === "import" && (
+                    <Badge variant="secondary">Excel template wizard</Badge>
                   )}
                   {isMasterDataLoading && (
                     <Badge variant="outline">Syncing master data</Badge>
@@ -1897,6 +1955,33 @@ export default function App({ onLogout = null }) {
                       />
                     </React.Suspense>
                   )}
+
+                {visibleActiveTab === "import" && canSetupReports && (
+                  <React.Suspense
+                    fallback={
+                      <Card className="flex h-full min-h-0 items-center justify-center border border-border shadow-none ring-0">
+                        <CardContent className="py-16 text-center text-sm text-muted-foreground">
+                          Loading Excel template wizard...
+                        </CardContent>
+                      </Card>
+                    }
+                  >
+                    <ExcelTemplateImportWizard
+                      companyName={
+                        masterData.companyProfile.name ||
+                        activeReport?.companyName ||
+                        "Carmen Hotel & Resorts"
+                      }
+                      userIds={reportUsers.map((user) => user.id)}
+                      owner={currentUser?.id || ""}
+                      onImportTemplates={handleImportExcelTemplates}
+                      onOpenImportedReport={(reportId) => {
+                        if (reportId) setCurrentReportId(reportId);
+                        handleTabChange("setup");
+                      }}
+                    />
+                  </React.Suspense>
+                )}
               </>
             )}
           </div>
