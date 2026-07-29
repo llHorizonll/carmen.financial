@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildReportDefinitionPayload, cloneCarmenReport, deleteCarmenReport, fetchCarmenReport, fetchCarmenReportOptions, loginWithCarmenCredentials, saveCarmenReport } from './reportApi.js';
+import { buildReportDefinitionPayload, cloneCarmenReport, deleteCarmenReport, fetchCarmenDimensions, fetchCarmenReport, fetchCarmenReportOptions, loginWithCarmenCredentials, saveCarmenReport } from './reportApi.js';
 
 const createSessionStorageMock = (session = {}) => {
   const storage = new Map();
@@ -215,6 +215,27 @@ describe('reportApi helpers', () => {
         canEdit: true,
       }),
     ]);
+  });
+
+  it('loads active dimension captions from the dimension search API', async () => {
+    createSessionStorageMock({
+      accessToken: 'token',
+      businessUnit: { tenant: 'tenant-1' },
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ Data: [{ Caption: 'Market Segment' }, { Caption: 'Meal Period' }, { Caption: 'Market Segment' }] }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchCarmenDimensions()).resolves.toEqual(['Market Segment', 'Meal Period']);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/dimension/search?useTenant=tenant-1'),
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"Field":"Active"'),
+      }),
+    );
   });
 
   it('sends POST for new reports and PUT for updates', async () => {

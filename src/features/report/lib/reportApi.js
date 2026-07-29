@@ -285,6 +285,28 @@ export const fetchCarmenReportOptions = async () => {
   };
 };
 
+export const fetchCarmenDimensions = async () => {
+  if (!isCarmenApiConfigured()) {
+    throw new Error('Carmen API session is not configured.');
+  }
+
+  const response = await requestCarmenJson('/api/dimension/search', {
+    method: 'POST',
+    body: {
+      Limit: 0,
+      Page: 1,
+      WhereGroupList: [{
+        AndOr: 'And',
+        ConditionList: [{ AndOr: 'And', Field: 'Active', Operator: '=', Value: true }],
+      }],
+    },
+  });
+
+  return [...new Set((Array.isArray(response?.Data) ? response.Data : [])
+    .map((item) => String(item?.Caption || '').trim())
+    .filter(Boolean))];
+};
+
 export const fetchCarmenReportPeriods = async ({ year } = {}) => {
   if (!isCarmenApiConfigured()) {
     throw new Error('Carmen API session is not configured.');

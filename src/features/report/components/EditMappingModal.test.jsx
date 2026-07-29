@@ -20,6 +20,8 @@ describe('EditMappingModal', () => {
           groupLevel: 'L4',
           groups: 'FOO',
           accCodes: '4001',
+          dim1: 'OTA',
+          dim2: 'LUNCH',
         }}
         setEditingRow={setEditingRow}
         masterData={{
@@ -27,6 +29,7 @@ describe('EditMappingModal', () => {
           groups: { L4: [{ id: 'FOO', name: 'Food' }] },
           accCodes: [{ id: '4001', type: 'I' }],
         }}
+        dimensionOptions={{ dim1: ['OTA', 'Corporate'], dim2: ['LUNCH', 'DINNER'] }}
         modalAccCategory="ALL"
         setModalAccCategory={setModalAccCategory}
         onOpenDetailSelector={onOpenDetailSelector}
@@ -45,6 +48,10 @@ describe('EditMappingModal', () => {
     fireEvent.click(screen.getAllByRole('combobox')[2]);
     fireEvent.click(await screen.findByText('Balance Sheet'));
     expect(setModalAccCategory).toHaveBeenCalledWith('B');
+
+    fireEvent.click(screen.getByRole('button', { name: /DIM 1/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Corporate' }));
+    expect(setEditingRow).toHaveBeenCalledWith(expect.objectContaining({ dim1: 'OTA, Corporate' }));
 
     fireEvent.click(screen.getByText('Apply Mapping'));
     expect(onApply).toHaveBeenCalledTimes(1);

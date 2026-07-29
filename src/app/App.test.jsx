@@ -7,6 +7,7 @@ import { INITIAL_MASTER_DATA } from '../features/report/lib/reportLogic.js';
 const reportApiMocks = vi.hoisted(() => ({
   isCarmenApiConfigured: vi.fn(() => false),
   getStoredCarmenSession: vi.fn(() => null),
+  fetchCarmenDimensions: vi.fn(),
   fetchCarmenMasterData: vi.fn(),
   fetchCarmenReportOptions: vi.fn(),
   fetchCarmenReports: vi.fn(),
@@ -53,6 +54,9 @@ describe('App shell', () => {
       budgetRevisions: [],
       groups: {},
     });
+
+    reportApiMocks.fetchCarmenDimensions.mockReset();
+    reportApiMocks.fetchCarmenDimensions.mockResolvedValue([]);
 
     reportApiMocks.fetchCarmenReportOptions.mockReset();
     reportApiMocks.fetchCarmenReportOptions.mockResolvedValue({});
@@ -1559,6 +1563,23 @@ describe('App shell', () => {
     expect(reportApiMocks.fetchCarmenReportData).toHaveBeenLastCalledWith(
       expect.objectContaining({ day: '28' })
     );
+  });
+
+  it('downloads an Excel-compatible report from the toolbar', async () => {
+    const createObjectURLSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:report-export');
+    let downloadedName = '';
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function captureDownload() {
+      downloadedName = this.download;
+    });
+    const { container } = render(<App />);
+
+    await waitFor(() => expect(screen.getByText('Carmen Hotel & Resorts')).toBeInTheDocument());
+    fireEvent.click(container.querySelector('button[title="Export to Excel"]'));
+
+    expect(createObjectURLSpy).toHaveBeenCalledWith(expect.any(Blob));
+    expect(downloadedName).toBe('Profit_and_Loss_Export.xls');
+    clickSpy.mockRestore();
+    createObjectURLSpy.mockRestore();
   });
 
   it('keeps the browser print action wired from the report toolbar', async () => {

@@ -20,8 +20,16 @@ import {
   SelectValue,
 } from '@/components/ui/select.jsx';
 import { Textarea } from '@/components/ui/textarea.jsx';
+import MultiSelectDropdown from './MultiSelectDropdown.jsx';
 
 const EMPTY_REPORT_OPTIONS = {};
+const EMPTY_DIMENSION_OPTIONS = {};
+const DIMENSION_FIELDS = [
+  { key: 'dim1', label: 'DIM 1' },
+  { key: 'dim2', label: 'DIM 2' },
+];
+const parseDimensionValues = (value) => String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
+const normalizeDimensionValue = (value) => String(value || '').trim().toUpperCase();
 
 export default function EditMappingModal({
   isOpen,
@@ -29,6 +37,7 @@ export default function EditMappingModal({
   setEditingRow,
   masterData,
   reportOptions = EMPTY_REPORT_OPTIONS,
+  dimensionOptions = EMPTY_DIMENSION_OPTIONS,
   modalAccCategory,
   setModalAccCategory,
   onOpenDetailSelector,
@@ -159,24 +168,6 @@ export default function EditMappingModal({
               />
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Dim 1</Label>
-                <Input
-                  value={editingRow.dim1 || ''}
-                  onChange={(e) => setEditingRow({ ...editingRow, dim1: e.target.value })}
-                  placeholder="Optional"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Dim 2</Label>
-                <Input
-                  value={editingRow.dim2 || ''}
-                  onChange={(e) => setEditingRow({ ...editingRow, dim2: e.target.value })}
-                  placeholder="Optional"
-                />
-              </div>
-            </div>
           </div>
 
           <div className="space-y-2 rounded-xl border border-border bg-background p-4">
@@ -226,6 +217,28 @@ export default function EditMappingModal({
                 placeholder="e.g. 4001, 4002"
                 className="min-h-24"
               />
+            </div>
+          </div>
+
+          <div className="space-y-3 rounded-xl border border-border bg-background p-4">
+            <Label>Dimensions</Label>
+            <div className="grid gap-3 md:grid-cols-2">
+              {DIMENSION_FIELDS.map(({ key, label }) => {
+                const selected = parseDimensionValues(editingRow[key]);
+                const options = [...new Set([...(dimensionOptions[key] || []), ...selected])];
+                return (
+                  <MultiSelectDropdown
+                    key={key}
+                    options={options}
+                    selected={selected}
+                    onChange={(values) => setEditingRow({ ...editingRow, [key]: values.join(', ') })}
+                    label={label}
+                    testIdPrefix={`mapping-${key}`}
+                    normalizeValue={normalizeDimensionValue}
+                    searchPlaceholder={`Search ${label.toLowerCase()}...`}
+                  />
+                );
+              })}
             </div>
           </div>
         </div>

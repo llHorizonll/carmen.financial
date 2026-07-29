@@ -305,6 +305,48 @@ describe('buildReportData', () => {
     expect(result[1].results.C6).toBe(200);
   });
 
+  it('matches the FRD golden report across all four calculation passes', () => {
+    const result = buildReportData({
+      activeReport: {
+        category: ['ALL'],
+        rows: [
+          { id: 'r1', desc: 'F&B Revenue - OTA Lunch', dept: '201', accCodes: '4002', dim1: 'OTA', dim2: 'LUNCH', isHeader: false, isTotal: false, percentBase: 'R4' },
+          { id: 'r2', desc: 'F&B Revenue - Corp Lunch', dept: '201', accCodes: '4002', dim1: 'Corporate', dim2: 'LUNCH', isHeader: false, isTotal: false, percentBase: 'R4' },
+          { id: 'r3', desc: 'F&B Revenue - OTA Dinner', dept: '201', accCodes: '4002', dim1: 'OTA', dim2: 'DINNER', isHeader: false, isTotal: false, percentBase: 'R4' },
+          { id: 'r4', desc: 'Total Food Selected', isHeader: false, isTotal: true, formula: 'R1+R2+R3', percentBase: 'R4' },
+        ],
+        columns: [
+          { id: 'C1', label: 'Actual Daily', type: 'DAC', yearMode: 'current', periodMode: 'current' },
+          { id: 'C2', label: 'Double Actual', isFormula: true, formula: 'C1*2' },
+          { id: 'C3', label: 'Mix %', isPercent: true, targetCol: 'C1' },
+        ],
+      },
+      engineData: [
+        { year: '2026', period: '5', day: '18', deptcode: '201', acccode: '4002', dim1: 'OTA', dim2: 'LUNCH', amount: '500.00' },
+        { year: '2026', period: '5', day: '18', deptcode: '201', acccode: '4002', dim1: 'Corporate', dim2: 'LUNCH', amount: '300.00' },
+        { year: '2026', period: '5', day: '18', deptcode: '201', acccode: '4002', dim1: 'OTA', dim2: 'DINNER', amount: '1,200.00' },
+        { year: '2026', period: '5', day: '18', deptcode: '201', acccode: '4002', dim1: 'Walk-in', dim2: 'BREAKFAST', amount: '450.00' },
+      ],
+      budgetData: [],
+      appliedDepts: [],
+      appliedYear: '2026',
+      appliedPeriod: '5',
+      appliedDay: '18',
+      appliedRevision: '0',
+      masterData: {
+        ...INITIAL_MASTER_DATA,
+        accCodes: [{ id: '4002', name: 'F&B Revenue', type: 'I' }],
+      },
+    });
+
+    expect(result.map((row) => row.results)).toEqual([
+      { C1: 500, C2: 1000, C3: 25 },
+      { C1: 300, C2: 600, C3: 15 },
+      { C1: 1200, C2: 2400, C3: 60 },
+      { C1: 2000, C2: 4000, C3: 100 },
+    ]);
+  });
+
   it('matches department lookups even when codes are zero-padded', () => {
     const paddedResult = buildReportData({
       activeReport,
@@ -416,12 +458,12 @@ describe('buildReportData', () => {
     expect(dailyResult[0].results.C1).toBe(100);
   });
 
-  it('requires all row dimensions to match when they are defined', () => {
+  it('supports multiple values per dimension while requiring every dimension field', () => {
     const dimensionResult = buildReportData({
       activeReport: {
         category: ['ALL'],
         rows: [
-          { id: 'r1', desc: 'Dim Revenue', isHeader: false, isTotal: false, dept: '101', groupLevel: 'L4', groups: 'FOO', accCodes: '4001', dim1: 'A', dim2: 'X', percentBase: '', formula: '', indent: 0 },
+          { id: 'r1', desc: 'Dim Revenue', isHeader: false, isTotal: false, dept: '101', groupLevel: 'L4', groups: 'FOO', accCodes: '4001', dim1: 'a, b', dim2: 'X', percentBase: '', formula: '', indent: 0 },
         ],
         columns: [
           { id: 'C1', label: 'Actual', isActive: true, isFormula: false, isPercent: false, yearMode: 'current', periodMode: 'current', type: 'AC', width: '' },
@@ -429,6 +471,7 @@ describe('buildReportData', () => {
       },
       engineData: [
         { year: '2025', deptcode: '101', acccode: '4001', accnature: 'I', group4: 'FOO', dim1: 'A', dim2: 'X', amt2: '100', bfamt2: '50' },
+        { year: '2025', deptcode: '101', acccode: '4001', accnature: 'I', group4: 'FOO', dim1: 'B', dim2: 'X', amt2: '50', bfamt2: '0' },
         { year: '2025', deptcode: '101', acccode: '4001', accnature: 'I', group4: 'FOO', dim1: 'A', dim2: 'Y', amt2: '999', bfamt2: '0' },
       ],
       budgetData: [],
@@ -439,7 +482,7 @@ describe('buildReportData', () => {
       masterData,
     });
 
-    expect(dimensionResult[0].results.C1).toBe(100);
+    expect(dimensionResult[0].results.C1).toBe(150);
   });
 
   it('rewrites row and column references when deleting or moving', () => {

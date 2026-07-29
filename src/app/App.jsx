@@ -74,6 +74,7 @@ import { createBlankReport } from "../features/report/data/reportTemplates.js";
 import {
   cloneCarmenReport,
   deleteCarmenReport,
+  fetchCarmenDimensions,
   fetchCarmenMasterData,
   fetchCarmenReportData,
   fetchCarmenReportOptions,
@@ -372,6 +373,15 @@ export default function App({ onLogout = null }) {
 
   const [engineData, setEngineData] = useState([]);
   const [budgetData, setBudgetData] = useState([]);
+  const [apiDimensions, setApiDimensions] = useState([]);
+  const dimensionOptions = useMemo(() => Object.fromEntries(
+    ["dim1", "dim2"].map((field) => [
+      field,
+      apiDimensions.length > 0 ? apiDimensions : [...new Set([...engineData, ...budgetData]
+        .map((row) => String(row?.[field] ?? row?.[field.toUpperCase()] ?? "").trim())
+        .filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })),
+    ]),
+  ), [apiDimensions, budgetData, engineData]);
   const glUploadRef = useRef(null);
   const budUploadRef = useRef(null);
   const reportSaveTimerRef = useRef(null);
@@ -532,9 +542,13 @@ export default function App({ onLogout = null }) {
     const loadCarmenMasterData = async () => {
       setIsMasterDataLoading(true);
       try {
-        const apiData = await fetchCarmenMasterData({ year: globalYear });
+        const [apiData, dimensions] = await Promise.all([
+          fetchCarmenMasterData({ year: globalYear }),
+          fetchCarmenDimensions().catch(() => []),
+        ]);
         if (isCancelled) return;
 
+        setApiDimensions(dimensions);
         setMasterData((prev) => ({
           ...prev,
           companyProfile: apiData.companyProfile || prev.companyProfile,
@@ -1908,6 +1922,7 @@ export default function App({ onLogout = null }) {
           setEditingRow={setEditingRow}
           masterData={masterData}
           reportOptions={reportOptions}
+          dimensionOptions={dimensionOptions}
           modalAccCategory={modalAccCategory}
           setModalAccCategory={setModalAccCategory}
           onOpenDetailSelector={({ field, title, subTitle, items }) =>

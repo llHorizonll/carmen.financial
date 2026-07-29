@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/popover.jsx';
 import { cn } from '@/lib/utils.js';
 
-export default function MultiSelectDropdown({ options, selected, onChange, label, testIdPrefix }) {
+export default function MultiSelectDropdown({ options, selected, onChange, label, testIdPrefix, normalizeValue = normalizeDeptLookupCode, searchPlaceholder = 'Search department...' }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const friendlyButtonClassName = 'border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150';
@@ -23,16 +23,18 @@ export default function MultiSelectDropdown({ options, selected, onChange, label
     options.forEach((option) => {
       if (typeof option === 'string') {
         const id = option.trim();
-        if (!id || seen.has(id)) return;
-        seen.add(id);
+        const key = normalizeValue(id);
+        if (!id || seen.has(key)) return;
+        seen.add(key);
         unique.push({ id, display: id, searchText: id });
         return;
       }
 
       if (!option?.id) return;
       const id = String(option.id).trim();
-      if (!id || seen.has(id)) return;
-      seen.add(id);
+      const key = normalizeValue(id);
+      if (!id || seen.has(key)) return;
+      seen.add(key);
       const display = option.name && option.name !== option.id && option.name !== `Dept ${option.id}`
         ? `${id} - ${option.name}`
         : id;
@@ -40,12 +42,12 @@ export default function MultiSelectDropdown({ options, selected, onChange, label
     });
 
     return unique.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' }));
-  }, [options]);
+  }, [normalizeValue, options]);
 
-  const selectedLookupKeys = useMemo(() => new Set(selected.map(normalizeDeptLookupCode)), [selected]);
+  const selectedLookupKeys = useMemo(() => new Set(selected.map(normalizeValue)), [normalizeValue, selected]);
   const selectedItems = useMemo(
-    () => validOptions.filter((option) => selectedLookupKeys.has(normalizeDeptLookupCode(option.id))),
-    [selectedLookupKeys, validOptions]
+    () => validOptions.filter((option) => selectedLookupKeys.has(normalizeValue(option.id))),
+    [normalizeValue, selectedLookupKeys, validOptions]
   );
   const isAllSelected = validOptions.length > 0 && selectedItems.length === validOptions.length;
   const filteredOptions = useMemo(() => {
@@ -56,12 +58,12 @@ export default function MultiSelectDropdown({ options, selected, onChange, label
     );
   }, [searchTerm, validOptions]);
 
-  const isSelected = (id) => selectedLookupKeys.has(normalizeDeptLookupCode(id));
+  const isSelected = (id) => selectedLookupKeys.has(normalizeValue(id));
   const selectAll = () => onChange(validOptions.map((option) => option.id));
   const clearAll = () => onChange([]);
   const toggleSelected = (id) => {
-    const key = normalizeDeptLookupCode(id);
-    const existingIndex = selected.findIndex((item) => normalizeDeptLookupCode(item) === key);
+    const key = normalizeValue(id);
+    const existingIndex = selected.findIndex((item) => normalizeValue(item) === key);
     if (existingIndex >= 0) onChange(selected.filter((_, index) => index !== existingIndex));
     else onChange([...selected, id]);
   };
@@ -103,7 +105,7 @@ export default function MultiSelectDropdown({ options, selected, onChange, label
                   setSearchTerm('');
                 }
               }}
-              placeholder="Search department..."
+              placeholder={searchPlaceholder}
               className="h-8 border-0 bg-transparent p-0 shadow-none focus-visible:ring-0"
             />
           </div>

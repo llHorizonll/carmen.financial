@@ -419,10 +419,18 @@ const matchesRowDimensions = (row, sourceRow) => {
   const rowDimensions = normalizeRowDimensions(row);
   if (rowDimensions.length === 0) return true;
 
-  return rowDimensions.every(({ key, value }) => {
-    if (!key || !value) return true;
-    const sourceValue = String(sourceRow?.[key] || sourceRow?.[key.toLowerCase()] || sourceRow?.[key.toUpperCase()] || '').trim();
-    return sourceValue === value;
+  const valuesByKey = new Map();
+  rowDimensions.forEach(({ key, value }) => {
+    const normalizedKey = String(key || '').trim().toLowerCase();
+    if (!normalizedKey) return;
+    const values = String(value || '').split(',').map((item) => item.trim().toUpperCase()).filter(Boolean);
+    if (!valuesByKey.has(normalizedKey)) valuesByKey.set(normalizedKey, new Set());
+    values.forEach((item) => valuesByKey.get(normalizedKey).add(item));
+  });
+
+  return [...valuesByKey].every(([key, values]) => {
+    const sourceValue = String(sourceRow?.[key] || sourceRow?.[key.toLowerCase()] || sourceRow?.[key.toUpperCase()] || '').trim().toUpperCase();
+    return values.has(sourceValue);
   });
 };
 
