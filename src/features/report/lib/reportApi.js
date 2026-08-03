@@ -360,6 +360,9 @@ export const buildReportDefinitionPayload = (report) => ({
   reportType: String(report?.reportType || 'Monthly').trim() || 'Monthly',
   day: String(report?.day || '').trim(),
   theme: String(report?.theme || 'blue').trim() || 'blue',
+  descriptionPosition: Number.isInteger(Number(report?.descriptionPosition))
+    ? Number(report.descriptionPosition)
+    : 0,
   columns: Array.isArray(report?.columns) ? report.columns : [],
   rows: Array.isArray(report?.rows) ? report.rows.map(normalizeReportRowForPayload) : [],
   access: Array.isArray(report?.access) && report.access.length > 0

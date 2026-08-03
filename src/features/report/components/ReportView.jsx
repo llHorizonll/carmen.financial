@@ -9,6 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table.jsx';
+import { getReportDisplayColumns } from '../lib/reportLogic.js';
 
 export default function ReportView({
   activeReport,
@@ -22,6 +23,8 @@ export default function ReportView({
   getIndentClass,
 }) {
   if (!activeReport) return null;
+  const displayColumns = getReportDisplayColumns(activeReport, activeCols);
+  const descriptionIsFirst = displayColumns[0]?.isDescription;
 
   return (
     <Card className="flex h-full min-h-0 flex-col border border-border shadow-none ring-0">
@@ -53,12 +56,14 @@ export default function ReportView({
             >
               <TableHeader className={`sticky top-0 z-20 ${currentTheme.header}`}>
                 <TableRow>
-                  <TableHead
-                    className={`sticky left-0 z-30 min-w-[240px] border-r text-center text-[10px] uppercase tracking-[0.2em] sm:min-w-[300px] ${currentTheme.header}`}
-                  >
-                    Description
-                  </TableHead>
-                  {activeCols.map((col) => (
+                  {displayColumns.map((col) => col.isDescription ? (
+                    <TableHead
+                      key={col.id}
+                      className={`${descriptionIsFirst ? 'sticky left-0 z-30' : ''} min-w-[240px] border-r text-center text-[10px] uppercase tracking-[0.2em] sm:min-w-[300px] ${currentTheme.header}`}
+                    >
+                      Description
+                    </TableHead>
+                  ) : (
                     <TableHead
                       key={col.id}
                       style={{ width: col.width ? `${col.width}px` : 'auto', minWidth: col.width ? `${col.width}px` : '96px' }}
@@ -82,12 +87,17 @@ export default function ReportView({
 
                   return (
                     <TableRow key={row.id} className={`border-b ${currentTheme.cellBorder} ${rowThemeClass}`}>
-                      <TableCell
-                        className={`sticky left-0 z-10 border-r px-3 py-2.5 text-sm leading-6 sm:px-4 ${currentTheme.cellBorder} ${isTotal || isHeader ? '' : 'bg-background font-semibold'} ${indentClass}`}
-                      >
-                        {row.desc}
-                      </TableCell>
-                      {activeCols.map((col) => {
+                      {displayColumns.map((col) => {
+                        if (col.isDescription) {
+                          return (
+                            <TableCell
+                              key={col.id}
+                              className={`${descriptionIsFirst ? 'sticky left-0 z-10' : ''} border-r px-3 py-2.5 text-sm leading-6 sm:px-4 ${currentTheme.cellBorder} ${isTotal || isHeader ? '' : 'bg-background font-semibold'} ${indentClass}`}
+                            >
+                              {row.desc}
+                            </TableCell>
+                          );
+                        }
                         const val = Number(row.results?.[col.id]) || 0;
                         const isNegativeVar = col.formula?.includes('-') && val < 0 && !col.isPercent;
                         if (isHeader) {

@@ -12,6 +12,7 @@ export const createBlankReport = (companyName, userIds, newId = `rep-${Date.now(
   overridePeriodDisplay: '',
   day: '',
   theme: 'blue',
+  descriptionPosition: 0,
   columns: [
     { id: 'C1', label: 'Actual', isActive: true, isFormula: false, isPercent: false, formatAsPercent: false, yearMode: 'current', periodMode: 'current', type: 'AC', width: '' }
   ],

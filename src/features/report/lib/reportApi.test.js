@@ -84,6 +84,7 @@ describe('reportApi helpers', () => {
       reportType: 'Daily',
       day: '28',
       theme: 'blue',
+      descriptionPosition: 0,
       columns: [{ id: 'C1', label: 'Actual', isActive: true }],
       rows: [{
         id: 'r1',

@@ -1101,7 +1101,13 @@ export default function App({ onLogout = null }) {
       type: type === "data" ? defaultDataType : undefined,
       width: "",
     };
-    updateActiveReport({ columns: [...activeReport.columns, newCol] });
+    const descriptionPosition = Number(activeReport.descriptionPosition);
+    updateActiveReport({
+      columns: [...activeReport.columns, newCol],
+      ...(Number.isInteger(descriptionPosition) && descriptionPosition === activeReport.columns.length
+        ? { descriptionPosition: descriptionPosition + 1 }
+        : {}),
+    });
   };
 
   const handleAddRow = (type) => {
@@ -1137,7 +1143,15 @@ export default function App({ onLogout = null }) {
   };
 
   const handleDeleteCol = (colId) => {
-    updateActiveReport(deleteColAndRewriteReferences(activeReport, colId));
+    const deletedIndex = activeReport.columns.findIndex((column) => column.id === colId);
+    const nextReport = deleteColAndRewriteReferences(activeReport, colId);
+    const descriptionPosition = Number(activeReport.descriptionPosition);
+    updateActiveReport({
+      ...nextReport,
+      ...(Number.isInteger(descriptionPosition) && deletedIndex >= 0 && deletedIndex < descriptionPosition
+        ? { descriptionPosition: descriptionPosition - 1 }
+        : {}),
+    });
   };
 
   const persistActiveReport = async (nextReport) => {

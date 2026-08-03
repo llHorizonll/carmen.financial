@@ -13,6 +13,7 @@ describe('ColumnsConfigurator', () => {
     render(
       <ColumnsConfigurator
         activeReport={{
+          descriptionPosition: 2,
           columns: [
             { id: 'C1', label: 'Actual', isActive: true, type: 'AC', yearMode: 'current', periodMode: 'current', width: '' },
             { id: 'C2', label: 'Budget', isActive: false, type: 'BUD', yearMode: 'current', periodMode: 'current', width: '120' },
@@ -20,6 +21,7 @@ describe('ColumnsConfigurator', () => {
         }}
         handleAddCol={handleAddCol}
         handleUpdateCol={handleUpdateCol}
+        updateActiveReport={vi.fn()}
         moveCol={moveCol}
         handleDeleteCol={handleDeleteCol}
       />
@@ -75,12 +77,14 @@ describe('ColumnsConfigurator', () => {
     render(
       <ColumnsConfigurator
         activeReport={{
+          descriptionPosition: 2,
           columns: [
             { id: 'C1', label: 'Actual', isActive: true, type: 'AC', yearMode: 'current', periodMode: 'current', width: '' },
           ],
         }}
         handleAddCol={vi.fn()}
         handleUpdateCol={handleUpdateCol}
+        updateActiveReport={vi.fn()}
         moveCol={vi.fn()}
         handleDeleteCol={vi.fn()}
       />
@@ -88,5 +92,30 @@ describe('ColumnsConfigurator', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Hide column C1/i }));
     expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'isActive', false);
+  });
+
+  it('moves Description without reordering calculation columns', () => {
+    const updateActiveReport = vi.fn();
+    const moveCol = vi.fn();
+
+    render(
+      <ColumnsConfigurator
+        activeReport={{
+          descriptionPosition: 1,
+          columns: [
+            { id: 'C1', label: 'Actual', isActive: true, type: 'AC', yearMode: 'current', periodMode: 'current', width: '' },
+          ],
+        }}
+        handleAddCol={vi.fn()}
+        handleUpdateCol={vi.fn()}
+        updateActiveReport={updateActiveReport}
+        moveCol={moveCol}
+        handleDeleteCol={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move Description left' }));
+    expect(updateActiveReport).toHaveBeenCalledWith({ descriptionPosition: 0 });
+    expect(moveCol).not.toHaveBeenCalled();
   });
 });

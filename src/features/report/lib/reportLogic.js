@@ -980,17 +980,33 @@ export const moveRowsAndRewriteReferences = (activeReport, idx, dir) => {
   };
 };
 
+export const getReportDisplayColumns = (activeReport, columns = activeReport?.columns || []) => {
+  const reportColumns = activeReport?.columns || [];
+  const requestedPosition = Number(activeReport?.descriptionPosition);
+  const descriptionPosition = Number.isInteger(requestedPosition)
+    ? Math.min(reportColumns.length, Math.max(0, requestedPosition))
+    : 0;
+  const precedingIds = new Set(reportColumns.slice(0, descriptionPosition).map((column) => column.id));
+  const visiblePosition = columns.filter((column) => precedingIds.has(column.id)).length;
+  const displayColumns = [...columns];
+  displayColumns.splice(visiblePosition, 0, { id: '__description__', label: 'Description', isDescription: true });
+  return displayColumns;
+};
+
 export const buildExcelHtml = ({ activeReport, activeCols, displayCompanyLabel, displayDateLabel, displayPeriodLabel, reportData, themeColors }) => {
+  const displayColumns = getReportDisplayColumns(activeReport, activeCols);
   let tableHtml = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"></head><body>`;
   tableHtml += `<table border="1" cellpadding="5" cellspacing="0" style="font-family: Arial, sans-serif; font-size: 12px; border-collapse: collapse;">`;
-  tableHtml += `<tr><td colspan="${activeCols.length + 1}" style="text-align:center; font-size: 16px; font-weight: bold; border:none;">${displayCompanyLabel}</td></tr>`;
-  tableHtml += `<tr><td colspan="${activeCols.length + 1}" style="text-align:center; font-size: 14px; font-weight: bold; border:none;">${activeReport.name}</td></tr>`;
-  tableHtml += `<tr><td colspan="${activeCols.length + 1}" style="text-align:center; font-size: 12px; border:none;">${displayDateLabel}</td></tr>`;
-  tableHtml += `<tr><td colspan="${activeCols.length + 1}" style="text-align:center; font-size: 12px; border:none;">${displayPeriodLabel}</td></tr>`;
-  tableHtml += `<tr><td colspan="${activeCols.length + 1}" style="border:none;"></td></tr>`;
-  tableHtml += `<tr><th style="background-color: ${themeColors.hexHeader}; color: white; text-align: left; padding: 8px;">Description</th>`;
-  activeCols.forEach(col => {
-    tableHtml += `<th style="background-color: ${themeColors.hexHeader}; color: white; padding: 8px; width: ${col.width || 100}px;">${col.label}</th>`;
+  tableHtml += `<tr><td colspan="${displayColumns.length}" style="text-align:center; font-size: 16px; font-weight: bold; border:none;">${displayCompanyLabel}</td></tr>`;
+  tableHtml += `<tr><td colspan="${displayColumns.length}" style="text-align:center; font-size: 14px; font-weight: bold; border:none;">${activeReport.name}</td></tr>`;
+  tableHtml += `<tr><td colspan="${displayColumns.length}" style="text-align:center; font-size: 12px; border:none;">${displayDateLabel}</td></tr>`;
+  tableHtml += `<tr><td colspan="${displayColumns.length}" style="text-align:center; font-size: 12px; border:none;">${displayPeriodLabel}</td></tr>`;
+  tableHtml += `<tr><td colspan="${displayColumns.length}" style="border:none;"></td></tr>`;
+  tableHtml += `<tr>`;
+  displayColumns.forEach(col => {
+    tableHtml += col.isDescription
+      ? `<th style="background-color: ${themeColors.hexHeader}; color: white; text-align: left; padding: 8px;">Description</th>`
+      : `<th style="background-color: ${themeColors.hexHeader}; color: white; padding: 8px; width: ${col.width || 100}px;">${col.label}</th>`;
   });
   tableHtml += `</tr>`;
 
@@ -1000,9 +1016,12 @@ export const buildExcelHtml = ({ activeReport, activeCols, displayCompanyLabel, 
     if (row.isTotal) { rowStyle = `background-color: ${themeColors.hexTotal};`; fontStyle = 'font-weight: bold;'; }
     else if (row.isHeader) { rowStyle = `background-color: ${themeColors.hexSubHeader};`; fontStyle = 'font-weight: bold;'; }
     tableHtml += `<tr style="${rowStyle} ${fontStyle}">`;
-    const indentSpaces = '&nbsp;&nbsp;&nbsp;&nbsp;'.repeat(row.indent || 0);
-    tableHtml += `<td style="padding: 6px;">${indentSpaces}${row.desc}</td>`;
-    activeCols.forEach(col => {
+    displayColumns.forEach(col => {
+      if (col.isDescription) {
+        const indentSpaces = '&nbsp;&nbsp;&nbsp;&nbsp;'.repeat(row.indent || 0);
+        tableHtml += `<td style="padding: 6px;">${indentSpaces}${row.desc}</td>`;
+        return;
+      }
       if (row.isHeader) {
         tableHtml += `<td></td>`;
       } else {

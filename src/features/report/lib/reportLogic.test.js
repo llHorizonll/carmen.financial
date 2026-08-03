@@ -634,5 +634,20 @@ describe('buildReportData', () => {
     expect(html).toContain('Actual');
     expect(html).toContain('Revenue');
   });
+
+  it('exports Description at the configured column position', () => {
+    const html = buildExcelHtml({
+      activeReport: { name: 'Report', descriptionPosition: 1, columns: [{ id: 'C1' }] },
+      activeCols: [{ id: 'C1', label: 'Actual', width: '' }],
+      displayCompanyLabel: 'Carmen',
+      displayDateLabel: 'As of Feb',
+      displayPeriodLabel: 'P2',
+      reportData: [{ desc: 'Revenue', results: { C1: 100 } }],
+      themeColors: THEMES.blue,
+    });
+
+    expect(html.indexOf('Actual')).toBeLessThan(html.indexOf('Description'));
+    expect(html.indexOf('100.00')).toBeLessThan(html.indexOf('Revenue'));
+  });
 });
 

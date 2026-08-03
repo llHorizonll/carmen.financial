@@ -27,4 +27,22 @@ describe('ReportView', () => {
     expect(screen.getByText('Revenue')).toBeInTheDocument();
     expect(screen.getByText('123.45')).toBeInTheDocument();
   });
+
+  it('renders Description at the configured position', () => {
+    render(
+      <ReportView
+        activeReport={{ name: 'P&L', descriptionPosition: 1, columns: [{ id: 'C1' }] }}
+        displayCompanyLabel="Carmen Hotel"
+        displayDateLabel="As of 2025-02-28"
+        displayPeriodLabel="P2"
+        reportData={[{ id: 'r1', desc: 'Revenue', results: { C1: 123.45 } }]}
+        activeCols={[{ id: 'C1', label: 'Actual', width: '' }]}
+        currentTheme={THEMES.blue}
+        tableZoom={100}
+        getIndentClass={getIndentClass}
+      />
+    );
+
+    expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual(['Actual', 'Description']);
+  });
 });

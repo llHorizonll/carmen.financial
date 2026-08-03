@@ -307,6 +307,9 @@ export const adaptCarmenReportDefinition = (report) => {
     reportType: report.reportType || report.ReportType || 'Monthly',
     day: report.day || report.Day || '',
     theme: report.theme || report.Theme || 'blue',
+    descriptionPosition: Number.isInteger(Number(report.descriptionPosition ?? report.DescriptionPosition))
+      ? Number(report.descriptionPosition ?? report.DescriptionPosition)
+      : 0,
     columns: toArray(report.columns || report.Columns),
     rows: toArray(report.rows || report.Rows).map(normalizeReportRow),
     access,

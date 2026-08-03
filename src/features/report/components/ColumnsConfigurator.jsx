@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select.jsx';
-import { findBrokenReferences } from '../lib/reportLogic.js';
+import { findBrokenReferences, getReportDisplayColumns } from '../lib/reportLogic.js';
 
 const EMPTY_REPORT_OPTIONS = {};
 
@@ -39,6 +39,7 @@ export default function ColumnsConfigurator({
   reportOptions = EMPTY_REPORT_OPTIONS,
   handleAddCol,
   handleUpdateCol,
+  updateActiveReport,
   moveCol,
   handleDeleteCol,
 }) {
@@ -98,6 +99,23 @@ export default function ColumnsConfigurator({
       ];
   const hasIncompatibleColumns = activeReport.columns.some((col) => col.type && !allowedColumnTypes.has(String(col.type).trim().toUpperCase()));
   const brokenColumnReferences = findBrokenReferences(activeReport).filter((issue) => issue.scope === 'column');
+  const displayColumns = getReportDisplayColumns(activeReport);
+  const descriptionPosition = displayColumns.findIndex((column) => column.isDescription);
+  const moveDescription = (direction) => {
+    const nextPosition = descriptionPosition + (direction === 'left' ? -1 : 1);
+    if (nextPosition >= 0 && nextPosition <= activeReport.columns.length) {
+      updateActiveReport({ descriptionPosition: nextPosition });
+    }
+  };
+  const moveReportColumn = (columnIndex, direction) => {
+    const visualIndex = columnIndex + (columnIndex >= descriptionPosition ? 1 : 0);
+    const targetVisualIndex = visualIndex + (direction === 'left' ? -1 : 1);
+    if (targetVisualIndex === descriptionPosition) {
+      moveDescription(direction === 'left' ? 'right' : 'left');
+      return;
+    }
+    moveCol(columnIndex, direction);
+  };
   const headerActionClassName = 'w-full justify-center rounded-xl border shadow-sm transition-colors transition-all duration-150';
   const dataActionClassName = 'border-blue-200 bg-blue-50/50 text-blue-700 hover:bg-blue-100/60 dark:border-blue-900/30 dark:bg-blue-950/20 dark:text-blue-400 dark:hover:bg-blue-950/40';
   const formulaActionClassName = 'border-purple-200 bg-purple-50/50 text-purple-700 hover:bg-purple-100/60 dark:border-purple-900/30 dark:bg-purple-950/20 dark:text-purple-400 dark:hover:bg-purple-950/40';
@@ -137,7 +155,59 @@ export default function ColumnsConfigurator({
         <div className="relative w-full overflow-hidden">
           <div className="pointer-events-none absolute inset-y-0 right-0 z-20 hidden w-10 bg-gradient-to-l from-background via-background/80 to-transparent md:block" />
           <div className="flex gap-4 overflow-x-auto p-5 scrollbar-thin scrollbar-thumb-muted-foreground/20 pb-6 w-full">
-            {activeReport.columns.map((col, idx) => {
+            {displayColumns.map((col) => {
+              if (col.isDescription) {
+                return (
+                  <Card
+                    key={col.id}
+                    data-testid="description-column-card"
+                    className="column-card flex min-h-0 w-[310px] shrink-0 flex-col border border-border border-t-2 border-t-amber-500 bg-card shadow-sm transition-all duration-200 hover:shadow-md dark:border-t-amber-400"
+                  >
+                    <CardHeader className="flex flex-row items-center justify-between gap-2 rounded-t-xl border-b border-border bg-muted/30 px-3 py-2.5">
+                      <CardTitle className="flex min-w-0 flex-1 items-center gap-1.5">
+                        <Badge variant="secondary" className="shrink-0 px-2 py-0.5 text-xs font-semibold">
+                          Description
+                        </Badge>
+                        <Badge variant="outline" className="shrink-0 rounded-md border-amber-200/50 bg-amber-100 px-1.5 py-0 text-[10px] font-medium text-amber-800 dark:border-amber-800/50 dark:bg-amber-900/40 dark:text-amber-300">
+                          Label
+                        </Badge>
+                      </CardTitle>
+                      <nav aria-label="Description column position" className="flex shrink-0 items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={() => moveDescription('left')}
+                          disabled={descriptionPosition === 0}
+                          aria-label="Move Description left"
+                          title="Move Description left"
+                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        >
+                          <ArrowLeft className="size-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={() => moveDescription('right')}
+                          disabled={descriptionPosition === activeReport.columns.length}
+                          aria-label="Move Description right"
+                          title="Move Description right"
+                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        >
+                          <ArrowRight className="size-3.5" />
+                        </Button>
+                      </nav>
+                    </CardHeader>
+                    <CardContent className="space-y-2 p-4">
+                      <p className="text-sm font-semibold text-foreground">Row description</p>
+                      <p className="text-xs leading-5 text-muted-foreground">
+                        Display-only column. Moving it does not change C references or calculations.
+                      </p>
+                    </CardContent>
+                  </Card>
+                );
+              }
+
+              const idx = activeReport.columns.findIndex((column) => column.id === col.id);
               const colClassy = col.isFormula 
                 ? COLUMN_CLASY_MAP.formula 
                 : col.isPercent 
@@ -167,7 +237,7 @@ export default function ColumnsConfigurator({
                     <Button
                       variant="ghost"
                       size="icon-xs"
-                      onClick={() => moveCol(idx, 'left')}
+                      onClick={() => moveReportColumn(idx, 'left')}
                       aria-label={`Move column ${col.id} left`}
                       title={`Move column ${col.id} left`}
                       className="h-7 w-7 text-muted-foreground hover:text-foreground"
@@ -179,7 +249,7 @@ export default function ColumnsConfigurator({
                     <Button
                       variant="ghost"
                       size="icon-xs"
-                      onClick={() => moveCol(idx, 'right')}
+                      onClick={() => moveReportColumn(idx, 'right')}
                       aria-label={`Move column ${col.id} right`}
                       title={`Move column ${col.id} right`}
                       className="h-7 w-7 text-muted-foreground hover:text-foreground"
