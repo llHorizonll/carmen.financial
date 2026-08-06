@@ -88,8 +88,8 @@ describe('reportLogic helpers', () => {
     expect(formatAutoPeriod(2025, 2, 'end_of_month')).toBe('February 28, 2025');
     expect(formatAutoPeriod(2025, 'Q1', 'year_month')).toBe('Q1 2025');
     expect(formatAutoPeriod(2025, '-1', 'year_month')).toBe('Previous Period (2025)');
-    expect(getIndentClass(3)).toBe('pl-16');
-    expect(getIndentClass(7)).toBe('pl-32');
+    expect(getIndentClass(3)).toBe('pl-12');
+    expect(getIndentClass(7)).toBe('pl-28');
   });
 
   it('resolves column time windows', () => {

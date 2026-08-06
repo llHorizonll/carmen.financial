@@ -434,7 +434,7 @@ const matchesRowDimensions = (row, sourceRow) => {
   });
 };
 
-const INDENT_CLASSES = ['pl-4', 'pl-8', 'pl-12', 'pl-16', 'pl-20', 'pl-24', 'pl-28', 'pl-32'];
+const INDENT_CLASSES = ['pl-0', 'pl-4', 'pl-8', 'pl-12', 'pl-16', 'pl-20', 'pl-24', 'pl-28'];
 export const getIndentClass = (level) => INDENT_CLASSES[Math.min(7, Math.max(0, Math.round(Number(level) || 0)))];
 
 export { createBlankReport } from '../data/reportTemplates.js';

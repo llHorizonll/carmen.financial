@@ -241,29 +241,47 @@ export const loginWithCarmenCredentials = async ({ userName, password, tenant, l
   };
 };
 
+const pendingReadRequests = new Map();
+
 const requestCarmenJson = async (path, options = {}) => {
   const session = getStoredCarmenSession();
   if (!session?.accessToken) throw new Error('Carmen session is missing.');
+  const method = options.method || 'GET';
+  const url = buildUrl(path, options);
 
-  const response = await fetch(buildUrl(path, options), {
-    method: options.method || 'GET',
-    headers: {
-      Authorization: session.accessToken,
-      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(options.headers || {}),
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
+  const executeRequest = async () => {
+    const response = await fetch(url, {
+      method,
+      headers: {
+        Authorization: session.accessToken,
+        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(options.headers || {}),
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined,
+    });
 
-  if (!response.ok) {
-    if (response.status === 401) {
-      clearCarmenSession();
-      throw new Error('Carmen session expired. Please sign in again.');
+    if (!response.ok) {
+      if (response.status === 401) {
+        clearCarmenSession();
+        throw new Error('Carmen session expired. Please sign in again.');
+      }
+      throw new Error(`Carmen API request failed for ${path} with HTTP ${response.status}.`);
     }
-    throw new Error(`Carmen API request failed for ${path} with HTTP ${response.status}.`);
-  }
 
-  return response.json();
+    return response.json();
+  };
+
+  const isReadRequest = method === 'GET' || (method === 'POST' && /\/search(?:\?|$)/.test(path));
+  if (!isReadRequest) return executeRequest();
+
+  const requestKey = JSON.stringify([session.accessToken, method, url, options.body || null]);
+  if (!pendingReadRequests.has(requestKey)) {
+    pendingReadRequests.set(
+      requestKey,
+      executeRequest().finally(() => pendingReadRequests.delete(requestKey)),
+    );
+  }
+  return pendingReadRequests.get(requestKey);
 };
 
 export const fetchCarmenReportOptions = async () => {

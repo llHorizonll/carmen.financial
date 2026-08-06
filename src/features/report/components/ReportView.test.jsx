@@ -45,4 +45,27 @@ describe('ReportView', () => {
 
     expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual(['Actual', 'Description']);
   });
+
+  it('preserves description indentation without conflicting horizontal padding', () => {
+    render(
+      <ReportView
+        activeReport={{ name: 'P&L' }}
+        displayCompanyLabel="Carmen Hotel"
+        displayDateLabel="As of 2025-02-28"
+        displayPeriodLabel="P2"
+        reportData={[
+          { id: 'r1', desc: 'Revenue', indent: 0, results: { C1: 0 } },
+          { id: 'r2', desc: 'Room Revenue', indent: 2, results: { C1: 0 } },
+        ]}
+        activeCols={[{ id: 'C1', label: 'Actual', width: '' }]}
+        currentTheme={THEMES.blue}
+        tableZoom={100}
+        getIndentClass={getIndentClass}
+      />
+    );
+
+    const detailDescription = screen.getByText('Room Revenue');
+    expect(detailDescription).toHaveClass('block', 'pl-8');
+    expect(detailDescription.closest('td')).toHaveClass('px-3', 'sm:px-4');
+  });
 });

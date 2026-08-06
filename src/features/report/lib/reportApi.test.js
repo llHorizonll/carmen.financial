@@ -35,6 +35,46 @@ afterEach(() => {
 });
 
 describe('reportApi helpers', () => {
+  it('coalesces concurrent identical GET requests during StrictMode remounts', async () => {
+    createSessionStorageMock({
+      accessToken: 'token',
+      businessUnit: { tenant: 'tenant-1' },
+    });
+    let resolveFetch;
+    const fetchMock = vi.fn(() => new Promise((resolve) => {
+      resolveFetch = resolve;
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const firstRequest = fetchCarmenReportOptions();
+    const secondRequest = fetchCarmenReportOptions();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    resolveFetch({ ok: true, json: async () => ({ themes: [] }) });
+    await expect(Promise.all([firstRequest, secondRequest])).resolves.toHaveLength(2);
+  });
+
+  it('coalesces concurrent user and dimension search requests', async () => {
+    createSessionStorageMock({
+      accessToken: 'token',
+      businessUnit: { tenant: 'tenant-1' },
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ Data: [] }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await Promise.all([
+      fetchCarmenUsers(),
+      fetchCarmenUsers(),
+      fetchCarmenDimensions(),
+      fetchCarmenDimensions(),
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps report definition payloads aligned with the frontend shape', () => {
     expect(buildReportDefinitionPayload({
       id: 'rep-1',

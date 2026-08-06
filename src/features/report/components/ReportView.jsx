@@ -92,9 +92,9 @@ export default function ReportView({
                           return (
                             <TableCell
                               key={col.id}
-                              className={`${descriptionIsFirst ? 'sticky left-0 z-10' : ''} border-r px-3 py-2.5 text-sm leading-6 sm:px-4 ${currentTheme.cellBorder} ${isTotal || isHeader ? '' : 'bg-background font-semibold'} ${indentClass}`}
+                              className={`${descriptionIsFirst ? 'sticky left-0 z-10' : ''} border-r px-3 py-2.5 text-sm leading-6 sm:px-4 ${currentTheme.cellBorder} ${isTotal || isHeader ? '' : 'bg-background font-semibold'}`}
                             >
-                              {row.desc}
+                              <span className={`block ${indentClass}`}>{row.desc}</span>
                             </TableCell>
                           );
                         }
