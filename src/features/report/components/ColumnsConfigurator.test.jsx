@@ -7,7 +7,6 @@ describe('ColumnsConfigurator', () => {
   it('adds, updates, moves, and deletes columns', async () => {
     const handleAddCol = vi.fn();
     const handleUpdateCol = vi.fn();
-    const moveCol = vi.fn();
     const handleDeleteCol = vi.fn();
 
     render(
@@ -22,7 +21,6 @@ describe('ColumnsConfigurator', () => {
         handleAddCol={handleAddCol}
         handleUpdateCol={handleUpdateCol}
         updateActiveReport={vi.fn()}
-        moveCol={moveCol}
         handleDeleteCol={handleDeleteCol}
       />
     );
@@ -51,12 +49,6 @@ describe('ColumnsConfigurator', () => {
 
     fireEvent.click(within(row).getByRole('button', { name: /Delete column C1/i }));
     expect(handleDeleteCol).toHaveBeenCalledWith('C1');
-
-    fireEvent.click(within(row).getByRole('button', { name: /Move column C1 left/i }));
-    expect(moveCol).toHaveBeenCalledWith(0, 'left');
-
-    fireEvent.click(within(row).getByRole('button', { name: /Move column C1 right/i }));
-    expect(moveCol).toHaveBeenCalledWith(0, 'right');
 
     fireEvent.click(within(row).getAllByRole('combobox')[0]);
     fireEvent.click(await screen.findByText('BCC'));
@@ -94,9 +86,14 @@ describe('ColumnsConfigurator', () => {
     expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'isActive', false);
   });
 
-  it('moves Description without reordering calculation columns', () => {
+  it('moves Description by drag and drop without reordering calculation columns', () => {
     const updateActiveReport = vi.fn();
-    const moveCol = vi.fn();
+    const dataTransfer = {
+      effectAllowed: '',
+      dropEffect: '',
+      setData: vi.fn(),
+      setDragImage: vi.fn(),
+    };
 
     render(
       <ColumnsConfigurator
@@ -109,13 +106,18 @@ describe('ColumnsConfigurator', () => {
         handleAddCol={vi.fn()}
         handleUpdateCol={vi.fn()}
         updateActiveReport={updateActiveReport}
-        moveCol={moveCol}
         handleDeleteCol={vi.fn()}
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Move Description left' }));
-    expect(updateActiveReport).toHaveBeenCalledWith({ descriptionPosition: 0 });
-    expect(moveCol).not.toHaveBeenCalled();
+    fireEvent.dragStart(screen.getByRole('button', { name: /Reorder Description column/i }), { dataTransfer });
+    const target = screen.getByTestId('column-card');
+    fireEvent.dragOver(target, { dataTransfer });
+    fireEvent.drop(target, { dataTransfer });
+
+    expect(updateActiveReport).toHaveBeenCalledWith(expect.objectContaining({
+      descriptionPosition: 0,
+      columns: [expect.objectContaining({ id: 'C1' })],
+    }));
   });
 });

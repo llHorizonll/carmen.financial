@@ -79,11 +79,17 @@ describe('RowsConfigurator', () => {
       expect.objectContaining({ msg: 'Delete Row?' })
     );
 
-    fireEvent.click(rowButtons[1]);
-    expect(moveRow).toHaveBeenCalledWith(0, 'up');
-
-    fireEvent.click(rowButtons[2]);
-    expect(moveRow).toHaveBeenCalledWith(0, 'down');
+    const dataTransfer = {
+      effectAllowed: '',
+      dropEffect: '',
+      setData: vi.fn(),
+      setDragImage: vi.fn(),
+    };
+    fireEvent.dragStart(within(revenueRow).getByRole('button', { name: /Reorder row r1/i }), { dataTransfer });
+    const targetRow = screen.getByDisplayValue('Total Revenue').closest('tr');
+    fireEvent.dragOver(targetRow, { dataTransfer });
+    fireEvent.drop(targetRow, { dataTransfer });
+    expect(moveRow).toHaveBeenCalledWith(0, 1);
 
     fireEvent.click(within(revenueRow).getAllByRole('combobox')[0]);
     fireEvent.click(await screen.findByText('Header (H)'));
@@ -99,7 +105,7 @@ describe('RowsConfigurator', () => {
     fireEvent.change(screen.getByDisplayValue('R2'), { target: { value: 'R3' } });
     expect(handleUpdateRow).toHaveBeenCalledWith('r1', 'percentBase', 'R3');
 
-    fireEvent.click(rowButtons[3]);
+    fireEvent.click(rowButtons[2]);
     expect(setEditingRow).toHaveBeenCalledWith(expect.objectContaining({ id: 'r1' }));
 
     const formulaRow = screen.getByDisplayValue('Total Revenue').closest('tr');

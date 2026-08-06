@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
+import { LoaderCircle, Save, Undo2 } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
+import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/badge.jsx';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card.jsx';
 import ReportDetailsPanel from './ReportDetailsPanel.jsx';
@@ -47,6 +49,27 @@ export default function ReportSetup(props) {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto">
+      <section
+        aria-label="Report setting actions"
+        className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/85"
+      >
+        <p className="flex items-center gap-2 text-sm" aria-live="polite">
+          <span className={cn('size-2 rounded-full', props.isDirty ? 'bg-amber-500' : 'bg-emerald-500')} />
+          <span className={props.isDirty ? 'font-medium text-foreground' : 'text-muted-foreground'}>
+            {props.isDirty ? 'Unsaved changes' : 'All changes saved'}
+          </span>
+        </p>
+        <nav aria-label="Save or cancel report settings" className="flex items-center gap-2">
+          <Button type="button" variant="outline" onClick={props.onCancel} disabled={!props.isDirty || props.isSaving}>
+            <Undo2 />
+            Cancel changes
+          </Button>
+          <Button type="button" onClick={props.onSave} disabled={!props.isDirty || props.isSaving}>
+            {props.isSaving ? <LoaderCircle className="animate-spin motion-reduce:animate-none" /> : <Save />}
+            {props.isSaving ? 'Saving...' : 'Save changes'}
+          </Button>
+        </nav>
+      </section>
       <Card className="overflow-hidden border border-border bg-gradient-to-br from-background via-background to-muted/25 shadow-none ring-0">
         <CardContent className="grid gap-5 p-5 xl:grid-cols-[1.15fr_0.85fr] xl:items-center xl:p-6">
           <div className="space-y-3">

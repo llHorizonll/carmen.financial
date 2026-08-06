@@ -25,6 +25,7 @@ const getUserRoleLabel = (user) => (isSetupAdmin(user) ? 'Admin' : 'User');
 export default function AccessModal({ isOpen, masterData, activeReport, onClose, onUpdateUsers }) {
   if (!activeReport) return null;
   const friendlyButtonClassName = 'border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150';
+  const assignedUsers = new Set(activeReport.assignedUsers);
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -40,7 +41,7 @@ export default function AccessModal({ isOpen, masterData, activeReport, onClose,
         <ScrollArea className="max-h-[min(60vh,360px)] pr-3">
           <div className="space-y-2">
             {masterData.users.map((user) => {
-              const isSelected = activeReport.assignedUsers.includes(user.id);
+              const isSelected = assignedUsers.has(user.id);
               const nextUsers = isSelected
                 ? activeReport.assignedUsers.filter((id) => id !== user.id)
                 : [...activeReport.assignedUsers, user.id];

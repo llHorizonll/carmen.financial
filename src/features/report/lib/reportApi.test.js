@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildReportDefinitionPayload, cloneCarmenReport, deleteCarmenReport, fetchCarmenDimensions, fetchCarmenReport, fetchCarmenReportOptions, loginWithCarmenCredentials, saveCarmenReport, saveCarmenReports } from './reportApi.js';
+import { buildReportDefinitionPayload, cloneCarmenReport, deleteCarmenReport, fetchCarmenDimensions, fetchCarmenReport, fetchCarmenReportOptions, fetchCarmenUsers, loginWithCarmenCredentials, saveCarmenReport, saveCarmenReports } from './reportApi.js';
 
 const createSessionStorageMock = (session = {}) => {
   const storage = new Map();
@@ -53,10 +53,10 @@ describe('reportApi helpers', () => {
       day: '28',
       theme: 'blue',
       columns: [
-        { id: 'C1', label: 'Actual', isActive: true },
+        { id: 'C1', label: 'Actual', isActive: true, yearMode: 'specific', specificYear: '2024', dayMode: '15', budRev: '2' },
       ],
       rows: [
-        { id: 'r1', desc: 'Revenue', isActive: true, dim1: 'A', dim2: 'X' },
+        { id: 'r1', desc: 'Revenue', isActive: true, deptGroup: 'ROOMS', dim1: 'A', dim2: 'X' },
       ],
       access: [
         {
@@ -85,11 +85,12 @@ describe('reportApi helpers', () => {
       day: '28',
       theme: 'blue',
       descriptionPosition: 0,
-      columns: [{ id: 'C1', label: 'Actual', isActive: true }],
+      columns: [{ id: 'C1', label: 'Actual', isActive: true, yearMode: 'specific', specificYear: '2024', dayMode: '15', budRev: '2' }],
       rows: [{
         id: 'r1',
         desc: 'Revenue',
         isActive: true,
+        deptGroup: 'ROOMS',
         dim1: 'A',
         dim2: 'X',
         dimensions: [
@@ -218,20 +219,54 @@ describe('reportApi helpers', () => {
     ]);
   });
 
-  it('loads active dimension captions from the dimension search API', async () => {
+  it('loads dimension values by configured dimension slot', async () => {
     createSessionStorageMock({
       accessToken: 'token',
       businessUnit: { tenant: 'tenant-1' },
     });
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ Data: [{ Caption: 'Market Segment' }, { Caption: 'Meal Period' }, { Caption: 'Market Segment' }] }),
+      json: async () => ({ Data: [
+        { Caption: 'Market Segment', ListOfValues: '["Retail","Corporate"]' },
+        { Caption: 'Meal Period', ListOfValues: 'Breakfast,Lunch|Dinner' },
+      ] }),
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(fetchCarmenDimensions()).resolves.toEqual(['Market Segment', 'Meal Period']);
+    await expect(fetchCarmenDimensions()).resolves.toEqual({
+      dim1: ['Retail', 'Corporate'],
+      dim2: ['Breakfast', 'Lunch', 'Dinner'],
+    });
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/api/dimension/search?useTenant=tenant-1'),
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"Field":"Active"'),
+      }),
+    );
+  });
+
+  it('loads active Carmen users from api/user/search using usernames as report identities', async () => {
+    createSessionStorageMock({
+      accessToken: 'token',
+      businessUnit: { tenant: 'tenant-1' },
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ Data: [
+        { UserId: 'guid-2', UserName: 'viewer.b', Active: true },
+        { UserId: 'guid-1', UserName: 'viewer.a', Active: true },
+        { UserId: 'guid-3', UserName: 'disabled', Active: false },
+      ] }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchCarmenUsers()).resolves.toEqual([
+      expect.objectContaining({ id: 'viewer.a', name: 'viewer.a' }),
+      expect.objectContaining({ id: 'viewer.b', name: 'viewer.b' }),
+    ]);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/user/search?useTenant=tenant-1'),
       expect.objectContaining({
         method: 'POST',
         body: expect.stringContaining('"Field":"Active"'),

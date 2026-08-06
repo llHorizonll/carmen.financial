@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowDown, ArrowUp, Calculator, Edit3, Layout, Trash2 } from 'lucide-react';
+import { Calculator, Edit3, GripVertical, Layout, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card.jsx';
 import { Input } from '@/components/ui/input.jsx';
@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select.jsx';
 import { findBrokenReferences, getRowMappingWarnings } from '../lib/reportLogic.js';
+import useDragReorder from '../hooks/useDragReorder.js';
 
 export default function RowsConfigurator({
   activeReport,
@@ -33,10 +34,25 @@ export default function RowsConfigurator({
   const formulaActionClassName = 'border-purple-200 bg-purple-50/50 text-purple-700 hover:bg-purple-100/60 dark:border-purple-900/30 dark:bg-purple-950/20 dark:text-purple-400 dark:hover:bg-purple-950/40';
 
   const rowsCountRef = React.useRef(activeReport.rows.length);
+  const reorderRows = React.useCallback((fromIndex, toIndex) => {
+    moveRow(fromIndex, toIndex);
+  }, [moveRow]);
+  const {
+    announcement,
+    containerRef,
+    getHandleProps,
+    getItemProps,
+  } = useDragReorder({
+    items: activeReport.rows.map((row) => row.id),
+    onReorder: reorderRows,
+    axis: 'vertical',
+    itemLabel: (id) => `row ${id}`,
+  });
 
   React.useEffect(() => {
+    let scrollTimer;
     if (activeReport.rows.length > rowsCountRef.current) {
-      setTimeout(() => {
+      scrollTimer = setTimeout(() => {
         const rows = document.querySelectorAll('.row-configurator-row');
         if (rows.length > 0) {
           const lastRow = rows[rows.length - 1];
@@ -50,6 +66,7 @@ export default function RowsConfigurator({
       }, 50);
     }
     rowsCountRef.current = activeReport.rows.length;
+    return () => clearTimeout(scrollTimer);
   }, [activeReport.rows.length]);
 
   return (
@@ -61,7 +78,7 @@ export default function RowsConfigurator({
               <Layout className="size-4 text-muted-foreground" />
               Rows Configurator
             </CardTitle>
-            <CardDescription className="text-sm text-muted-foreground">Control report row structure, formulas, and mappings.</CardDescription>
+            <CardDescription className="text-sm text-muted-foreground">Control row details, then drag the grip to reorder.</CardDescription>
           </div>
           <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[24rem]">
             <Button variant="outline" size="sm" className={`${headerActionClassName} ${dataActionClassName}`} onClick={() => handleAddRow('data')}>+ Add Data Row</Button>
@@ -72,9 +89,10 @@ export default function RowsConfigurator({
       </CardHeader>
 
       <CardContent className="p-0">
+        <p className="sr-only" aria-live="polite">{announcement}</p>
         {brokenRowReferences.length > 0 && (
           <div className="border-b bg-destructive/5 px-4 py-2 text-sm text-destructive">
-            Broken row references found. Fix {brokenRowReferences.length} invalid reference(s) before saving.
+            Broken row references found. These {brokenRowReferences.length} invalid reference(s) may produce incomplete report data.
           </div>
         )}
 
@@ -91,7 +109,7 @@ export default function RowsConfigurator({
                 <TableHead className="min-w-[24rem]">Mapping Rules Setup</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
+            <TableBody ref={containerRef}>
               {activeReport.rows.map((row, idx) => {
                 const isHeader = row.isHeader || false;
                 const isTotal = row.isTotal || false;
@@ -104,7 +122,11 @@ export default function RowsConfigurator({
                 const rowWarnings = getRowMappingWarnings(row, activeReport.rows, masterData);
 
                 return (
-                  <TableRow key={row.id} className={`row-configurator-row ${isTotal ? 'bg-muted/30' : isHeader ? 'bg-muted/10' : ''}`}>
+                  <TableRow
+                    key={row.id}
+                    {...getItemProps(row.id)}
+                    className={`row-configurator-row transition-[opacity,box-shadow,transform,background-color] duration-200 ease-out data-[dragging=true]:opacity-40 data-[drag-over=true]:bg-primary/5 data-[drag-over=true]:ring-2 data-[drag-over=true]:ring-inset data-[drag-over=true]:ring-primary/35 motion-reduce:transition-none ${isTotal ? 'bg-muted/30' : isHeader ? 'bg-muted/10' : ''}`}
+                  >
                   <TableCell className="px-2 py-2 align-middle">
                     <Button
                       variant="destructive"
@@ -157,27 +179,17 @@ export default function RowsConfigurator({
                       </Select>
                     </TableCell>
                     <TableCell className="px-2 py-2 align-middle">
-                      <div className="flex flex-col items-center gap-1.5 whitespace-nowrap">
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          aria-label={`Move row ${row.id} up`}
-                          title={`Move row ${row.id} up`}
-                          onClick={() => moveRow(idx, 'up')}
-                        >
-                          <ArrowUp />
-                        </Button>
+                      <section className="flex flex-col items-center gap-1.5 whitespace-nowrap">
                         <Badge variant="secondary">R{idx + 1}</Badge>
                         <Button
                           variant="ghost"
-                          size="icon-xs"
-                          aria-label={`Move row ${row.id} down`}
-                          title={`Move row ${row.id} down`}
-                          onClick={() => moveRow(idx, 'down')}
+                          size="icon-sm"
+                          {...getHandleProps(row.id, idx)}
+                          className="cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
                         >
-                          <ArrowDown />
+                          <GripVertical />
                         </Button>
-                      </div>
+                      </section>
                     </TableCell>
                     <TableCell className="px-2 py-2 align-middle">
                       {!isHeader ? (

@@ -119,8 +119,9 @@ const detectColumns = (matrix, descriptionColumn, cellMatrix = []) => {
       ).length >= 2,
   );
   const headerRows = qualifyingHeaderRows.reduce((rows, rowIndex) => {
-    if (rows.length > 0 && rowIndex - rows.at(-1) > 1) return [rowIndex];
-    return [...rows, rowIndex];
+    if (rows.length > 0 && rowIndex - rows.at(-1) > 1) rows.length = 0;
+    rows.push(rowIndex);
+    return rows;
   }, []);
   const lastHeaderColumn =
     headerRows.length > 0

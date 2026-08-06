@@ -20,6 +20,7 @@ import {
   deleteRowAndRewriteReferences,
   deleteColAndRewriteReferences,
   moveColumnsAndRewriteReferences,
+  moveDisplayColumnsAndRewriteReferences,
   moveRowsAndRewriteReferences,
   buildExcelHtml,
 } from './reportLogic.js';
@@ -540,6 +541,25 @@ describe('buildReportData', () => {
     }, 0, 'left');
     expect(moveColsNoop.columns[0].formula).toBe('C1');
 
+    const draggedCols = moveColumnsAndRewriteReferences({
+      columns: [
+        { id: 'C1', formula: '' },
+        { id: 'C2', formula: '' },
+        { id: 'C3', formula: 'C1+C2' },
+      ],
+      rows: [],
+    }, 0, 2);
+    expect(draggedCols.columns.map((column) => column.id)).toEqual(['C2', 'C3', 'C1']);
+    expect(draggedCols.columns[1].formula).toBe('C3+C1');
+
+    const draggedDescription = moveDisplayColumnsAndRewriteReferences({
+      descriptionPosition: 1,
+      columns: [{ id: 'C1' }, { id: 'C2' }],
+      rows: [],
+    }, 1, 0);
+    expect(draggedDescription.descriptionPosition).toBe(0);
+    expect(draggedDescription.columns.map((column) => column.id)).toEqual(['C1', 'C2']);
+
     const movedRows = moveRowsAndRewriteReferences({
       rows: [
         { id: 'r1', formula: '' },
@@ -549,6 +569,17 @@ describe('buildReportData', () => {
     }, 1, 'up');
     expect(movedRows.rows[0].formula).toBe('R2+R2');
     expect(movedRows.rows[0].percentBase).toBe('R2');
+
+    const draggedRows = moveRowsAndRewriteReferences({
+      rows: [
+        { id: 'r1', formula: '' },
+        { id: 'r2', formula: '' },
+        { id: 'r3', formula: 'R1+R2', percentBase: 'R1' },
+      ],
+      columns: [],
+    }, 0, 2);
+    expect(draggedRows.rows.map((row) => row.id)).toEqual(['r2', 'r3', 'r1']);
+    expect(draggedRows.rows[1].formula).toBe('R3+R1');
 
     const moveRowsNoop = moveRowsAndRewriteReferences({
       rows: [{ id: 'r1', formula: 'R1', percentBase: 'R1' }],
@@ -633,6 +664,29 @@ describe('buildReportData', () => {
     expect(html).toContain('Carmen');
     expect(html).toContain('Actual');
     expect(html).toContain('Revenue');
+  });
+
+  it('prorates monthly budget rows for daily budget columns', () => {
+    const result = buildReportData({
+      activeReport: {
+        category: ['ALL'],
+        rows: [{ id: 'r1', dept: '101', accCodes: '4001', groupLevel: 'L4', groups: '' }],
+        columns: [
+          { id: 'C1', type: 'DACBG', yearMode: 'current', periodMode: 'current' },
+          { id: 'C2', type: 'PTDBG', yearMode: 'current', periodMode: 'current' },
+        ],
+      },
+      engineData: [],
+      budgetData: [{ year: '2025', revision: '0', deptcode: '101', acccode: '4001', amt2: '280', days2: 28 }],
+      appliedDepts: [],
+      appliedYear: '2025',
+      appliedPeriod: '2',
+      appliedDay: '2',
+      appliedRevision: '0',
+      masterData,
+    });
+
+    expect(result[0].results).toMatchObject({ C1: 10, C2: 20 });
   });
 
   it('exports Description at the configured column position', () => {

@@ -564,29 +564,29 @@ export const getRowMappingWarnings = (row, allRows = [], masterData = null) => {
     }
   }
 
-  const masterDeptIds = getMasterListIds(masterData?.depts);
-  if (masterDeptIds.length > 0 && hasDept) {
+  const masterDeptIds = new Set(getMasterListIds(masterData?.depts));
+  if (masterDeptIds.size > 0 && hasDept) {
     const invalidDepts = String(row.dept || '')
       .split(',')
       .map(normalizeDeptLookupCode)
       .filter(Boolean)
-      .filter((dept) => !masterDeptIds.includes(dept));
+      .filter((dept) => !masterDeptIds.has(dept));
     if (invalidDepts.length > 0) {
       warnings.push(`unknown department code(s): ${invalidDepts.join(', ')}.`);
     }
   }
 
-  const masterAccIds = getMasterListIds(masterData?.accCodes);
+  const masterAccIds = new Set(getMasterListIds(masterData?.accCodes));
   if (hasDeptGroup && Array.isArray(masterData?.deptGroups) && !masterData.deptGroups.some((group) => String(group?.id || '').trim().toUpperCase() === deptGroup)) {
     warnings.push('unknown department group: ' + deptGroup + '.');
   }
 
-  if (masterAccIds.length > 0 && hasAccCodes) {
+  if (masterAccIds.size > 0 && hasAccCodes) {
     const invalidAccs = String(row.accCodes || '')
       .split(',')
       .map(normalizeAccLookupCode)
       .filter(Boolean)
-      .filter((acc) => !masterAccIds.includes(acc));
+      .filter((acc) => !masterAccIds.has(acc));
     if (invalidAccs.length > 0) {
       warnings.push(`unknown account code(s): ${invalidAccs.join(', ')}.`);
     }
@@ -628,7 +628,19 @@ const filterEngineRows = (row, masterData) => {
         .map((field) => (row[field] ? { key: field, value: String(row[field]).trim() } : null))
         .filter(Boolean);
   const groupLevelKey = (row.groupLevel === 'L1' ? 'group1' : row.groupLevel === 'L2' ? 'group2' : row.groupLevel === 'L3' ? 'group3' : 'group4');
-  return { depts, accs, grps, dimensions, groupLevelKey, hasDeptMap: depts.length > 0, hasAccMap: accs.length > 0, hasGrpMap: grps.length > 0 };
+  return {
+    depts,
+    accs,
+    grps,
+    deptSet: new Set(depts),
+    accSet: new Set(accs),
+    grpSet: new Set(grps),
+    dimensions,
+    groupLevelKey,
+    hasDeptMap: depts.length > 0,
+    hasAccMap: accs.length > 0,
+    hasGrpMap: grps.length > 0,
+  };
 };
 
 const resolveAccType = (d, masterData, dAccCode) => {
@@ -640,7 +652,7 @@ const resolveAccType = (d, masterData, dAccCode) => {
   return dAccType;
 };
 
-const matchesReportCategory = ({ reportCategories, dAccType, hasAccMap, dAccCode, accs }) => {
+const matchesReportCategory = ({ reportCategories, dAccType, hasAccMap, dAccCode, accSet }) => {
   if (reportCategories.includes('ALL')) return true;
   const isIncome = ['I', 'E', 'R', 'INC', 'EXP', 'REV', 'COS', 'PL'].some(t => dAccType === t || dAccType.startsWith(t));
   const isBalance = ['B', 'A', 'L', 'AST', 'LIA', 'EQU', 'CAP', 'BS'].some(t => dAccType === t || dAccType.startsWith(t));
@@ -648,12 +660,13 @@ const matchesReportCategory = ({ reportCategories, dAccType, hasAccMap, dAccCode
   if (reportCategories.includes('I') && isIncome) return true;
   if (reportCategories.includes('B') && isBalance) return true;
   if (reportCategories.some(cat => dAccType === cat || dAccType.startsWith(cat))) return true;
-  return !hasAccMap || accs.includes(dAccCode);
+  return !hasAccMap || accSet.has(dAccCode);
 };
 
 const sumActuals = ({ col, rowConfig, engineData, appliedDepts, appliedYear, appliedPeriod, appliedDay, periodOptions, reportCategories, masterData }) => {
   const { effYear, targetMonths } = resolveTime(col, appliedYear, appliedPeriod, periodOptions);
   const normalizedAppliedDepts = appliedDepts.map(normalizeDeptLookupCode).filter(Boolean);
+  const appliedDeptSet = new Set(normalizedAppliedDepts);
   const type = String(col.type || '').trim().toUpperCase();
   const monthsToEvaluate = ['BUDACC', 'BCC'].includes(type) && col.periodMode === 'FY' ? [targetMonths[0]] : targetMonths;
   const targetDay = Number.parseInt(appliedDay, 10);
@@ -678,14 +691,14 @@ const sumActuals = ({ col, rowConfig, engineData, appliedDepts, appliedYear, app
       const dAccCode = normalizeAccLookupCode(d.acccode || d.account || d.accountcode || '');
       const dGroup = (d[rowConfig.groupLevelKey] || d.group || '').toString().trim().toUpperCase();
 
-      if (normalizedAppliedDepts.length > 0 && !normalizedAppliedDepts.includes(dDeptCode)) return;
-      if (rowConfig.hasDeptMap && !rowConfig.depts.includes(dDeptCode)) return;
-      if (rowConfig.hasAccMap && !rowConfig.accs.includes(dAccCode)) return;
-      if (rowConfig.hasGrpMap && !rowConfig.grps.includes(dGroup)) return;
+      if (appliedDeptSet.size > 0 && !appliedDeptSet.has(dDeptCode)) return;
+      if (rowConfig.hasDeptMap && !rowConfig.deptSet.has(dDeptCode)) return;
+      if (rowConfig.hasAccMap && !rowConfig.accSet.has(dAccCode)) return;
+      if (rowConfig.hasGrpMap && !rowConfig.grpSet.has(dGroup)) return;
       if (!matchesRowDimensions(rowConfig, d)) return;
 
       const dAccType = resolveAccType(d, masterData, dAccCode);
-      if (!matchesReportCategory({ reportCategories, dAccType, hasAccMap: rowConfig.hasAccMap, dAccCode, accs: rowConfig.accs })) return;
+      if (!matchesReportCategory({ reportCategories, dAccType, hasAccMap: rowConfig.hasAccMap, dAccCode, accSet: rowConfig.accSet })) return;
 
       const amtM = d['amt' + m] !== undefined && d['amt' + m] !== '' ? d['amt' + m] : (d['amt0' + m] !== undefined && d['amt0' + m] !== '' ? d['amt0' + m] : 0);
       const bfAmtM = d['bfamt' + m] !== undefined && d['bfamt' + m] !== '' ? d['bfamt' + m] : (d['bfamt0' + m] !== undefined && d['bfamt0' + m] !== '' ? d['bfamt0' + m] : 0);
@@ -704,6 +717,7 @@ const sumActuals = ({ col, rowConfig, engineData, appliedDepts, appliedYear, app
 const sumBudget = ({ col, rowConfig, budgetData, appliedDepts, appliedYear, appliedPeriod, appliedDay, appliedRevision, periodOptions, reportCategories, masterData }) => {
   const { effYear, targetMonths } = resolveTime(col, appliedYear, appliedPeriod, periodOptions);
   const normalizedAppliedDepts = appliedDepts.map(normalizeDeptLookupCode).filter(Boolean);
+  const appliedDeptSet = new Set(normalizedAppliedDepts);
   const type = String(col.type || '').trim().toUpperCase();
   const monthsToEvaluate = ['BUDACC', 'BCC'].includes(type) && col.periodMode === 'FY' ? [targetMonths[0]] : targetMonths;
   const targetDay = Number.parseInt(appliedDay, 10);
@@ -717,8 +731,7 @@ const sumBudget = ({ col, rowConfig, budgetData, appliedDepts, appliedYear, appl
         const dPeriod = Number.parseInt(d.period || d.month || d.period_no, 10);
         const dDay = Number.parseInt(d.day || d.Day || d.docDay || d.transactionDay || d.date_day || d.day_no, 10);
         if (Number.isInteger(dPeriod) && dPeriod !== m) return;
-        if (Number.isInteger(targetDay)) {
-          if (!Number.isInteger(dDay)) return;
+        if (Number.isInteger(targetDay) && Number.isInteger(dDay)) {
           if (type === 'DACBG' && dDay !== targetDay) return;
           if (type === 'PTDBG' && (dDay < 1 || dDay > targetDay)) return;
         }
@@ -731,19 +744,26 @@ const sumBudget = ({ col, rowConfig, budgetData, appliedDepts, appliedYear, appl
       const dAccCode = normalizeAccLookupCode(d.acccode || d.account || d.accountcode || '');
       const dGroup = (d[rowConfig.groupLevelKey] || d.group || '').toString().trim().toUpperCase();
 
-      if (normalizedAppliedDepts.length > 0 && !normalizedAppliedDepts.includes(dDeptCode)) return;
-      if (rowConfig.hasDeptMap && !rowConfig.depts.includes(dDeptCode)) return;
-      if (rowConfig.hasAccMap && !rowConfig.accs.includes(dAccCode)) return;
-      if (rowConfig.hasGrpMap && !rowConfig.grps.includes(dGroup)) return;
+      if (appliedDeptSet.size > 0 && !appliedDeptSet.has(dDeptCode)) return;
+      if (rowConfig.hasDeptMap && !rowConfig.deptSet.has(dDeptCode)) return;
+      if (rowConfig.hasAccMap && !rowConfig.accSet.has(dAccCode)) return;
+      if (rowConfig.hasGrpMap && !rowConfig.grpSet.has(dGroup)) return;
       if (!matchesRowDimensions(rowConfig, d)) return;
 
       const dAccType = resolveAccType(d, masterData, dAccCode);
-      if (!matchesReportCategory({ reportCategories, dAccType, hasAccMap: rowConfig.hasAccMap, dAccCode, accs: rowConfig.accs })) return;
+      if (!matchesReportCategory({ reportCategories, dAccType, hasAccMap: rowConfig.hasAccMap, dAccCode, accSet: rowConfig.accSet })) return;
 
       const valueMode = getColumnValueMode(col.type);
       if (type === 'DACBG' || type === 'PTDBG') {
         const amtM = d['amt' + m] !== undefined && d['amt' + m] !== '' ? d['amt' + m] : (d['amt0' + m] !== undefined && d['amt0' + m] !== '' ? d['amt0' + m] : 0);
-        sum += parseAmount(d.amount ?? d.amt ?? d.val ?? amtM);
+        const dDay = Number.parseInt(d.day || d.Day || d.docDay || d.transactionDay || d.date_day || d.day_no, 10);
+        if (Number.isInteger(dDay)) {
+          sum += parseAmount(d.amount ?? d.amt ?? d.val ?? amtM);
+        } else {
+          const daysInPeriod = Number.parseInt(d['days' + m], 10) || new Date(Number(effYear), m, 0).getDate();
+          const dailyAmount = Math.round((parseAmount(amtM) / daysInPeriod) * 100) / 100;
+          sum += dailyAmount * (type === 'PTDBG' ? Math.max(0, targetDay || 0) : 1);
+        }
       } else if (valueMode === 'bud') {
         const amtM = d['amt' + m] !== undefined && d['amt' + m] !== '' ? d['amt' + m] : (d['amt0' + m] !== undefined && d['amt0' + m] !== '' ? d['amt0' + m] : 0);
         sum += parseAmount(amtM);
@@ -936,9 +956,10 @@ export const deleteColAndRewriteReferences = (activeReport, colId) => {
 
 export const moveColumnsAndRewriteReferences = (activeReport, idx, dir) => {
   const newCols = [...activeReport.columns];
-  const swapIdx = dir === 'left' ? idx - 1 : idx + 1;
-  if (swapIdx < 0 || swapIdx >= newCols.length) return activeReport;
-  [newCols[idx], newCols[swapIdx]] = [newCols[swapIdx], newCols[idx]];
+  const targetIdx = Number.isInteger(dir) ? dir : (dir === 'left' ? idx - 1 : idx + 1);
+  if (idx < 0 || idx >= newCols.length || targetIdx < 0 || targetIdx >= newCols.length || idx === targetIdx) return activeReport;
+  const [movedColumn] = newCols.splice(idx, 1);
+  newCols.splice(targetIdx, 0, movedColumn);
   const map = {};
   newCols.forEach((c, i) => {
     const oldI = activeReport.columns.findIndex(oc => oc.id === c.id);
@@ -957,11 +978,29 @@ export const moveColumnsAndRewriteReferences = (activeReport, idx, dir) => {
   };
 };
 
+export const moveDisplayColumnsAndRewriteReferences = (activeReport, fromIndex, toIndex) => {
+  const displayColumns = getReportDisplayColumns(activeReport);
+  if (fromIndex < 0 || fromIndex >= displayColumns.length || toIndex < 0 || toIndex >= displayColumns.length || fromIndex === toIndex) return activeReport;
+  const [movedColumn] = displayColumns.splice(fromIndex, 1);
+  displayColumns.splice(toIndex, 0, movedColumn);
+
+  const descriptionPosition = displayColumns.findIndex((column) => column.isDescription);
+  if (movedColumn.isDescription) return { ...activeReport, descriptionPosition };
+
+  const targetColumnIndex = displayColumns.filter((column) => !column.isDescription).findIndex((column) => column.id === movedColumn.id);
+  const sourceColumnIndex = activeReport.columns.findIndex((column) => column.id === movedColumn.id);
+  return {
+    ...moveColumnsAndRewriteReferences(activeReport, sourceColumnIndex, targetColumnIndex),
+    descriptionPosition,
+  };
+};
+
 export const moveRowsAndRewriteReferences = (activeReport, idx, dir) => {
   const newRows = [...activeReport.rows];
-  const swapIdx = dir === 'up' ? idx - 1 : idx + 1;
-  if (swapIdx < 0 || swapIdx >= newRows.length) return activeReport;
-  [newRows[idx], newRows[swapIdx]] = [newRows[swapIdx], newRows[idx]];
+  const targetIdx = Number.isInteger(dir) ? dir : (dir === 'up' ? idx - 1 : idx + 1);
+  if (idx < 0 || idx >= newRows.length || targetIdx < 0 || targetIdx >= newRows.length || idx === targetIdx) return activeReport;
+  const [movedRow] = newRows.splice(idx, 1);
+  newRows.splice(targetIdx, 0, movedRow);
   const map = {};
   newRows.forEach((r, i) => {
     const oldI = activeReport.rows.findIndex(or => or.id === r.id);

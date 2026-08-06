@@ -21,6 +21,7 @@ import {
   MoonStar,
   SunMedium,
   AlertTriangle,
+  LoaderCircle,
 } from "lucide-react";
 
 import { useIsMobile } from "@/hooks/use-mobile.js";
@@ -51,6 +52,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select.jsx";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog.jsx";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -88,9 +96,6 @@ import {
 import {
   THEMES,
   INITIAL_MASTER_DATA,
-  parseGlCsvText,
-  parseBudgetCsvText,
-  mergeAndSort,
   formatAutoPeriod,
   getIndentClass,
   cloneReport,
@@ -267,6 +272,36 @@ const isSessionExpiredError = (error) =>
     .toLowerCase()
     .includes("session expired");
 
+const getSetupWarnings = (report, masterData) => {
+  if (!report) return [];
+  const warnings = [];
+  const describeItem = (scope, id) => {
+    const items = scope === "row" ? report.rows || [] : report.columns || [];
+    const index = items.findIndex((item) => item?.id === id);
+    const item = items[index];
+    const code = `${scope === "row" ? "R" : "C"}${index + 1}`;
+    const name = scope === "row" ? item?.desc : item?.label;
+    return `${scope === "row" ? "Row" : "Column"} ${code}${name ? ` (${name})` : ""}`;
+  };
+
+  findBrokenReferences(report).forEach((issue) => {
+    warnings.push(`${describeItem(issue.scope, issue.id)}: ${issue.field} contains invalid reference ${issue.value}.`);
+  });
+  findRowMappingConflicts(report, masterData).forEach((issue) => {
+    warnings.push(`${describeItem("row", issue.id)}: ${issue.value}`);
+  });
+
+  const allowedTypes = report.reportType === "Daily" ? DAILY_COLUMN_TYPES : MONTHLY_COLUMN_TYPES;
+  (report.columns || []).forEach((column) => {
+    const type = String(column?.type || "").trim().toUpperCase();
+    if (type && !allowedTypes.has(type)) {
+      warnings.push(`${describeItem("column", column.id)}: type ${type} is not compatible with ${report.reportType || "Monthly"} reports.`);
+    }
+  });
+
+  return [...new Set(warnings)];
+};
+
 const mergeOptionArrays = (fallbackItems, nextItems) => {
   const merged = new Map();
   fallbackItems.forEach((item) => merged.set(String(item.id), item));
@@ -300,15 +335,15 @@ const mergeReportOptions = (defaults, loaded) => ({
 
 const REPORT_STORAGE_KEY = "carmen_bi_reports_config_v5_23";
 const NEUTRAL_BUTTON_CLASS =
-  "border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150";
+  "border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors duration-150";
 const NEUTRAL_FILTER_TRIGGER_CLASS =
-  "border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150";
+  "border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors duration-150";
 const MODE_SWITCH_CLASS =
   "inline-flex items-center rounded-xl border border-border bg-muted/60 p-1 shadow-inner";
 const ACTIVE_MODE_CLASS =
-  "bg-primary text-primary-foreground shadow-sm ring-1 ring-primary/20 transition-all duration-150";
+  "bg-primary text-primary-foreground shadow-sm ring-1 ring-primary/20 transition-colors duration-150";
 const INACTIVE_MODE_CLASS =
-  "text-muted-foreground hover:bg-background hover:text-foreground transition-all duration-150";
+  "text-muted-foreground hover:bg-background hover:text-foreground transition-colors duration-150";
 
 const readStoredReports = () => {
   if (typeof window === "undefined" || !window.localStorage) return null;
@@ -344,6 +379,8 @@ export default function App({ onLogout = null }) {
 
   const [alertMsg, setAlertMsg] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
+  const confirmActionRef = useRef(null);
+  const [setupSaveWarnings, setSetupSaveWarnings] = useState([]);
 
   const [masterData, setMasterData] = usePersistentState(
     "carmen_bi_master_v5_23",
@@ -381,20 +418,18 @@ export default function App({ onLogout = null }) {
 
   const [engineData, setEngineData] = useState([]);
   const [budgetData, setBudgetData] = useState([]);
-  const [apiDimensions, setApiDimensions] = useState([]);
+  const [apiDimensions, setApiDimensions] = useState({});
   const dimensionOptions = useMemo(() => Object.fromEntries(
     ["dim1", "dim2"].map((field) => [
       field,
-      apiDimensions.length > 0 ? apiDimensions : [...new Set([...engineData, ...budgetData]
+      apiDimensions[field]?.length > 0 ? apiDimensions[field] : [...new Set([...engineData, ...budgetData]
         .map((row) => String(row?.[field] ?? row?.[field.toUpperCase()] ?? "").trim())
         .filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })),
     ]),
   ), [apiDimensions, budgetData, engineData]);
-  const glUploadRef = useRef(null);
-  const budUploadRef = useRef(null);
-  const reportSaveTimerRef = useRef(null);
   const pageTransitionTimerRef = useRef(null);
   const reportDataFetchSkipRef = useRef(false);
+  const reportDataRequestCountRef = useRef(0);
 
   // --- Report Configuration Data ---
   const [reports, setReports] = useState(() => {
@@ -403,6 +438,8 @@ export default function App({ onLogout = null }) {
   });
   const [reportsLoaded, setReportsLoaded] = useState(!apiConfigured);
   const [currentReportId, setCurrentReportId] = useState("rep-carmen-pnl");
+  const [setupDraft, setSetupDraft] = useState(null);
+  const [isSetupDirty, setIsSetupDirty] = useState(false);
   const [editingRow, setEditingRow] = useState(null);
   const [detailSelecting, setDetailSelecting] = useState(null);
   const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
@@ -432,6 +469,12 @@ export default function App({ onLogout = null }) {
     accessibleReports.find((r) => r.id === resolvedCurrentReportId) ||
     accessibleReports[0] ||
     null;
+  const setupReport = setupDraft?.id === activeReport?.id ? setupDraft : activeReport;
+
+  useEffect(() => {
+    setSetupDraft(activeReport);
+    setIsSetupDirty(false);
+  }, [activeReport?.id]);
   const activeReportUsesDayFilter = useMemo(() => {
     if (!activeReport) return false;
     if (activeReport.reportType === "Daily") return true;
@@ -460,22 +503,6 @@ export default function App({ onLogout = null }) {
       ),
     [activeReport],
   );
-  const activeReportHasIncompatibleColumns = useMemo(() => {
-    if (!activeReport) return false;
-    const allowedTypes =
-      activeReport.reportType === "Daily"
-        ? DAILY_COLUMN_TYPES
-        : MONTHLY_COLUMN_TYPES;
-    return (
-      Array.isArray(activeReport.columns) &&
-      activeReport.columns.some((col) => {
-        const type = String(col?.type || "")
-          .trim()
-          .toUpperCase();
-        return Boolean(type) && !allowedTypes.has(type);
-      })
-    );
-  }, [activeReport]);
   const appliedBudgetRevision = activeReportUsesBudget ? appliedRevision : "0";
 
   const loadReportDataFromApi = useCallback(
@@ -516,6 +543,7 @@ export default function App({ onLogout = null }) {
         }
       }
 
+      reportDataRequestCountRef.current += 1;
       setIsLoading(true);
       try {
         const apiData = await fetchCarmenReportData({
@@ -537,7 +565,8 @@ export default function App({ onLogout = null }) {
         setAlertMsg(message);
         throw error;
       } finally {
-        setIsLoading(false);
+        reportDataRequestCountRef.current = Math.max(0, reportDataRequestCountRef.current - 1);
+        setIsLoading(reportDataRequestCountRef.current > 0);
       }
     },
     [apiConfigured, activeReport, activeReportUsesDayFilter, periodOptions],
@@ -552,7 +581,7 @@ export default function App({ onLogout = null }) {
       try {
         const [apiData, dimensions] = await Promise.all([
           fetchCarmenMasterData({ year: globalYear }),
-          fetchCarmenDimensions().catch(() => []),
+          fetchCarmenDimensions().catch(() => ({})),
         ]);
         if (isCancelled) return;
 
@@ -605,7 +634,10 @@ export default function App({ onLogout = null }) {
           );
         }
       } finally {
-        if (!isCancelled) setIsMasterDataLoading(false);
+        if (!isCancelled) {
+          // react-doctor-disable-next-line no-loading-flag-reset-outside-finally -- This reset is already in finally; the guard prevents updates after effect cleanup.
+          setIsMasterDataLoading(false);
+        }
       }
     };
 
@@ -671,7 +703,10 @@ export default function App({ onLogout = null }) {
           );
         }
       } finally {
-        if (!isCancelled) setIsReportCatalogLoading(false);
+        if (!isCancelled) {
+          // react-doctor-disable-next-line no-loading-flag-reset-outside-finally -- This reset is already in finally; the guard prevents updates after effect cleanup.
+          setIsReportCatalogLoading(false);
+        }
       }
     };
 
@@ -740,171 +775,86 @@ export default function App({ onLogout = null }) {
     loadReportDataFromApi,
   ]);
 
-  useEffect(() => {
-    if (!apiConfigured || !activeReport?.id) return undefined;
-
-    const brokenReferences = findBrokenReferences(activeReport);
-    if (brokenReferences.length > 0) {
-      setReportCatalogError(
-        `Report contains ${brokenReferences.length} unresolved reference(s). Resolve invalid row or column references before saving.`,
-      );
-      return undefined;
-    }
-
-    const mappingConflicts = findRowMappingConflicts(activeReport, masterData);
-    if (mappingConflicts.length > 0) {
-      setReportCatalogError(
-        `Report contains ${mappingConflicts.length} conflicting row mapping(s). Resolve mapping conflicts before saving.`,
-      );
-      return undefined;
-    }
-
-    if (activeReportHasIncompatibleColumns) {
-      setReportCatalogError(
-        `${activeReport.reportType || "Monthly"} reports should only use compatible column types. Update any mismatched columns before saving.`,
-      );
-      return undefined;
-    }
-
-    if (reportSaveTimerRef.current) {
-      clearTimeout(reportSaveTimerRef.current);
-    }
-
-    setReportCatalogError(null);
-    reportSaveTimerRef.current = setTimeout(() => {
-      setIsSetupSaving(true);
-      saveCarmenReport(activeReport)
-        .then(() => {
-          setReportCatalogError(null);
-        })
-        .catch((error) => {
-          setReportCatalogError(
-            error.message || "Unable to save report definition.",
-          );
-        })
-        .finally(() => {
-          setIsSetupSaving(false);
-        });
-    }, 350);
-
-    return () => {
-      if (reportSaveTimerRef.current) {
-        clearTimeout(reportSaveTimerRef.current);
-      }
-    };
-  }, [
-    activeReport,
-    apiConfigured,
-    activeReportHasIncompatibleColumns,
-    masterData,
-  ]);
-
-  // ============================================================================
-  // 🚀 CSV PARSER
-  // ============================================================================
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (apiConfigured) {
-      e.target.value = null;
-      return;
-    }
-    setIsLoading(true);
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const parsed = parseGlCsvText(event.target.result);
-      if (parsed.error) {
-        setAlertMsg("ไฟล์ CSV ไม่ถูกต้อง หรือไม่มีข้อมูล");
-        setIsLoading(false);
-        return;
-      }
-      const {
-        parsedData,
-        newDeptsMap,
-        newAccCodesMap,
-        newGroups,
-        detectedYear,
-      } = parsed;
-
-      setMasterData((prev) => ({
-        ...prev,
-        depts: mergeAndSort(prev.depts, newDeptsMap),
-        accCodes: mergeAndSort(prev.accCodes, newAccCodesMap),
-        groups: {
-          L1: mergeAndSort(prev.groups.L1, newGroups.L1),
-          L2: mergeAndSort(prev.groups.L2, newGroups.L2),
-          L3: mergeAndSort(prev.groups.L3, newGroups.L3),
-          L4: mergeAndSort(prev.groups.L4, newGroups.L4),
-        },
-      }));
-
-      if (detectedYear) {
-        setGlobalYear(detectedYear);
-        setAppliedYear(detectedYear);
-      }
-
-      setEngineData(parsedData);
-      setIsLoading(false);
-      setAlertMsg(
-        `โหลดข้อมูล Transaction (GL) สำเร็จ ${parsedData.length} รายการ!\n(อัปเดตตัวกรองปีเป็น ${detectedYear || "ปัจจุบัน"} ให้อัตโนมัติแล้ว)`,
-      );
-    };
-    reader.onerror = () => {
-      setAlertMsg("เกิดข้อผิดพลาดในการอ่านไฟล์");
-      setIsLoading(false);
-    };
-    reader.readAsText(file);
-    e.target.value = null;
-  };
-
-  const handleBudgetUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (apiConfigured) {
-      e.target.value = null;
-      return;
-    }
-    setIsLoading(true);
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const parsed = parseBudgetCsvText(event.target.result);
-      if (parsed.error) {
-        setAlertMsg("ไฟล์ Budget CSV ไม่ถูกต้อง");
-        setIsLoading(false);
-        return;
-      }
-      const { parsedData, newDeptsMap, newAccCodesMap } = parsed;
-
-      setMasterData((prev) => ({
-        ...prev,
-        depts: mergeAndSort(prev.depts, newDeptsMap),
-        accCodes: mergeAndSort(prev.accCodes, newAccCodesMap),
-      }));
-
-      setBudgetData(parsedData);
-      setIsLoading(false);
-      setAlertMsg(`โหลดข้อมูล Budget สำเร็จ!`);
-    };
-    reader.readAsText(file);
-    e.target.value = null;
-  };
-
   const updateActiveReport = (updates) => {
     if (!activeReport) return;
-    setReports((prevReports) =>
-      prevReports.map((r) =>
-        r.id === activeReport.id ? { ...r, ...updates } : r,
-      ),
-    );
+    setSetupDraft((currentDraft) => ({
+      ...(currentDraft?.id === activeReport.id ? currentDraft : activeReport),
+      ...updates,
+    }));
+    setIsSetupDirty(true);
+    setReportCatalogError(null);
   };
 
-  const handleApplyFilters = () => {
-    setAppliedDepts([...globalDepts]);
+  const persistSetup = async () => {
+    setIsSetupSaving(true);
+    try {
+      if (apiConfigured) await saveCarmenReport(setupReport);
+      setReports((currentReports) => currentReports.map((report) =>
+        report.id === setupReport.id ? setupReport : report
+      ));
+      setSetupDraft(setupReport);
+      setIsSetupDirty(false);
+      setReportCatalogError(null);
+    } catch (error) {
+      setReportCatalogError(error.message || "Unable to save report definition.");
+    } finally {
+      setIsSetupSaving(false);
+    }
+  };
+
+  const handleSaveSetup = async () => {
+    if (!setupReport || !isSetupDirty || isSetupSaving) return;
+    const warnings = getSetupWarnings(setupReport, masterData);
+    if (warnings.length > 0) {
+      setSetupSaveWarnings(warnings);
+      return;
+    }
+    await persistSetup();
+  };
+
+  const discardSetupChanges = () => {
+    setSetupDraft(activeReport);
+    setIsSetupDirty(false);
+    setReportCatalogError(null);
+  };
+
+  const requestConfirmation = ({ msg, onConfirm }) => {
+    confirmActionRef.current = onConfirm;
+    setConfirmAction({ msg });
+  };
+
+  const closeConfirmation = () => {
+    confirmActionRef.current = null;
+    setConfirmAction(null);
+  };
+
+  const confirmPendingAction = () => {
+    const onConfirm = confirmActionRef.current;
+    closeConfirmation();
+    onConfirm?.();
+  };
+
+  const confirmDiscardSetup = () => {
+    if (!isSetupDirty) {
+      return;
+    }
+    confirmActionRef.current = discardSetupChanges;
+    setConfirmAction({ msg: "Discard all unsaved report settings?" });
+  };
+
+  const handleCancelSetup = () => confirmDiscardSetup();
+
+  const handleApplyFilters = async () => {
+    const nextDepts = [...globalDepts];
+    const nextRevision = activeReportUsesBudget ? globalRevision : "0";
+    const filtersChanged = String(appliedYear) !== String(globalYear)
+      || String(appliedPeriod) !== String(globalPeriod)
+      || String(appliedRevision) !== String(nextRevision)
+      || nextDepts.join("|") !== appliedDepts.join("|");
+    if (apiConfigured && filtersChanged) reportDataFetchSkipRef.current = true;
+    setAppliedDepts(nextDepts);
     setAppliedYear(globalYear);
     setAppliedPeriod(globalPeriod);
-    const nextRevision = activeReportUsesBudget ? globalRevision : "0";
     if (!activeReportUsesBudget && String(globalRevision) !== "0") {
       setAlertMsg(
         "Revision selector is ignored for reports without budget columns.",
@@ -912,51 +862,27 @@ export default function App({ onLogout = null }) {
     }
     setGlobalRevision(nextRevision);
     setAppliedRevision(nextRevision);
-  };
-
-  const handleSyncReportData = async (source) => {
-    if (!apiConfigured) {
-      if (source === "gl") {
-        glUploadRef.current?.click();
-      } else {
-        budUploadRef.current?.click();
-      }
-      return;
-    }
-
-    const nextAppliedDepts = [...globalDepts];
-    const nextAppliedYear = globalYear;
-    const nextAppliedPeriod = globalPeriod;
-    const nextAppliedRevision = activeReportUsesBudget ? globalRevision : "0";
-
-    reportDataFetchSkipRef.current = true;
-    setAppliedDepts(nextAppliedDepts);
-    setAppliedYear(nextAppliedYear);
-    setAppliedPeriod(nextAppliedPeriod);
-    setGlobalRevision(nextAppliedRevision);
-    setAppliedRevision(nextAppliedRevision);
-
+    if (!apiConfigured) return;
     try {
       await loadReportDataFromApi({
         reportId: activeReport?.id,
-        year: nextAppliedYear,
-        period: nextAppliedPeriod,
-        revision: nextAppliedRevision,
-        deptIds: nextAppliedDepts,
+        year: globalYear,
+        period: globalPeriod,
+        revision: nextRevision,
+        deptIds: nextDepts,
         day: activeReportDay,
-        source,
       });
-      setAlertMsg(`${source.toUpperCase()} data synced from Carmen API.`);
     } catch {
       // Error already surfaced by loadReportDataFromApi.
     }
   };
 
   const handleCloneReport = async () => {
-    if (!activeReport) return;
+    const sourceReport = setupReport || activeReport;
+    if (!sourceReport) return;
     if (apiConfigured) {
       try {
-        const apiClone = await cloneCarmenReport(activeReport.id);
+        const apiClone = await cloneCarmenReport(sourceReport.id);
         if (apiClone) {
           setReports((prev) => [...prev, apiClone]);
           setCurrentReportId(apiClone.id);
@@ -971,7 +897,7 @@ export default function App({ onLogout = null }) {
 
     const newId = "rep-" + Date.now();
     const clonedReport = cloneReport(
-      activeReport,
+      sourceReport,
       newId,
       currentUser?.id || "",
     );
@@ -1010,23 +936,23 @@ export default function App({ onLogout = null }) {
   };
 
   const handleDeleteReport = () => {
+    confirmActionRef.current = async () => {
+      const deletedReport = activeReport;
+      const newReports = reports.filter((r) => r.id !== currentReportId);
+      setReports(newReports);
+      setCurrentReportId(newReports.length > 0 ? newReports[0].id : null);
+      if (apiConfigured && deletedReport?.id) {
+        try {
+          await deleteCarmenReport(deletedReport.id);
+        } catch (error) {
+          setReportCatalogError(
+            error.message || "Unable to delete report from Carmen API.",
+          );
+        }
+      }
+    };
     setConfirmAction({
       msg: "Are you sure you want to completely delete this report?",
-      onConfirm: async () => {
-        const deletedReport = activeReport;
-        const newReports = reports.filter((r) => r.id !== currentReportId);
-        setReports(newReports);
-        setCurrentReportId(newReports.length > 0 ? newReports[0].id : null);
-        if (apiConfigured && deletedReport?.id) {
-          try {
-            await deleteCarmenReport(deletedReport.id);
-          } catch (error) {
-            setReportCatalogError(
-              error.message || "Unable to delete report from Carmen API.",
-            );
-          }
-        }
-      },
     });
   };
 
@@ -1062,26 +988,26 @@ export default function App({ onLogout = null }) {
   // --- Handlers ---
   const handleUpdateRow = (id, field, val) =>
     updateActiveReport({
-      rows: activeReport.rows.map((r) =>
+      rows: setupReport.rows.map((r) =>
         r.id === id ? { ...r, [field]: val } : r,
       ),
     });
   const handleUpdateRowMulti = (id, updates) =>
     updateActiveReport({
-      rows: activeReport.rows.map((r) =>
+      rows: setupReport.rows.map((r) =>
         r.id === id ? { ...r, ...updates } : r,
       ),
     });
   const handleUpdateCol = (id, field, val) =>
     updateActiveReport({
-      columns: activeReport.columns.map((c) =>
+      columns: setupReport.columns.map((c) =>
         c.id === id ? { ...c, [field]: val } : c,
       ),
     });
 
   const handleAddCol = (type) => {
-    const newColId = "C" + (activeReport.columns.length + 1) + "-" + Date.now();
-    const defaultDataType = activeReport?.reportType === "Daily" ? "DAC" : "AC";
+    const newColId = "C" + (setupReport.columns.length + 1) + "-" + Date.now();
+    const defaultDataType = setupReport?.reportType === "Daily" ? "DAC" : "AC";
     const newCol = {
       id: newColId,
       label:
@@ -1101,10 +1027,10 @@ export default function App({ onLogout = null }) {
       type: type === "data" ? defaultDataType : undefined,
       width: "",
     };
-    const descriptionPosition = Number(activeReport.descriptionPosition);
+    const descriptionPosition = Number(setupReport.descriptionPosition);
     updateActiveReport({
-      columns: [...activeReport.columns, newCol],
-      ...(Number.isInteger(descriptionPosition) && descriptionPosition === activeReport.columns.length
+      columns: [...setupReport.columns, newCol],
+      ...(Number.isInteger(descriptionPosition) && descriptionPosition === setupReport.columns.length
         ? { descriptionPosition: descriptionPosition + 1 }
         : {}),
     });
@@ -1112,8 +1038,8 @@ export default function App({ onLogout = null }) {
 
   const handleAddRow = (type) => {
     const lastRow =
-      activeReport.rows.length > 0
-        ? activeReport.rows[activeReport.rows.length - 1]
+      setupReport.rows.length > 0
+        ? setupReport.rows[setupReport.rows.length - 1]
         : null;
     const newRow = {
       id: "r-" + Date.now(),
@@ -1135,17 +1061,17 @@ export default function App({ onLogout = null }) {
       formula: type === "formula" ? "R1+R2" : "",
       indent: lastRow ? lastRow.indent : 0,
     };
-    updateActiveReport({ rows: [...activeReport.rows, newRow] });
+    updateActiveReport({ rows: [...setupReport.rows, newRow] });
   };
 
   const handleDeleteRow = (rowId) => {
-    updateActiveReport(deleteRowAndRewriteReferences(activeReport, rowId));
+    updateActiveReport(deleteRowAndRewriteReferences(setupReport, rowId));
   };
 
   const handleDeleteCol = (colId) => {
-    const deletedIndex = activeReport.columns.findIndex((column) => column.id === colId);
-    const nextReport = deleteColAndRewriteReferences(activeReport, colId);
-    const descriptionPosition = Number(activeReport.descriptionPosition);
+    const deletedIndex = setupReport.columns.findIndex((column) => column.id === colId);
+    const nextReport = deleteColAndRewriteReferences(setupReport, colId);
+    const descriptionPosition = Number(setupReport.descriptionPosition);
     updateActiveReport({
       ...nextReport,
       ...(Number.isInteger(descriptionPosition) && deletedIndex >= 0 && deletedIndex < descriptionPosition
@@ -1154,25 +1080,12 @@ export default function App({ onLogout = null }) {
     });
   };
 
-  const persistActiveReport = async (nextReport) => {
-    if (!apiConfigured || !nextReport) return;
-
-    try {
-      await saveCarmenReport(nextReport);
-      setReportCatalogError(null);
-    } catch (error) {
-      setReportCatalogError(
-        error.message || "Unable to save report definition.",
-      );
-    }
-  };
-
   const moveCol = (idx, dir) => {
-    updateActiveReport(moveColumnsAndRewriteReferences(activeReport, idx, dir));
+    updateActiveReport(moveColumnsAndRewriteReferences(setupReport, idx, dir));
   };
 
   const moveRow = (idx, dir) => {
-    updateActiveReport(moveRowsAndRewriteReferences(activeReport, idx, dir));
+    updateActiveReport(moveRowsAndRewriteReferences(setupReport, idx, dir));
   };
 
   // --- Display Labels (Configurable Period Formats) ---
@@ -1220,8 +1133,8 @@ export default function App({ onLogout = null }) {
     activeReport?.overridePeriodDisplay ||
     activeReport?.customPeriodLabel ||
     autoPeriodLabel;
-  const activeCategories = Array.isArray(activeReport?.category)
-    ? activeReport.category
+  const activeCategories = Array.isArray(setupReport?.category)
+    ? setupReport.category
     : ["ALL"];
   const activeCols = useMemo(
     () => activeReport?.columns?.filter((c) => c.isActive) || [],
@@ -1255,10 +1168,11 @@ export default function App({ onLogout = null }) {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   };
 
   const currentTheme = THEMES[activeReport?.theme || "blue"];
-  const showPageSkeleton = isPageTransitioning || isSetupSaving;
+  const showPageSkeleton = isPageTransitioning;
   const visibleActiveTab = canSetupReports ? activeTab : "report";
   const activeTabMotionClass =
     tabMotionDirection === null
@@ -1272,15 +1186,53 @@ export default function App({ onLogout = null }) {
       ? "flex h-full w-full min-h-0 flex-col"
       : "flex h-full w-full min-h-0 flex-col gap-3";
 
-  const handleTabChange = (nextTab) => {
-    if (nextTab === visibleActiveTab) return;
-    if ((nextTab === "setup" || nextTab === "import") && !canSetupReports)
-      return;
+  const applyTabChange = (nextTab) => {
     setTabMotionDirection(
       nextTab === "report" ? "backward" : "forward",
     );
     setActiveTab(nextTab);
   };
+
+  const handleTabChange = (nextTab) => {
+    if (nextTab === visibleActiveTab) return;
+    if ((nextTab === "setup" || nextTab === "import") && !canSetupReports) return;
+    if (visibleActiveTab === "setup" && isSetupDirty) {
+      confirmActionRef.current = () => {
+        discardSetupChanges();
+        applyTabChange(nextTab);
+      };
+      setConfirmAction({ msg: "Discard all unsaved report settings?" });
+      return;
+    }
+    applyTabChange(nextTab);
+  };
+
+  const handleReportChange = (reportId) => {
+    const openReport = () => {
+      setCurrentReportId(reportId);
+      applyTabChange("report");
+      setIsSidebarOpen(false);
+    };
+    if (visibleActiveTab === "setup" && isSetupDirty) {
+      confirmActionRef.current = () => {
+        discardSetupChanges();
+        openReport();
+      };
+      setConfirmAction({ msg: "Discard all unsaved report settings?" });
+      return;
+    }
+    openReport();
+  };
+
+  useEffect(() => {
+    if (!isSetupDirty) return undefined;
+    const warnBeforeUnload = (event) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, [isSetupDirty]);
 
   const triggerPageTransition = () => {
     if (pageTransitionTimerRef.current) {
@@ -1399,11 +1351,7 @@ export default function App({ onLogout = null }) {
                   resolvedCurrentReportId === report.id ? "secondary" : "ghost"
                 }
                 className="w-full justify-start gap-2"
-                onClick={() => {
-                  setCurrentReportId(report.id);
-                  handleTabChange("report");
-                  setIsSidebarOpen(false);
-                }}
+                onClick={() => handleReportChange(report.id)}
               >
                 <FileText className="size-4" />
                 <span className="truncate">{report.name}</span>
@@ -1481,9 +1429,65 @@ export default function App({ onLogout = null }) {
         </div>
       )}
 
+      <Dialog open={isLoading}>
+        <DialogContent
+          showCloseButton={false}
+          onEscapeKeyDown={(event) => event.preventDefault()}
+          onPointerDownOutside={(event) => event.preventDefault()}
+          className="sm:max-w-sm"
+        >
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <LoaderCircle className="size-5 animate-spin motion-reduce:animate-none" />
+              Loading report data
+            </DialogTitle>
+            <DialogDescription>
+              Please wait while Carmen prepares the report. Other actions are temporarily unavailable.
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={setupSaveWarnings.length > 0}
+        onOpenChange={(open) => !open && setSetupSaveWarnings([])}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Save incomplete report template?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This template can be saved, but report data may be incomplete or incorrect until these items are fixed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <ScrollArea className="max-h-72 rounded-lg border border-border">
+            <ul className="space-y-2 p-4 text-sm text-foreground">
+              {setupSaveWarnings.map((warning) => (
+                <li key={warning} className="flex gap-2">
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600" />
+                  <span className="text-pretty">{warning}</span>
+                </li>
+              ))}
+            </ul>
+          </ScrollArea>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setSetupSaveWarnings([])}>
+              Go back
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setSetupSaveWarnings([]);
+                persistSetup();
+              }}
+            >
+              Save anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog
         open={Boolean(confirmAction)}
-        onOpenChange={(open) => !open && setConfirmAction(null)}
+        onOpenChange={(open) => !open && closeConfirmation()}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1493,15 +1497,12 @@ export default function App({ onLogout = null }) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setConfirmAction(null)}>
+            <AlertDialogCancel onClick={closeConfirmation}>
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              onClick={() => {
-                confirmAction?.onConfirm?.();
-                setConfirmAction(null);
-              }}
+              onClick={confirmPendingAction}
             >
               Confirm
             </AlertDialogAction>
@@ -1792,58 +1793,14 @@ export default function App({ onLogout = null }) {
                         size="sm"
                         className={`h-8 w-full self-end border px-3 text-xs xl:w-auto ${NEUTRAL_BUTTON_CLASS}`}
                         onClick={handleApplyFilters}
+                        disabled={isLoading}
                       >
-                        Apply
+                        {isLoading ? <LoaderCircle className="animate-spin motion-reduce:animate-none" /> : null}
+                        {isLoading ? "Loading..." : "Apply"}
                       </Button>
                     </div>
 
                     <div className="flex flex-wrap gap-2 xl:ml-4 xl:flex-nowrap xl:self-end xl:justify-end">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className={`h-8 w-full sm:w-auto ${NEUTRAL_BUTTON_CLASS}`}
-                        onClick={() => handleSyncReportData("gl")}
-                        title={
-                          apiConfigured
-                            ? "Refresh GL data from Carmen API"
-                            : "Fallback to GL CSV import"
-                        }
-                      >
-                        <RefreshCw />
-                        GL
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className={`h-8 w-full sm:w-auto ${NEUTRAL_BUTTON_CLASS}`}
-                        onClick={() => handleSyncReportData("bud")}
-                        title={
-                          apiConfigured
-                            ? "Refresh budget data from Carmen API"
-                            : "Fallback to budget CSV import"
-                        }
-                      >
-                        <RefreshCw />
-                        BUD
-                      </Button>
-                      <input
-                        ref={glUploadRef}
-                        type="file"
-                        accept=".csv"
-                        aria-label="Upload GL CSV"
-                        onChange={(e) => handleFileUpload(e)}
-                        className="hidden"
-                      />
-                      <input
-                        ref={budUploadRef}
-                        type="file"
-                        accept=".csv"
-                        aria-label="Upload budget CSV"
-                        onChange={(e) => handleBudgetUpload(e)}
-                        className="hidden"
-                      />
                       <Button
                         variant="outline"
                         size="sm"
@@ -1890,7 +1847,7 @@ export default function App({ onLogout = null }) {
                   <Button
                     onClick={() => window.location.reload()}
                     variant="outline"
-                    className="h-9 border border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:border-destructive/40 transition-all gap-2"
+                    className="h-9 border border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:border-destructive/40 transition-colors gap-2"
                   >
                     <RefreshCw className="size-3.5" />
                     Retry Connection
@@ -1947,9 +1904,13 @@ export default function App({ onLogout = null }) {
                         themeMode={themeMode}
                         masterData={masterData}
                         reportOptions={reportOptions}
-                        activeReport={activeReport}
+                        activeReport={setupReport}
                         activeCategories={activeCategories}
                         updateActiveReport={updateActiveReport}
+                        isDirty={isSetupDirty}
+                        isSaving={isSetupSaving}
+                        onSave={handleSaveSetup}
+                        onCancel={handleCancelSetup}
                         onBusyTransition={triggerPageTransition}
                         handleCloneReport={handleCloneReport}
                         handleCreateBlankReport={handleCreateBlankReport}
@@ -1965,7 +1926,7 @@ export default function App({ onLogout = null }) {
                         moveRow={moveRow}
                         handleDeleteRow={handleDeleteRow}
                         setEditingRow={setEditingRow}
-                        setConfirmAction={setConfirmAction}
+                        setConfirmAction={requestConfirmation}
                       />
                     </React.Suspense>
                   )}
@@ -2006,7 +1967,7 @@ export default function App({ onLogout = null }) {
         <AccessModal
           isOpen={isAccessModalOpen}
           masterData={masterData}
-          activeReport={activeReport}
+          activeReport={setupReport}
           onClose={() => setIsAccessModalOpen(false)}
           onUpdateUsers={(newUsers) =>
             updateActiveReport({ assignedUsers: newUsers })
@@ -2027,23 +1988,7 @@ export default function App({ onLogout = null }) {
           onOpenDetailSelector={({ field, title, subTitle, items }) =>
             setDetailSelecting({ field, title, subTitle, items })
           }
-          onApply={async () => {
-            const nextRows = activeReport.rows.map((row) =>
-              row.id === editingRow.id
-                ? {
-                    ...row,
-                    desc: editingRow.desc,
-                    dept: editingRow.dept,
-                    deptGroup: editingRow.deptGroup,
-                    accCodes: editingRow.accCodes,
-                    groupLevel: editingRow.groupLevel,
-                    groups: editingRow.groups,
-                    dim1: editingRow.dim1,
-                    dim2: editingRow.dim2,
-                  }
-                : row,
-            );
-            const nextReport = { ...activeReport, rows: nextRows };
+          onApply={() => {
             handleUpdateRowMulti(editingRow.id, {
               desc: editingRow.desc,
               dept: editingRow.dept,
@@ -2055,7 +2000,6 @@ export default function App({ onLogout = null }) {
               dim2: editingRow.dim2,
             });
             setEditingRow(null);
-            await persistActiveReport(nextReport);
           }}
           onClose={() => setEditingRow(null)}
         />

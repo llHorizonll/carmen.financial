@@ -302,9 +302,54 @@ export const fetchCarmenDimensions = async () => {
     },
   });
 
-  return [...new Set((Array.isArray(response?.Data) ? response.Data : [])
-    .map((item) => String(item?.Caption || '').trim())
-    .filter(Boolean))];
+  const parseValues = (value) => {
+    if (Array.isArray(value)) return toTrimmedStringArray(value);
+    const text = String(value || '').trim();
+    if (!text) return [];
+    try {
+      return toTrimmedStringArray(JSON.parse(text));
+    } catch {
+      return text.split(/[\r\n,|]+/).map((item) => item.trim()).filter(Boolean);
+    }
+  };
+
+  return Object.fromEntries((Array.isArray(response?.Data) ? response.Data : [])
+    .sort((left, right) => String(left?.Id || '').localeCompare(String(right?.Id || ''), undefined, { numeric: true }))
+    .slice(0, 4)
+    .map((item, index) => [`dim${index + 1}`, [...new Set(parseValues(item?.ListOfValues))]]));
+};
+
+export const fetchCarmenUsers = async () => {
+  if (!isCarmenApiConfigured()) {
+    throw new Error('Carmen API session is not configured.');
+  }
+
+  const response = await requestCarmenJson('/api/user/search', {
+    method: 'POST',
+    body: {
+      Limit: 0,
+      Page: 0,
+      WhereGroupList: [{
+        AndOr: 'And',
+        ConditionList: [{ AndOr: 'And', Field: 'Active', Operator: '=', Value: true }],
+      }],
+    },
+  });
+
+  return (Array.isArray(response?.Data) ? response.Data : [])
+    .filter((user) => user?.Active !== false)
+    .map((user) => {
+      const userName = String(user?.UserName || '').trim();
+      return {
+        id: userName,
+        name: userName,
+        role: 'User',
+        source: 'carmen-api',
+        userName,
+      };
+    })
+    .filter((user) => user.id)
+    .sort((left, right) => left.name.localeCompare(right.name));
 };
 
 export const fetchCarmenReportPeriods = async ({ year } = {}) => {
@@ -444,11 +489,18 @@ export const fetchCarmenMasterData = async ({ year }) => {
   }
 
   const session = getStoredCarmenSession();
+  const usersPromise = fetchCarmenUsers().catch(() => []);
   try {
-    const masterData = await requestCarmenJson(`/api/report-master-data?year=${encodeURIComponent(year)}`);
+    const [masterData, users] = await Promise.all([
+      requestCarmenJson(`/api/report-master-data?year=${encodeURIComponent(year)}`),
+      usersPromise,
+    ]);
+    const currentUser = masterData?.currentUser || session?.user || null;
     return {
-      currentUser: masterData?.currentUser || session?.user || null,
-      users: Array.isArray(masterData?.users) ? masterData.users : [],
+      currentUser,
+      users: currentUser
+        ? [currentUser, ...users.filter((user) => String(user.id) !== String(currentUser.id))]
+        : users,
       companyProfile: adaptCarmenCompany(masterData?.companyProfile),
       depts: adaptCarmenDepartments(masterData?.depts),
       accCodes: adaptCarmenAccountCodes(masterData?.accCodes),
@@ -467,12 +519,13 @@ export const fetchCarmenMasterData = async ({ year }) => {
       throw new Error('Carmen session expired. Please sign in again.');
     }
 
-    const [company, departments, accountCodes, periods, budgets] = await Promise.all([
+    const [company, departments, accountCodes, periods, budgets, users] = await Promise.all([
       requestCarmenJson('/api/company'),
       requestCarmenJson('/api/department'),
       requestCarmenJson('/api/accountCode'),
       requestCarmenJson(`/api/glPeriod/year/${encodeURIComponent(year)}`),
       requestCarmenJson('/api/budget'),
+      usersPromise,
     ]);
 
     const currentUser = session?.user || {
@@ -484,7 +537,10 @@ export const fetchCarmenMasterData = async ({ year }) => {
     };
     return {
       currentUser,
-      users: [currentUser],
+      users: [currentUser, ...users.filter((user) =>
+        String(user.id) !== String(currentUser.id)
+        && String(user.userName) !== String(currentUser.userName || session?.username)
+      )],
       companyProfile: adaptCarmenCompany(company),
       depts: adaptCarmenDepartments(departments),
       accCodes: adaptCarmenAccountCodes(accountCodes),

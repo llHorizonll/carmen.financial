@@ -29,6 +29,18 @@ const REPORT_TYPE_OPTIONS = [
   { id: 'Monthly', label: 'Monthly' },
   { id: 'Daily', label: 'Daily' },
 ];
+const PERIOD_FORMAT_LABELS = {
+  standard: "Standard (Period : 2026-02)",
+  year_month: "Year-Month (2026-02)",
+  numeric: "Numeric Full (02/2026)",
+  numeric_short: "Numeric Short (02/26)",
+  short: "Short Month + YYYY (Feb 2026)",
+  short_yy: "Short Month + YY (Feb '26)",
+  long: "Long Month + YYYY (February 2026)",
+  month_only: "Month Only (February)",
+  day_month_year: "Day Month Year (28 Feb 2026)",
+  end_of_month: "End of Month (February 28, 2026)",
+};
 
 function ReportActionButtons({
   friendlyButtonClassName,
@@ -137,19 +149,6 @@ export default function ReportDetailsPanel({
         { id: 'green', label: 'Emerald Green' },
         { id: 'gray', label: 'Slate Gray' },
       ];
-  const periodFormatLabels = {
-    standard: "Standard (Period : 2026-02)",
-    year_month: "Year-Month (2026-02)",
-    numeric: "Numeric Full (02/2026)",
-    numeric_short: "Numeric Short (02/26)",
-    short: "Short Month + YYYY (Feb 2026)",
-    short_yy: "Short Month + YY (Feb '26)",
-    long: "Long Month + YYYY (February 2026)",
-    month_only: "Month Only (February)",
-    day_month_year: "Day Month Year (28 Feb 2026)",
-    end_of_month: "End of Month (February 28, 2026)",
-  };
-
   const periodFormatOptions = (reportOptions.periodFormats?.length > 0
     ? reportOptions.periodFormats
     : [
@@ -165,7 +164,7 @@ export default function ReportDetailsPanel({
         { id: 'end_of_month', label: 'End of Month (February 28, 2026)' },
       ]).map(option => ({
         ...option,
-        label: periodFormatLabels[option.id] || option.label
+        label: PERIOD_FORMAT_LABELS[option.id] || option.label
       }));
   const accountCategoryOptions = reportOptions.accountCategories?.length > 0
     ? reportOptions.accountCategories

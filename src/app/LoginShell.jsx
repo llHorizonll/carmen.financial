@@ -373,7 +373,7 @@ export default function LoginShell() {
               <div className="flex flex-col items-stretch gap-3 px-4 pb-5 pt-3 sm:pb-6">
                 <Button
                   type="submit"
-                  className="h-11 w-full border border-primary/90 bg-primary text-primary-foreground shadow-sm transition-all hover:-translate-y-px hover:bg-primary/90 hover:shadow-md active:translate-y-0"
+                  className="h-11 w-full border border-primary/90 bg-primary text-primary-foreground shadow-sm transition-transform hover:-translate-y-px hover:bg-primary/90 hover:shadow-md active:translate-y-0"
                   disabled={!canSubmit}
                 >
                   {isLoggingIn ? 'Signing in...' : 'Sign in'}

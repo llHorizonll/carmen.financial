@@ -17,6 +17,8 @@ vi.mock('./RowsConfigurator.jsx', () => ({
 
 describe('ReportSetup', () => {
   it('shows columns by default and switches to rows on tab click', () => {
+    const onSave = vi.fn();
+    const onCancel = vi.fn();
     render(
       <ReportSetup
         activeReport={{
@@ -26,8 +28,17 @@ describe('ReportSetup', () => {
         }}
         activeCategories={['I']}
         reportOptions={{ themes: [{ id: 'blue', label: 'Classic Blue' }] }}
+        isDirty
+        onSave={onSave}
+        onCancel={onCancel}
       />
     );
+
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel changes' }));
+    expect(onSave).toHaveBeenCalledOnce();
+    expect(onCancel).toHaveBeenCalledOnce();
 
     expect(screen.getByText('Columns Configurator Content')).toBeInTheDocument();
     expect(screen.getByText('Rows Configurator Content')).toBeInTheDocument();

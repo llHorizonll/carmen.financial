@@ -27,7 +27,7 @@ describe('getCarmenApiConfig', () => {
   it('uses local Carmen WebApi defaults when window config is missing', () => {
     expect(getCarmenApiConfig()).toEqual({
       baseUrl: 'http://localhost/Carmen.WebApi',
-      adminToken: 'f9ebce3d77f2f445dee52ba252cc53ee',
+      adminToken: '<admin-token>',
     });
   });
 });

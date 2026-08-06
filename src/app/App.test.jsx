@@ -98,6 +98,22 @@ describe('App shell', () => {
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument(), { timeout: 5000 });
   });
 
+  it('keeps setup edits as a draft and restores them on Cancel changes', async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
+
+    const reportName = await screen.findByDisplayValue('Profit and Loss');
+    fireEvent.change(reportName, { target: { value: 'Draft report name' } });
+
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel changes' }));
+    expect(screen.getByText('Discard all unsaved report settings?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    await waitFor(() => expect(screen.getByDisplayValue('Profit and Loss')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+  });
+
   it('opens the Excel template wizard as a separate admin page', async () => {
     render(<App />);
 
@@ -148,69 +164,7 @@ describe('App shell', () => {
     }
   });
 
-  it('handles GL CSV uploads through the file input flow', async () => {
-    const csv = [
-      'year,deptcode,acccode,accname,accnature,group1,group2,group3,group4,amt1,bfamt1',
-      '2025,101,4001,Rooms,I,FOOD,BEV,MAIN,DETAIL,100,25',
-    ].join('\n');
-
-    class MockFileReader {
-      readAsText() {
-        this.onload({ target: { result: csv } });
-      }
-    }
-
-    const originalFileReader = globalThis.FileReader;
-    globalThis.FileReader = MockFileReader;
-
-    try {
-      const { container } = render(<App />);
-      const glInput = container.querySelectorAll('input[type="file"]')[0];
-
-      fireEvent.change(glInput, { target: { files: [new File(['ignored'], 'gl.csv', { type: 'text/csv' })] } });
-
-      await waitFor(() => expect(screen.getByText(/Transaction \(GL\)/)).toBeInTheDocument());
-      fireEvent.click(screen.getAllByRole('button', { name: 'OK' })[0]);
-      await waitFor(() => expect(screen.queryByText(/Transaction \(GL\)/)).not.toBeInTheDocument());
-      expect(screen.getByDisplayValue('2025')).toBeInTheDocument();
-    } finally {
-      globalThis.FileReader = originalFileReader;
-    }
-  });
-
-  it('handles Budget CSV uploads through the file input flow', async () => {
-    const csv = [
-      'deptcode,acccode,caption,amt1,amt2',
-      '102,5002,Budget Rooms,10,20',
-    ].join('\n');
-
-    class MockFileReader {
-      readAsText() {
-        this.onload({ target: { result: csv } });
-      }
-    }
-
-    const originalFileReader = globalThis.FileReader;
-    globalThis.FileReader = MockFileReader;
-
-    try {
-      const { container } = render(<App />);
-      const budgetInput = container.querySelectorAll('input[type="file"]')[1];
-
-      fireEvent.change(budgetInput, { target: { files: [new File(['ignored'], 'budget.csv', { type: 'text/csv' })] } });
-
-      const notice = await screen.findByText('Notice', {}, { timeout: 5000 });
-      const noticeCard = notice.closest('[data-slot="card"]');
-      expect(within(noticeCard).getByText(/Budget/)).toBeInTheDocument();
-      fireEvent.click(screen.getAllByRole('button', { name: 'OK' })[0]);
-      await waitFor(() => expect(screen.queryByText('Notice')).not.toBeInTheDocument());
-      expect(screen.getByText('Budget')).toBeInTheDocument();
-    } finally {
-      globalThis.FileReader = originalFileReader;
-    }
-  });
-
-  it('ignores CSV file uploads when Carmen API sync is configured', async () => {
+  it('uses Apply as the only report data refresh action', async () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.getStoredCarmenSession.mockReturnValue({
       user: {
@@ -289,34 +243,25 @@ describe('App shell', () => {
       },
     ]);
 
-    class MockFileReader {
-      readAsText() {
-        throw new Error('CSV parsing should not run when Carmen API sync is configured.');
-      }
-    }
+    render(<App />);
+    await waitFor(() => expect(screen.getAllByText('API Sync Report').length).toBeGreaterThan(0));
+    await waitFor(() => expect(reportApiMocks.fetchCarmenReportData).toHaveBeenCalled());
 
-    const originalFileReader = globalThis.FileReader;
-    globalThis.FileReader = MockFileReader;
+    let resolveApply;
+    reportApiMocks.fetchCarmenReportData.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveApply = resolve;
+    }));
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(await screen.findByRole('dialog', { name: 'Loading report data' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Apply' })).not.toBeInTheDocument();
+    resolveApply({ actualRows: [], budgetRows: [] });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Loading report data' })).not.toBeInTheDocument());
 
-    try {
-      const { container } = render(<App />);
-      await waitFor(() => expect(screen.getAllByText('API Sync Report').length).toBeGreaterThan(0));
-
-      fireEvent.click(screen.getByRole('button', { name: /GL/i }));
-      await waitFor(() => expect(screen.getByText('GL data synced from Carmen API.')).toBeInTheDocument());
-
-      const glInput = container.querySelectorAll('input[type="file"]')[0];
-      fireEvent.change(glInput, { target: { files: [new File(['ignored'], 'gl.csv', { type: 'text/csv' })] } });
-
-      await waitFor(() => expect(screen.queryByText(/Transaction \(GL\)/)).not.toBeInTheDocument());
-      await waitFor(() => expect(screen.getByText('Revenue')).toBeInTheDocument());
-      expect(reportApiMocks.fetchCarmenReportData).toHaveBeenCalled();
-    } finally {
-      globalThis.FileReader = originalFileReader;
-    }
+    expect(screen.queryByRole('button', { name: /^GL$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^BUD$/i })).not.toBeInTheDocument();
   });
 
-  it('clears the report catalog error after fixing broken references', async () => {
+  it('warns about broken references but allows saving anyway', async () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.getStoredCarmenSession.mockReturnValue({
       user: {
@@ -393,15 +338,19 @@ describe('App shell', () => {
 
     const { container } = render(<App />);
 
-    await waitFor(() => expect(screen.getByText('Report catalog error')).toBeInTheDocument());
-
     fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
 
     await waitFor(() => expect(screen.getByText(/Broken row references found/i)).toBeInTheDocument());
     const formulaInput = await screen.findByDisplayValue('R99');
-    fireEvent.change(formulaInput, { target: { value: 'R1' } });
+    fireEvent.change(formulaInput, { target: { value: 'R98' } });
+    expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(await screen.findByRole('alertdialog', { name: 'Save incomplete report template?' })).toBeInTheDocument();
+    expect(screen.getByText(/Row R1 \(Revenue\).*invalid reference R98/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save anyway' }));
 
-    await waitFor(() => expect(screen.queryByText('Report catalog error')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('alertdialog', { name: 'Save incomplete report template?' })).not.toBeInTheDocument());
+    expect(reportApiMocks.saveCarmenReport).toHaveBeenCalledTimes(1);
   });
 
   it('falls back to localStorage report definitions when the API catalog load fails', async () => {
@@ -645,7 +594,7 @@ describe('App shell', () => {
     expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalledWith(expect.objectContaining({ id: 'rep-daily-invalid' }));
   });
 
-  it('blocks saving duplicate row mappings before persist', async () => {
+  it('warns about duplicate row mappings but allows saving anyway', async () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
       currentUser: {
@@ -715,8 +664,14 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Duplicate Mapping').length).toBeGreaterThan(0));
-    await waitFor(() => expect(screen.getByTitle(/conflicting row mapping/i)).toBeInTheDocument());
-    expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalledWith(expect.objectContaining({ id: 'rep-duplicate-mapping' }));
+    fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
+    const reportName = await screen.findByDisplayValue('Duplicate Mapping');
+    fireEvent.change(reportName, { target: { value: 'Duplicate Mapping Edit' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(await screen.findByText(/Row R1 \(Revenue\).*double count/i)).toBeInTheDocument();
+    expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Save anyway' }));
+    await waitFor(() => expect(reportApiMocks.saveCarmenReport).toHaveBeenCalledWith(expect.objectContaining({ id: 'rep-duplicate-mapping' })));
   });
 
   it('warns when manual row codes do not exist in API master data', async () => {
@@ -795,7 +750,7 @@ describe('App shell', () => {
     expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalledWith(expect.objectContaining({ id: 'rep-invalid-master-data' }));
   });
 
-  it('saves the report after master data is refreshed with a valid account code', async () => {
+  it('does not save a report when master data refreshes', async () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.getStoredCarmenSession.mockReturnValue({
       user: {
@@ -913,10 +868,7 @@ describe('App shell', () => {
     fireEvent.change(yearInput, { target: { value: String(new Date().getFullYear() + 1) } });
 
     await waitFor(() => expect(reportApiMocks.fetchCarmenMasterData).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(reportApiMocks.saveCarmenReport).toHaveBeenCalledWith(expect.objectContaining({
-      id: 'rep-validating',
-      rows: [expect.objectContaining({ accCodes: '4001' })],
-    })));
+    expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalled();
   });
 
   it('persists edited account codes from the mapping modal to the API', async () => {
@@ -994,9 +946,6 @@ describe('App shell', () => {
 
     const { container } = render(<App />);
 
-    await waitFor(() => expect(reportApiMocks.saveCarmenReport).toHaveBeenCalled());
-    reportApiMocks.saveCarmenReport.mockClear();
-
     fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument());
 
@@ -1007,6 +956,9 @@ describe('App shell', () => {
     const accTextarea = screen.getByPlaceholderText('e.g. 4001, 4002');
     fireEvent.change(accTextarea, { target: { value: '4001' } });
     fireEvent.click(screen.getByRole('button', { name: 'Apply Mapping' }));
+
+    expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(reportApiMocks.saveCarmenReport).toHaveBeenCalledWith(expect.objectContaining({
       id: 'rep-edit-modal',
@@ -1089,7 +1041,7 @@ describe('App shell', () => {
           { id: 'C1', label: 'Actual', isActive: true, isFormula: false, isPercent: false, yearMode: 'current', periodMode: 'current', type: 'AC', width: '' },
         ],
         rows: [
-          { id: 'r1', desc: 'Revenue', isActive: true, isHeader: false, isTotal: false, dept: '', groupLevel: 'L4', groups: 'FOO', accCodes: '4001', percentBase: '', formula: '', indent: 0 },
+          { id: 'r1', desc: 'Revenue', isActive: true, isHeader: false, isTotal: false, dept: '', groupLevel: 'L4', groups: '', accCodes: '', percentBase: '', formula: '', indent: 0 },
         ],
       },
     ]);
@@ -1116,6 +1068,18 @@ describe('App shell', () => {
 
     await waitFor(() => expect(screen.getByText('Balance Sheet')).toBeInTheDocument());
     expect(screen.getByText(/Admin User, General Manager/i)).toBeInTheDocument();
+    expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Manage Report Access' })).not.toBeInTheDocument());
+    const saveChanges = screen.getByRole('button', { name: 'Save changes' });
+    expect(saveChanges).toBeEnabled();
+    fireEvent.click(saveChanges);
+    await waitFor(() => expect(reportApiMocks.saveCarmenReport).toHaveBeenCalledTimes(1));
+    expect(reportApiMocks.saveCarmenReport).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'rep-setup-edits',
+      category: ['B'],
+      assignedUsers: ['admin', 'u2'],
+    }));
   });
 
   it('renders API-backed users in the role selector and access modal', async () => {
@@ -1214,7 +1178,7 @@ describe('App shell', () => {
     expect(screen.getAllByText('Finance Owner').length).toBeGreaterThan(1);
   });
 
-  it('syncs GL and BUD data from the Carmen API buttons', async () => {
+  it('does not render separate GL and BUD refresh buttons', async () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.getStoredCarmenSession.mockReturnValue({
       user: {
@@ -1296,15 +1260,9 @@ describe('App shell', () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('API Sync Report').length).toBeGreaterThan(0));
-    const initialFetchCount = reportApiMocks.fetchCarmenReportData.mock.calls.length;
-
-    fireEvent.click(screen.getByRole('button', { name: /GL/i }));
-    await waitFor(() => expect(screen.getByText('GL data synced from Carmen API.')).toBeInTheDocument());
-    expect(reportApiMocks.fetchCarmenReportData.mock.calls.length).toBe(initialFetchCount + 1);
-
-    fireEvent.click(screen.getByRole('button', { name: /BUD/i }));
-    await waitFor(() => expect(screen.getByText('BUD data synced from Carmen API.')).toBeInTheDocument());
-    expect(reportApiMocks.fetchCarmenReportData.mock.calls.length).toBe(initialFetchCount + 2);
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Loading report data' })).not.toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /^GL$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^BUD$/i })).not.toBeInTheDocument();
   });
 
   it('renders API-loaded constant dropdown options in setup mode', async () => {
@@ -1621,7 +1579,7 @@ describe('App shell', () => {
     expect(screen.getByRole('button', { name: 'VIEW' }).className).toMatch(/bg-stone|border-stone|text-stone|ring-stone|bg-primary|ring-primary/);
     expect(screen.getByRole('button', { name: /DEPT/i }).className).toMatch(/bg-stone|border-stone|text-stone|bg-muted|border-border|text-muted/);
     expect(screen.getByRole('button', { name: 'Apply' }).className).toMatch(/bg-stone|border-stone|text-stone|bg-muted|border-border|text-muted/);
-    expect(screen.getByRole('button', { name: /GL/i }).className).toMatch(/bg-stone|border-stone|text-stone|bg-muted|border-border|text-muted/);
+    expect(screen.getByTitle('Export to Excel').className).toMatch(/bg-stone|border-stone|text-stone|bg-muted|border-border|text-muted/);
   });
 
   it('rejects an out-of-range day for PTD reports before loading report data', async () => {
