@@ -339,6 +339,7 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
+    fireEvent.click(await screen.findByRole('tab', { name: /Rows/i }));
 
     await waitFor(() => expect(screen.getByText(/Broken row references found/i)).toBeInTheDocument());
     const formulaInput = await screen.findByDisplayValue('R99');
@@ -744,6 +745,7 @@ describe('App shell', () => {
 
     await waitFor(() => expect(screen.getAllByText('Invalid Master Data Mapping').length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
+    fireEvent.click(await screen.findByRole('tab', { name: /Rows/i }));
 
     await waitFor(() => expect(screen.getByText(/Unknown department code\(s\): 999/i)).toBeInTheDocument());
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -948,6 +950,7 @@ describe('App shell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('tab', { name: /Rows/i }));
 
     const rowInput = screen.getByDisplayValue('Rooms');
     const row = rowInput.closest('tr');

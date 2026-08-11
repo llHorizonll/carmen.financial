@@ -6,8 +6,11 @@
   "packageManager": "bun@1.3.9",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/prerender-login.mjs && node scripts/critical-css.mjs",
     "preview": "vite preview",
+    "perf:bundle": "node scripts/performance-audit.mjs --bundle-only",
+    "perf:audit": "node scripts/performance-audit.mjs",
+    "perf:audit:quick": "node scripts/performance-audit.mjs --quick",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -32,7 +35,9 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@vitejs/plugin-react": "^6.0.2",
+    "critters": "^0.0.25",
     "jsdom": "^29.1.1",
+    "lighthouse": "^13.4.1",
     "tailwindcss": "^4.3.0",
     "vite": "^8.0.16",
     "vitest": "^4.1.8"

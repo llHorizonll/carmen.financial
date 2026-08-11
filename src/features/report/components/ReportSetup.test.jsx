@@ -41,14 +41,11 @@ describe('ReportSetup', () => {
     expect(onCancel).toHaveBeenCalledOnce();
 
     expect(screen.getByText('Columns Configurator Content')).toBeInTheDocument();
-    expect(screen.getByText('Rows Configurator Content')).toBeInTheDocument();
-    expect(screen.getByText('Columns Configurator Content').closest('section')).not.toHaveAttribute('hidden');
-    expect(screen.getByText('Rows Configurator Content').closest('section')).toHaveAttribute('hidden');
+    expect(screen.queryByText('Rows Configurator Content')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('tab', { name: /Rows/i }));
 
     expect(screen.getByText('Rows Configurator Content')).toBeInTheDocument();
-    expect(screen.getByText('Rows Configurator Content').closest('section')).not.toHaveAttribute('hidden');
-    expect(screen.getByText('Columns Configurator Content').closest('section')).toHaveAttribute('hidden');
+    expect(screen.queryByText('Columns Configurator Content')).not.toBeInTheDocument();
   });
 });

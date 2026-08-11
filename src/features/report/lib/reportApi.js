@@ -8,14 +8,23 @@ import {
   adaptCarmenReportDefinitions,
   adaptCarmenLoginUser,
 } from './reportAdapters.js';
+import {
+  clearCarmenSession,
+  getBusinessUnitDisplayName,
+  getBusinessUnitTenant,
+  getStoredCarmenSession,
+  saveCarmenSession,
+} from './carmenSession.js';
+
+export {
+  clearCarmenSession,
+  getBusinessUnitDisplayName,
+  getBusinessUnitTenant,
+  getStoredCarmenSession,
+  saveCarmenSession,
+};
 
 const DEFAULT_BASE_URL = 'http://localhost/Carmen.WebApi';
-const SESSION_KEYS = {
-  token: 'carmen_access_token',
-  username: 'carmen_username',
-  businessUnit: 'carmen_business_unit',
-  user: 'carmen_user',
-};
 const toTrimmedStringArray = (value) =>
   Array.isArray(value)
     ? value.flatMap((item) => {
@@ -26,6 +35,96 @@ const toTrimmedStringArray = (value) =>
 
 const getWindowConfig = () => (typeof window !== 'undefined' ? window.__CARMEN_CONFIG__ || {} : {});
 const joinUrl = (baseUrl, path) => `${baseUrl.replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
+
+const publishCarmenApiError = (error) => {
+  if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return;
+  window.dispatchEvent(new CustomEvent('carmen-api-error', {
+    detail: {
+      kind: error.kind || 'api',
+      message: error.message,
+      path: error.path || '',
+      status: error.status || null,
+    },
+  }));
+};
+
+const createCarmenApiError = (message, details = {}) => {
+  const error = new Error(message);
+  error.name = 'CarmenApiError';
+  Object.assign(error, details);
+  publishCarmenApiError(error);
+  return error;
+};
+
+const fetchWithNetworkHandling = async (url, options, path = '') => {
+  try {
+    return await fetch(url, options);
+  } catch (cause) {
+    const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+    throw createCarmenApiError(
+      isOffline
+        ? 'You are offline. Reconnect to the internet and try again.'
+        : 'Unable to reach Carmen API. Check your network connection or contact the administrator.',
+      { kind: isOffline ? 'offline' : 'network', path, cause },
+    );
+  }
+};
+
+const extractApiErrorMessage = (payload) => {
+  if (!payload || typeof payload !== 'object') return '';
+  return String(
+    payload.UserMessage
+    || payload.userMessage
+    || payload.Message
+    || payload.message
+    || payload.title
+    || payload.InternalMessage
+    || payload.internalMessage
+    || '',
+  ).trim();
+};
+
+const readResponsePayload = async (response) => {
+  if (response.status === 204) return null;
+  if (typeof response.text === 'function') {
+    const text = await response.text();
+    if (!text) return null;
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
+    }
+  }
+  return typeof response.json === 'function' ? response.json() : null;
+};
+
+const throwResponseError = async (response, { path, context, isAuthenticated = false }) => {
+  let payload = null;
+  try {
+    payload = await readResponsePayload(response);
+  } catch {
+    payload = null;
+  }
+
+  const unauthorized = isAuthenticated && [401, 419, 440].includes(response.status);
+  if (unauthorized) {
+    clearCarmenSession();
+    throw createCarmenApiError(
+      'Your Carmen session expired. Please sign in again.',
+      { kind: 'session', status: response.status, path },
+    );
+  }
+
+  const apiMessage = typeof payload === 'string' ? payload.trim() : extractApiErrorMessage(payload);
+  const message = apiMessage
+    ? `Carmen API: ${apiMessage}`
+    : `${context} failed with HTTP ${response.status}.`;
+  throw createCarmenApiError(message, {
+    kind: response.status === 401 || response.status === 403 ? 'authorization' : 'api',
+    status: response.status,
+    path,
+  });
+};
 
 const getBusinessUnitApiBaseUrl = () => {
   const config = getWindowConfig();
@@ -39,10 +138,6 @@ export const getCarmenApiConfig = () => {
     adminToken: config?.adminToken || '',
   };
 };
-
-export const getBusinessUnitTenant = (item) => String(item?.Tenant || item?.tenant || '').trim();
-export const getBusinessUnitDisplayName = (item) =>
-  String(item?.Description || item?.description || getBusinessUnitTenant(item)).trim();
 
 const buildUrl = (path, { useTenant = true, query = {} } = {}) => {
   const { baseUrl } = getCarmenApiConfig();
@@ -58,48 +153,6 @@ const buildUrl = (path, { useTenant = true, query = {} } = {}) => {
     : `${url.pathname}${url.search}`;
 };
 
-export const getStoredCarmenSession = () => {
-  if (typeof window === 'undefined' || !window.localStorage) return null;
-  const accessToken = window.localStorage.getItem(SESSION_KEYS.token) || '';
-  const username = window.localStorage.getItem(SESSION_KEYS.username) || '';
-  let businessUnit = null;
-  let user = null;
-  try {
-    businessUnit = JSON.parse(window.localStorage.getItem(SESSION_KEYS.businessUnit) || 'null');
-  } catch {
-    businessUnit = null;
-  }
-  try {
-    user = JSON.parse(window.localStorage.getItem(SESSION_KEYS.user) || 'null');
-  } catch {
-    user = null;
-  }
-  return {
-    accessToken,
-    username,
-    businessUnit,
-    user,
-  };
-};
-
-export const saveCarmenSession = ({ accessToken, username, businessUnit, user }) => {
-  if (typeof window === 'undefined' || !window.localStorage) return;
-  window.localStorage.setItem(SESSION_KEYS.token, accessToken || '');
-  window.localStorage.setItem(SESSION_KEYS.username, username || '');
-  window.localStorage.setItem(SESSION_KEYS.businessUnit, JSON.stringify(businessUnit || null));
-  window.localStorage.setItem(SESSION_KEYS.user, JSON.stringify(user || null));
-  window.dispatchEvent(new Event('carmen-session-changed'));
-};
-
-export const clearCarmenSession = () => {
-  if (typeof window === 'undefined' || !window.localStorage) return;
-  window.localStorage.removeItem(SESSION_KEYS.token);
-  window.localStorage.removeItem(SESSION_KEYS.username);
-  window.localStorage.removeItem(SESSION_KEYS.businessUnit);
-  window.localStorage.removeItem(SESSION_KEYS.user);
-  window.dispatchEvent(new Event('carmen-session-changed'));
-};
-
 export const isCarmenApiConfigured = () => Boolean(getStoredCarmenSession()?.accessToken);
 
 export const fetchBusinessUnitsByUsername = async (username) => {
@@ -109,9 +162,12 @@ export const fetchBusinessUnitsByUsername = async (username) => {
   if (!trimmedUserName) return [];
 
   const url = `${getBusinessUnitApiBaseUrl().replace(/\/$/, '')}/api/userTenant/tenantListIn/${encodeURIComponent(adminToken)}/${encodeURIComponent(trimmedUserName)}`;
-  const response = await fetch(url);
+  const response = await fetchWithNetworkHandling(url, undefined, '/api/userTenant/tenantListIn');
   if (!response.ok) {
-    throw new Error(`Business unit request failed with HTTP ${response.status}.`);
+    await throwResponseError(response, {
+      path: '/api/userTenant/tenantListIn',
+      context: 'Business unit request',
+    });
   }
   const payload = await response.json();
   if (!Array.isArray(payload)) return [];
@@ -211,7 +267,7 @@ export const loginWithCarmenCredentials = async ({ userName, password, tenant, l
     throw new Error('Carmen adminToken not found in public/config.js.');
   }
 
-  const response = await fetch(buildUrl('/api/login', {
+  const response = await fetchWithNetworkHandling(buildUrl('/api/login', {
     useTenant: false,
     query: { adminToken },
   }), {
@@ -223,10 +279,10 @@ export const loginWithCarmenCredentials = async ({ userName, password, tenant, l
       Password: password,
       UserName: userName,
     }),
-  });
+  }, '/api/login');
 
   if (!response.ok) {
-    throw new Error(`Carmen login failed with HTTP ${response.status}.`);
+    await throwResponseError(response, { path: '/api/login', context: 'Carmen login' });
   }
 
   const payload = await response.json();
@@ -250,7 +306,7 @@ const requestCarmenJson = async (path, options = {}) => {
   const url = buildUrl(path, options);
 
   const executeRequest = async () => {
-    const response = await fetch(url, {
+    const response = await fetchWithNetworkHandling(url, {
       method,
       headers: {
         Authorization: session.accessToken,
@@ -258,17 +314,17 @@ const requestCarmenJson = async (path, options = {}) => {
         ...(options.headers || {}),
       },
       body: options.body ? JSON.stringify(options.body) : undefined,
-    });
+    }, path);
 
     if (!response.ok) {
-      if (response.status === 401) {
-        clearCarmenSession();
-        throw new Error('Carmen session expired. Please sign in again.');
-      }
-      throw new Error(`Carmen API request failed for ${path} with HTTP ${response.status}.`);
+      await throwResponseError(response, {
+        path,
+        context: `Carmen API request for ${path}`,
+        isAuthenticated: true,
+      });
     }
 
-    return response.json();
+    return readResponsePayload(response);
   };
 
   const isReadRequest = method === 'GET' || (method === 'POST' && /\/search(?:\?|$)/.test(path));

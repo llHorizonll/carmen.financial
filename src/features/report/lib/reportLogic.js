@@ -533,9 +533,31 @@ const getMasterListIds = (items) =>
     ? items.map((item) => String(item?.id || item?.code || item?.DeptCode || item?.AccCode || '').trim()).filter(Boolean)
     : [];
 
-export const getRowMappingWarnings = (row, allRows = [], masterData = null) => {
+export const createRowMappingWarningContext = (allRows = [], masterData = null) => {
+  const signatureCounts = new Map();
+  (Array.isArray(allRows) ? allRows : []).forEach((row) => {
+    if (!row || row.isHeader || row.isTotal) return;
+    const signature = buildRowMappingSignature(row);
+    if (signature) signatureCounts.set(signature, (signatureCounts.get(signature) || 0) + 1);
+  });
+
+  return {
+    signatureCounts,
+    masterDeptIds: new Set(getMasterListIds(masterData?.depts)),
+    masterAccIds: new Set(getMasterListIds(masterData?.accCodes)),
+    masterDeptGroupIds: new Set(
+      (Array.isArray(masterData?.deptGroups) ? masterData.deptGroups : [])
+        .map((group) => String(group?.id || '').trim().toUpperCase())
+        .filter(Boolean),
+    ),
+  };
+};
+
+export const getRowMappingWarnings = (row, allRows = [], masterData = null, warningContext = null) => {
   const warnings = [];
   if (!row) return warnings;
+
+  const context = warningContext || createRowMappingWarningContext(allRows, masterData);
 
   const hasDept = Boolean(String(row.dept || '').trim());
   const deptGroup = String(row.deptGroup || row.DeptGroup || '').trim().toUpperCase();
@@ -544,49 +566,37 @@ export const getRowMappingWarnings = (row, allRows = [], masterData = null) => {
   const hasGroups = Boolean(String(row.groups || '').trim());
   const groupLevel = String(row.groupLevel || 'L4').trim().toUpperCase();
 
-  if (hasDept && hasAccCodes) warnings.push('Dept and account code are both set.');
   if (hasDept && hasDeptGroup) warnings.push('Department and department group are both set.');
   if (hasDept && hasGroups) warnings.push('Dept and group mapping are both set.');
   if (hasAccCodes && hasGroups) warnings.push('Account code and group mapping are both set.');
   if (groupLevel !== 'L4' && hasAccCodes) warnings.push('Grouped rows should not mix with explicit account codes.');
 
   const signature = buildRowMappingSignature(row);
-  if (signature && Array.isArray(allRows)) {
-    const duplicate = allRows.find((other) =>
-      other
-      && other.id !== row.id
-      && !other.isHeader
-      && !other.isTotal
-      && buildRowMappingSignature(other) === signature
-    );
-    if (duplicate) {
-      warnings.push('This mapping duplicates another data row and may double count.');
-    }
+  if (signature && (context.signatureCounts.get(signature) || 0) > 1) {
+    warnings.push('This mapping duplicates another data row and may double count.');
   }
 
-  const masterDeptIds = new Set(getMasterListIds(masterData?.depts));
-  if (masterDeptIds.size > 0 && hasDept) {
+  if (context.masterDeptIds.size > 0 && hasDept) {
     const invalidDepts = String(row.dept || '')
       .split(',')
       .map(normalizeDeptLookupCode)
       .filter(Boolean)
-      .filter((dept) => !masterDeptIds.has(dept));
+      .filter((dept) => !context.masterDeptIds.has(dept));
     if (invalidDepts.length > 0) {
       warnings.push(`unknown department code(s): ${invalidDepts.join(', ')}.`);
     }
   }
 
-  const masterAccIds = new Set(getMasterListIds(masterData?.accCodes));
-  if (hasDeptGroup && Array.isArray(masterData?.deptGroups) && !masterData.deptGroups.some((group) => String(group?.id || '').trim().toUpperCase() === deptGroup)) {
+  if (hasDeptGroup && context.masterDeptGroupIds.size > 0 && !context.masterDeptGroupIds.has(deptGroup)) {
     warnings.push('unknown department group: ' + deptGroup + '.');
   }
 
-  if (masterAccIds.size > 0 && hasAccCodes) {
+  if (context.masterAccIds.size > 0 && hasAccCodes) {
     const invalidAccs = String(row.accCodes || '')
       .split(',')
       .map(normalizeAccLookupCode)
       .filter(Boolean)
-      .filter((acc) => !masterAccIds.has(acc));
+      .filter((acc) => !context.masterAccIds.has(acc));
     if (invalidAccs.length > 0) {
       warnings.push(`unknown account code(s): ${invalidAccs.join(', ')}.`);
     }

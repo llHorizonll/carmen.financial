@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/popover.jsx';
 import { cn } from '@/lib/utils.js';
 
-export default function MultiSelectDropdown({ options, selected, onChange, label, testIdPrefix, normalizeValue = normalizeDeptLookupCode, searchPlaceholder = 'Search department...' }) {
+export default function MultiSelectDropdown({ options, selected, onChange, label, testIdPrefix, normalizeValue = normalizeDeptLookupCode, searchPlaceholder = 'Search department...', emptyLabel = 'All' }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const friendlyButtonClassName = 'border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150';
@@ -79,8 +79,10 @@ export default function MultiSelectDropdown({ options, selected, onChange, label
           <span className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
             <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">{label}</span>
             <span className="truncate text-[13px] font-medium leading-4" data-testid={`selected-value-${testIdPrefix}`}>
-              {selected.length === 0 || isAllSelected
-                ? 'All'
+              {selected.length === 0
+                ? emptyLabel
+                : isAllSelected
+                  ? 'All'
                 : selectedItems.length <= 2
                   ? selectedItems.map((item) => item.display).join(', ')
                   : `${selectedItems.length} selected`}

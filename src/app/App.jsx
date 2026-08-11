@@ -998,6 +998,14 @@ export default function App({ onLogout = null }) {
         r.id === id ? { ...r, ...updates } : r,
       ),
     });
+  const handleBulkUpdateRows = (rowUpdates) => {
+    const updatesById = new Map(rowUpdates.map((item) => [item.id, item.updates]));
+    updateActiveReport({
+      rows: setupReport.rows.map((row) => (
+        updatesById.has(row.id) ? { ...row, ...updatesById.get(row.id) } : row
+      )),
+    });
+  };
   const handleUpdateCol = (id, field, val) =>
     updateActiveReport({
       columns: setupReport.columns.map((c) =>
@@ -1923,6 +1931,7 @@ export default function App({ onLogout = null }) {
                         handleAddRow={handleAddRow}
                         handleUpdateRow={handleUpdateRow}
                         handleUpdateRowMulti={handleUpdateRowMulti}
+                        handleBulkUpdateRows={handleBulkUpdateRows}
                         moveRow={moveRow}
                         handleDeleteRow={handleDeleteRow}
                         setEditingRow={setEditingRow}

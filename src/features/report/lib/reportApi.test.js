@@ -360,6 +360,78 @@ describe('reportApi helpers', () => {
     }));
   });
 
+  it('surfaces Carmen API UserMessage details instead of a generic HTTP error', async () => {
+    createSessionStorageMock({
+      accessToken: 'token',
+      businessUnit: { tenant: 'carmencloud' },
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      text: async () => JSON.stringify({
+        Code: -2147467259,
+        UserMessage: "Unknown column 'DescriptionPosition' in 'field list'",
+      }),
+    }));
+
+    await expect(saveCarmenReport({
+      id: 'rep-excel-1',
+      name: 'Imported report',
+      rows: [],
+      columns: [],
+    })).rejects.toThrow(/Unknown column 'DescriptionPosition'/i);
+  });
+
+  it('classifies offline fetch failures and publishes a global API error event', async () => {
+    createSessionStorageMock({
+      accessToken: 'token',
+      businessUnit: { tenant: 'carmencloud' },
+    });
+    Object.defineProperty(window.navigator, 'onLine', { value: false, configurable: true });
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+    const apiErrorListener = vi.fn();
+    window.addEventListener('carmen-api-error', apiErrorListener);
+
+    await expect(saveCarmenReport({
+      id: 'rep-offline',
+      name: 'Offline report',
+      rows: [],
+      columns: [],
+    })).rejects.toThrow(/offline/i);
+    expect(apiErrorListener).toHaveBeenCalledWith(expect.objectContaining({
+      detail: expect.objectContaining({ kind: 'offline' }),
+    }));
+
+    window.removeEventListener('carmen-api-error', apiErrorListener);
+  });
+
+  it('clears an expired session and publishes a session-expired event', async () => {
+    const storage = createSessionStorageMock({
+      accessToken: 'expired-token',
+      businessUnit: { tenant: 'carmencloud' },
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      text: async () => '',
+    }));
+    const apiErrorListener = vi.fn();
+    window.addEventListener('carmen-api-error', apiErrorListener);
+
+    await expect(saveCarmenReport({
+      id: 'rep-expired',
+      name: 'Expired session report',
+      rows: [],
+      columns: [],
+    })).rejects.toThrow(/session expired/i);
+    expect(storage.has('carmen_access_token')).toBe(false);
+    expect(apiErrorListener).toHaveBeenCalledWith(expect.objectContaining({
+      detail: expect.objectContaining({ kind: 'session' }),
+    }));
+
+    window.removeEventListener('carmen-api-error', apiErrorListener);
+  });
+
   it('saves multiple imported reports with one batch request', async () => {
     createSessionStorageMock({
       accessToken: 'token',

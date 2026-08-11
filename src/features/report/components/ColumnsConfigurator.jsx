@@ -100,8 +100,15 @@ export default function ColumnsConfigurator({
         { id: 'Q4', label: 'Q4' },
       ];
   const hasIncompatibleColumns = activeReport.columns.some((col) => col.type && !allowedColumnTypes.has(String(col.type).trim().toUpperCase()));
-  const brokenColumnReferences = findBrokenReferences(activeReport).filter((issue) => issue.scope === 'column');
-  const displayColumns = getReportDisplayColumns(activeReport);
+  const brokenColumnReferences = React.useMemo(
+    () => findBrokenReferences(activeReport).filter((issue) => issue.scope === 'column'),
+    [activeReport],
+  );
+  const displayColumns = React.useMemo(() => getReportDisplayColumns(activeReport), [activeReport]);
+  const columnIndexById = React.useMemo(
+    () => new Map(activeReport.columns.map((column, index) => [column.id, index])),
+    [activeReport.columns],
+  );
   const displayColumnIds = displayColumns.map((column) => column.id);
   const reorderColumns = React.useCallback((fromIndex, toIndex) => {
     updateActiveReport(moveDisplayColumnsAndRewriteReferences(activeReport, fromIndex, toIndex));
@@ -194,7 +201,7 @@ export default function ColumnsConfigurator({
                 );
               }
 
-              const idx = activeReport.columns.findIndex((column) => column.id === col.id);
+              const idx = columnIndexById.get(col.id) ?? -1;
               const fieldId = (field) => `${col.id}-${field}`;
               const colClassy = col.isFormula 
                 ? COLUMN_CLASY_MAP.formula 

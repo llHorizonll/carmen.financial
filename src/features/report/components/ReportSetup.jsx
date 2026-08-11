@@ -121,24 +121,25 @@ export default function ReportSetup(props) {
           activeKey={activeSetupSection}
           onChange={setActiveSetupSection}
         />
-        <section
-          id="report-setup-panel-columns"
-          role="tabpanel"
-          aria-labelledby="report-setup-tab-columns"
-          hidden={activeSetupSection !== 'columns'}
-          className="w-full min-w-0 overflow-hidden"
-        >
-          <ColumnsConfigurator {...props} />
-        </section>
-        <section
-          id="report-setup-panel-rows"
-          role="tabpanel"
-          aria-labelledby="report-setup-tab-rows"
-          hidden={activeSetupSection !== 'rows'}
-          className="w-full min-w-0 overflow-hidden"
-        >
-          <RowsConfigurator {...props} />
-        </section>
+        {activeSetupSection === 'columns' ? (
+          <section
+            id="report-setup-panel-columns"
+            role="tabpanel"
+            aria-labelledby="report-setup-tab-columns"
+            className="w-full min-w-0 overflow-hidden"
+          >
+            <ColumnsConfigurator {...props} />
+          </section>
+        ) : (
+          <section
+            id="report-setup-panel-rows"
+            role="tabpanel"
+            aria-labelledby="report-setup-tab-rows"
+            className="w-full min-w-0 overflow-hidden"
+          >
+            <RowsConfigurator {...props} />
+          </section>
+        )}
       </div>
     </div>
   );

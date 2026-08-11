@@ -1,9 +1,13 @@
 import React from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import RowsConfigurator from './RowsConfigurator.jsx';
 
 describe('RowsConfigurator', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
   it('adds and edits rows, and queues row deletion confirmation', async () => {
     const handleAddRow = vi.fn();
     const handleUpdateRow = vi.fn();
@@ -115,5 +119,88 @@ describe('RowsConfigurator', () => {
       'r2',
       expect.objectContaining({ isTotal: false, isHeader: false })
     );
+  });
+
+  it('bulk maps selected data rows, saves a preset, and supports undo', async () => {
+    const handleBulkUpdateRows = vi.fn();
+
+    render(
+      <RowsConfigurator
+        activeReport={{
+          rows: [
+            {
+              id: 'r1',
+              desc: 'Revenue',
+              indent: 0,
+              isHeader: false,
+              isTotal: false,
+              percentBase: '',
+              formula: '',
+              dept: '101',
+              deptGroup: '',
+              groups: '',
+              accCodes: '4001',
+              groupLevel: 'L4',
+            },
+            {
+              id: 'r2',
+              desc: 'Expense',
+              indent: 0,
+              isHeader: false,
+              isTotal: false,
+              percentBase: '',
+              formula: '',
+              dept: '',
+              deptGroup: '',
+              groups: '',
+              accCodes: '',
+              groupLevel: 'L4',
+            },
+          ],
+        }}
+        masterData={{
+          depts: [{ id: '101', name: 'Rooms' }, { id: '202', name: 'Restaurant' }],
+          accCodes: [{ id: '4001', name: 'Room revenue' }, { id: '4101', name: 'Food revenue' }],
+          groups: { L4: [] },
+        }}
+        handleAddRow={vi.fn()}
+        handleUpdateRow={vi.fn()}
+        handleUpdateRowMulti={vi.fn()}
+        handleBulkUpdateRows={handleBulkUpdateRows}
+        moveRow={vi.fn()}
+        handleDeleteRow={vi.fn()}
+        setEditingRow={vi.fn()}
+        setConfirmAction={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Bulk Mapping/i }));
+    fireEvent.click(screen.getByLabelText('Select row 1: Revenue'));
+    fireEvent.click(screen.getByLabelText('Select row 2: Expense'));
+    expect(screen.getByText(/2 selected/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Map selected/i }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('dropdown-bulk-departments'));
+    fireEvent.click(screen.getByTestId('check-bulk-departments-202'));
+    fireEvent.click(screen.getByTestId('dropdown-bulk-accounts'));
+    fireEvent.click(screen.getByTestId('check-bulk-accounts-4101'));
+
+    fireEvent.change(screen.getByLabelText('Save current selections'), { target: { value: 'F&B mapping' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(window.localStorage.getItem('carmen.mapping-presets.v1')).toContain('F&B mapping'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply to 2 rows' }));
+    expect(handleBulkUpdateRows).toHaveBeenCalledWith([
+      { id: 'r1', updates: { dept: '202', accCodes: '4101' } },
+      { id: 'r2', updates: { dept: '202', accCodes: '4101' } },
+    ]);
+
+    fireEvent.click(screen.getByRole('button', { name: /Undo bulk mapping/i }));
+    expect(handleBulkUpdateRows).toHaveBeenLastCalledWith([
+      { id: 'r1', updates: { dept: '101', accCodes: '4001' } },
+      { id: 'r2', updates: { dept: '', accCodes: '' } },
+    ]);
   });
 });

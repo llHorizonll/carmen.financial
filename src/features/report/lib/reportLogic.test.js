@@ -210,10 +210,19 @@ describe('reportLogic helpers', () => {
       depts: [{ id: '101' }, { id: '102' }],
       accCodes: [{ id: '5001' }],
     })).toEqual(expect.arrayContaining([
-      'Dept and account code are both set.',
       'Grouped rows should not mix with explicit account codes.',
       'unknown account code(s): 4001.',
     ]));
+    expect(getRowMappingWarnings({
+      id: 'r4',
+      dept: '101',
+      accCodes: '4001',
+      groups: '',
+      groupLevel: 'L4',
+    }, [], {
+      depts: [{ id: '101' }],
+      accCodes: [{ id: '4001' }],
+    })).toEqual([]);
 
     expect(findRowMappingConflicts({ rows }, {
       depts: [{ id: '101' }, { id: '102' }],
