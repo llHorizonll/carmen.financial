@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import './config.js';
 import '@astryxdesign/core/reset.css';
+import '@astryxdesign/core/astryx.css';
 import LoginShell from './app/LoginShell.jsx';
 import ConnectivityFeedback from './components/system/ConnectivityFeedback.jsx';
 import './index.css';

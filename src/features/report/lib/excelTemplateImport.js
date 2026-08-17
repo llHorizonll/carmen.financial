@@ -1,15 +1,48 @@
 const ERROR_VALUE = /^#(?:NAME\?|REF!|DIV\/0!|VALUE!|N\/A|NULL!|NUM!)/i;
 const NUMBER_VALUE = /^\(?-?[\d,.]+\)?%?$/;
-const FINANCIAL_NUMBER_VALUE =
-  /^\(?-?\s*(?:[$฿€£¥]\s*)?[\d,.]+\s*\)?\s*%?$/;
+const FINANCIAL_NUMBER_VALUE = /^\(?-?\s*(?:[$฿€£¥]\s*)?[\d,.]+\s*\)?\s*%?$/;
 const EMPTY_VALUE = /^[-–—]$/;
 const HEADER_NOISE =
   /^(?:%|bht|actual|budget|plan|variance|description|current month|last month|last year|this month|this year|year to date|month to date|report description)$/i;
 const DESCRIPTION_HEADER = /^(?:description|report description)$/i;
-const NON_REPORT_SHEET =
-  /^(?:intro|cover|glac|sheet1|sheet2|aspenmacro)$/i;
+const LINKED_MAPPING_HEADERS = {
+  dept: /^dept\s+code\s*\(linked\)$/i,
+  accCodes: /^account\s+code\s*\(linked\)$/i,
+};
+const NON_REPORT_SHEET = /^(?:intro|cover|glac|sheet1|sheet2|aspenmacro)$/i;
 
-const cleanText = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
+const cleanText = (value) =>
+  String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+const toPositiveInteger = (value) => {
+  if (value === "" || value === null || value === undefined) return null;
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : null;
+};
+
+export const excelColumnToIndex = (value) => {
+  const reference = cleanText(value).toUpperCase();
+  if (!/^[A-Z]+$/.test(reference)) return -1;
+  return (
+    [...reference].reduce(
+      (result, character) => result * 26 + character.charCodeAt(0) - 64,
+      0,
+    ) - 1
+  );
+};
+
+export const excelIndexToColumn = (value) => {
+  let index = Number(value);
+  if (!Number.isInteger(index) || index < 0) return "";
+  let reference = "";
+  while (index >= 0) {
+    reference = String.fromCharCode((index % 26) + 65) + reference;
+    index = Math.floor(index / 26) - 1;
+  }
+  return reference;
+};
+
 const isUsableText = (value) => {
   const text = cleanText(value);
   return (
@@ -20,7 +53,9 @@ const isUsableText = (value) => {
   );
 };
 
-const detectDescriptionColumn = (matrix) => {
+const detectDescriptionColumn = (matrix, override = "") => {
+  const overrideIndex = excelColumnToIndex(override);
+  if (overrideIndex >= 0) return overrideIndex;
   const scores = [];
   matrix.forEach((row) =>
     row.forEach((value, columnIndex) => {
@@ -34,8 +69,7 @@ const detectDescriptionColumn = (matrix) => {
     }),
   );
   return scores.reduce(
-    (best, score = 0, index) =>
-      score > best.score ? { index, score } : best,
+    (best, score = 0, index) => (score > best.score ? { index, score } : best),
     { index: 0, score: -1 },
   ).index;
 };
@@ -49,7 +83,51 @@ const isNumericValue = (value) => {
   );
 };
 
-const detectColumns = (matrix, descriptionColumn, cellMatrix = []) => {
+const detectLinkedMappingColumns = (matrix, options = {}) => {
+  const result = {
+    dept: excelColumnToIndex(options.deptMappingColumn),
+    accCodes: excelColumnToIndex(options.accountMappingColumn),
+    headerRow: toPositiveInteger(options.mappingHeaderRow),
+  };
+  const configuredHeaderIndex = result.headerRow ? result.headerRow - 1 : null;
+  const rows =
+    configuredHeaderIndex === null
+      ? matrix.map((row, rowIndex) => ({ row, rowIndex }))
+      : [
+          {
+            row: matrix[configuredHeaderIndex] || [],
+            rowIndex: configuredHeaderIndex,
+          },
+        ];
+
+  rows.some(({ row, rowIndex }) => {
+    row.forEach((value, columnIndex) => {
+      const header = cleanText(value);
+      Object.entries(LINKED_MAPPING_HEADERS).forEach(([field, pattern]) => {
+        if (result[field] < 0 && pattern.test(header)) {
+          result[field] = columnIndex;
+          result.headerRow ||= rowIndex + 1;
+        }
+      });
+    });
+    return result.dept >= 0 && result.accCodes >= 0;
+  });
+
+  return result;
+};
+
+const cleanMappingValue = (value) => {
+  const text = cleanText(value);
+  return !text || ERROR_VALUE.test(text) || EMPTY_VALUE.test(text) ? "" : text;
+};
+
+const detectColumns = (
+  matrix,
+  descriptionColumn,
+  cellMatrix = [],
+  excludedColumns = new Set(),
+  options = {},
+) => {
   const candidates = [];
   const merges = cellMatrix["!merges"] || [];
   const columnSettings = cellMatrix["!cols"] || [];
@@ -57,11 +135,42 @@ const detectColumns = (matrix, descriptionColumn, cellMatrix = []) => {
     (maximum, row) => Math.max(maximum, row.length),
     0,
   );
+  const configuredStartColumn = excelColumnToIndex(options.reportStartColumn);
+  const configuredEndColumn = excelColumnToIndex(options.reportEndColumn);
+  const mappingAreaStartColumn = matrix.reduce((detected, row) => {
+    const columnIndex = row.findIndex((value) =>
+      /^mapping\s+area$/i.test(cleanText(value)),
+    );
+    if (columnIndex < 0) return detected;
+    return detected < 0 ? columnIndex : Math.min(detected, columnIndex);
+  }, -1);
+  const automaticEndColumn =
+    configuredEndColumn >= 0
+      ? configuredEndColumn
+      : mappingAreaStartColumn >= 0
+        ? mappingAreaStartColumn - 1
+        : -1;
+  const startRowIndex = Math.max(
+    0,
+    (toPositiveInteger(options.dataStartRow) || 1) - 1,
+  );
+  const endRowIndex = Math.min(
+    matrix.length - 1,
+    (toPositiveInteger(options.dataEndRow) || matrix.length) - 1,
+  );
 
   for (let columnIndex = 0; columnIndex < maximumColumns; columnIndex += 1) {
-    if (columnIndex === descriptionColumn || columnSettings[columnIndex]?.hidden)
+    if (
+      columnIndex === descriptionColumn ||
+      excludedColumns.has(columnIndex) ||
+      (configuredStartColumn >= 0 && columnIndex < configuredStartColumn) ||
+      (automaticEndColumn >= 0 && columnIndex > automaticEndColumn) ||
+      columnSettings[columnIndex]?.hidden
+    )
       continue;
-    const values = matrix.map((row) => row[columnIndex]);
+    const values = matrix
+      .slice(startRowIndex, endRowIndex + 1)
+      .map((row) => row[columnIndex]);
     const numericCount = values.filter(isNumericValue).length;
     if (numericCount < 2) continue;
     candidates.push({ columnIndex, numericCount });
@@ -129,8 +238,7 @@ const detectColumns = (matrix, descriptionColumn, cellMatrix = []) => {
           ...reportCandidates
             .filter(({ columnIndex }) =>
               headerRows.some(
-                (rowIndex) =>
-                  cleanText(matrix[rowIndex]?.[columnIndex]) !== "",
+                (rowIndex) => cleanText(matrix[rowIndex]?.[columnIndex]) !== "",
               ),
             )
             .map(({ columnIndex }) => columnIndex),
@@ -152,6 +260,7 @@ const detectColumns = (matrix, descriptionColumn, cellMatrix = []) => {
   };
 
   const columns = [];
+  const sourceColumnIndexes = [];
   selected.forEach((candidate) => {
     const headerParts = (
       headerRows.length > 0
@@ -198,24 +307,29 @@ const detectColumns = (matrix, descriptionColumn, cellMatrix = []) => {
             width: "",
           }),
     });
+    sourceColumnIndexes.push(candidate.columnIndex);
   });
 
-  return columns.length > 0
-    ? columns
-    : [
-        {
-          id: "C1",
-          label: "Actual",
-          isActive: true,
-          isFormula: false,
-          isPercent: false,
-          formatAsPercent: false,
-          yearMode: "current",
-          periodMode: "current",
-          type: "AC",
-          width: "",
-        },
-      ];
+  return {
+    columns:
+      columns.length > 0
+        ? columns
+        : [
+            {
+              id: "C1",
+              label: "Actual",
+              isActive: true,
+              isFormula: false,
+              isPercent: false,
+              formatAsPercent: false,
+              yearMode: "current",
+              periodMode: "current",
+              type: "AC",
+              width: "",
+            },
+          ],
+    sourceColumnIndexes,
+  };
 };
 
 const decodeWorkbookXml = (workbook, path) => {
@@ -284,10 +398,7 @@ const parseSheetStyles = (workbook, sheetIndex, styles, XLSX) => {
     const styleIndex = match[0].match(/\bs="(\d+)"/)?.[1];
     if (!address || styleIndex === undefined) continue;
     const position = XLSX.utils.decode_cell(address);
-    result.set(
-      `${position.r}:${position.c}`,
-      styles[Number(styleIndex)] || {},
-    );
+    result.set(`${position.r}:${position.c}`, styles[Number(styleIndex)] || {});
   }
 
   return result;
@@ -313,16 +424,24 @@ const detectRows = (
   descriptionColumn,
   cellMatrix = [],
   cellStyles = new Map(),
+  linkedMappingColumns = { dept: -1, accCodes: -1 },
+  options = {},
 ) => {
   const descriptionHeaderIndex = matrix.findIndex((row) =>
     DESCRIPTION_HEADER.test(cleanText(row[descriptionColumn])),
   );
+  const configuredStartRow = toPositiveInteger(options.dataStartRow);
+  const configuredEndRow = toPositiveInteger(options.dataEndRow);
   let hasSection = false;
+  const sourceRowNumbers = [];
 
-  return matrix.flatMap((sourceRow, sourceIndex) => {
+  const rows = matrix.flatMap((sourceRow, sourceIndex) => {
+    const sourceRowNumber = sourceIndex + 1;
     const original = String(sourceRow[descriptionColumn] ?? "");
     const desc = cleanText(original);
     if (
+      (configuredStartRow && sourceRowNumber < configuredStartRow) ||
+      (configuredEndRow && sourceRowNumber > configuredEndRow) ||
       !isUsableText(desc) ||
       HEADER_NOISE.test(desc) ||
       (descriptionHeaderIndex >= 0 && sourceIndex <= descriptionHeaderIndex)
@@ -341,17 +460,25 @@ const detectRows = (
       style,
       original,
     );
+    const dept = cleanMappingValue(sourceRow[linkedMappingColumns.dept]);
+    const accCodes = cleanMappingValue(
+      sourceRow[linkedMappingColumns.accCodes],
+    );
+    const hasLinkedMapping = Boolean(dept || accCodes);
     const indent = isStyleBoundary
       ? 0
       : hasSection
         ? Math.max(1, sourceIndent)
         : sourceIndent;
     const letters = desc.replace(/[^\p{L}]/gu, "");
-    const isHeader = style
-      ? isStyleBoundary
-      : populatedCells.length <= 2 ||
-        (letters.length >= 4 && desc === desc.toUpperCase());
+    const isHeader = hasLinkedMapping
+      ? false
+      : style
+        ? isStyleBoundary
+        : populatedCells.length <= 2 ||
+          (letters.length >= 4 && desc === desc.toUpperCase());
     if (isStyleBoundary) hasSection = true;
+    sourceRowNumbers.push(sourceRowNumber);
 
     return [
       {
@@ -360,16 +487,120 @@ const detectRows = (
         isActive: true,
         isHeader,
         isTotal: false,
-        dept: "",
+        dept,
         groupLevel: "L4",
         groups: "",
-        accCodes: "",
+        accCodes,
         percentBase: "",
         formula: "",
         indent,
       },
     ];
   });
+
+  return { rows, sourceRowNumbers };
+};
+
+const getImportConfigIssues = ({
+  config,
+  matrix,
+  descriptionColumn,
+  linkedMappingColumns,
+  rowCount,
+  columnCount,
+}) => {
+  const errors = [];
+  const warnings = [];
+  [
+    ["descriptionColumn", "Description column"],
+    ["reportStartColumn", "First report column"],
+    ["reportEndColumn", "Last report column"],
+  ].forEach(([field, label]) => {
+    if (excelColumnToIndex(config[field]) < 0) {
+      errors.push(`${label} must be a valid Excel column such as A or BZ.`);
+    }
+  });
+
+  const startRow = toPositiveInteger(config.dataStartRow);
+  const endRow = toPositiveInteger(config.dataEndRow);
+  if (!startRow) errors.push("Data start row must be a positive whole number.");
+  if (!endRow) errors.push("Data end row must be a positive whole number.");
+  if (startRow && endRow && startRow > endRow) {
+    errors.push("Data start row cannot be after data end row.");
+  }
+  if (endRow && endRow > matrix.length) {
+    warnings.push(
+      `Data end row is beyond the worksheet's ${matrix.length} rows.`,
+    );
+  }
+
+  const reportStartColumn = excelColumnToIndex(config.reportStartColumn);
+  const reportEndColumn = excelColumnToIndex(config.reportEndColumn);
+  if (
+    reportStartColumn >= 0 &&
+    reportEndColumn >= 0 &&
+    reportStartColumn > reportEndColumn
+  ) {
+    errors.push("First report column cannot be after last report column.");
+  }
+
+  [
+    ["deptMappingColumn", "Department mapping column"],
+    ["accountMappingColumn", "Account mapping column"],
+  ].forEach(([field, label]) => {
+    if (cleanText(config[field]) && excelColumnToIndex(config[field]) < 0) {
+      errors.push(`${label} must be a valid Excel column or left blank.`);
+    }
+  });
+
+  const mappingHeaderRow = toPositiveInteger(config.mappingHeaderRow);
+  if (cleanText(config.mappingHeaderRow) && !mappingHeaderRow) {
+    errors.push(
+      "Mapping header row must be a positive whole number or left blank.",
+    );
+  }
+  if (
+    linkedMappingColumns.dept >= 0 &&
+    linkedMappingColumns.dept === linkedMappingColumns.accCodes
+  ) {
+    errors.push("Department and account mappings cannot use the same column.");
+  }
+  if (
+    descriptionColumn === linkedMappingColumns.dept ||
+    descriptionColumn === linkedMappingColumns.accCodes
+  ) {
+    errors.push("Description and mapping columns must be different.");
+  }
+
+  if (mappingHeaderRow && mappingHeaderRow <= matrix.length) {
+    const headerRow = matrix[mappingHeaderRow - 1] || [];
+    [
+      [
+        linkedMappingColumns.dept,
+        LINKED_MAPPING_HEADERS.dept,
+        "Dept Code (Linked)",
+      ],
+      [
+        linkedMappingColumns.accCodes,
+        LINKED_MAPPING_HEADERS.accCodes,
+        "Account Code (Linked)",
+      ],
+    ].forEach(([columnIndex, pattern, label]) => {
+      if (
+        columnIndex >= 0 &&
+        !pattern.test(cleanText(headerRow[columnIndex]))
+      ) {
+        warnings.push(
+          `${label} was not found on mapping header row ${mappingHeaderRow}.`,
+        );
+      }
+    });
+  }
+
+  if (rowCount < 2) errors.push("At least 2 report rows are required.");
+  if (columnCount < 2)
+    errors.push("At least 2 report value columns are required.");
+  return { errors, warnings };
 };
 
 export const analyzeExcelSheet = (
@@ -377,20 +608,41 @@ export const analyzeExcelSheet = (
   matrix,
   cellMatrix = [],
   cellStyles = new Map(),
+  options = {},
 ) => {
-  const descriptionColumn = detectDescriptionColumn(matrix);
-  const rows = detectRows(
+  const descriptionColumn = detectDescriptionColumn(
+    matrix,
+    options.descriptionColumn,
+  );
+  const linkedMappingColumns = detectLinkedMappingColumns(matrix, options);
+  const { rows, sourceRowNumbers } = detectRows(
     matrix,
     descriptionColumn,
     cellMatrix,
     cellStyles,
+    linkedMappingColumns,
+    options,
   );
-  const columns = detectColumns(matrix, descriptionColumn, cellMatrix);
+  const { columns, sourceColumnIndexes } = detectColumns(
+    matrix,
+    descriptionColumn,
+    cellMatrix,
+    new Set(
+      [linkedMappingColumns.dept, linkedMappingColumns.accCodes].filter(
+        (columnIndex) => columnIndex >= 0,
+      ),
+    ),
+    options,
+  );
   const populatedRows = new Set();
   const populatedColumns = new Set();
+  const reportColumnIndexes = new Set(sourceColumnIndexes);
+  const configuredStartRow = toPositiveInteger(options.dataStartRow);
+  const configuredEndRow = toPositiveInteger(options.dataEndRow);
   let reportDataRowCount = 0;
 
   matrix.forEach((row, rowIndex) => {
+    const rowNumber = rowIndex + 1;
     let hasReportValue = false;
     row.forEach((value, columnIndex) => {
       const text = cleanText(value);
@@ -398,7 +650,7 @@ export const analyzeExcelSheet = (
       populatedRows.add(rowIndex);
       populatedColumns.add(columnIndex);
       if (
-        columnIndex !== descriptionColumn &&
+        reportColumnIndexes.has(columnIndex) &&
         (typeof value === "number" ||
           ERROR_VALUE.test(text) ||
           NUMBER_VALUE.test(text))
@@ -406,10 +658,48 @@ export const analyzeExcelSheet = (
         hasReportValue = true;
       }
     });
-    if (isUsableText(row[descriptionColumn]) && hasReportValue) {
+    if (
+      (!configuredStartRow || rowNumber >= configuredStartRow) &&
+      (!configuredEndRow || rowNumber <= configuredEndRow) &&
+      isUsableText(row[descriptionColumn]) &&
+      hasReportValue
+    ) {
       reportDataRowCount += 1;
     }
   });
+
+  const importConfig = {
+    dataStartRow: options.dataStartRow ?? sourceRowNumbers[0] ?? 1,
+    dataEndRow: options.dataEndRow ?? sourceRowNumbers.at(-1) ?? matrix.length,
+    reportStartColumn:
+      options.reportStartColumn ?? excelIndexToColumn(sourceColumnIndexes[0]),
+    reportEndColumn:
+      options.reportEndColumn ?? excelIndexToColumn(sourceColumnIndexes.at(-1)),
+    descriptionColumn:
+      options.descriptionColumn ?? excelIndexToColumn(descriptionColumn),
+    mappingHeaderRow:
+      options.mappingHeaderRow ?? linkedMappingColumns.headerRow ?? "",
+    deptMappingColumn:
+      options.deptMappingColumn ??
+      excelIndexToColumn(linkedMappingColumns.dept),
+    accountMappingColumn:
+      options.accountMappingColumn ??
+      excelIndexToColumn(linkedMappingColumns.accCodes),
+  };
+  const importIssues = getImportConfigIssues({
+    config: importConfig,
+    matrix,
+    descriptionColumn,
+    linkedMappingColumns,
+    rowCount: rows.length,
+    columnCount: columns.length,
+  });
+  const isRecommended =
+    !NON_REPORT_SHEET.test(name) &&
+    rows.length >= 2 &&
+    columns.length >= 2 &&
+    reportDataRowCount >= 2 &&
+    importIssues.errors.length === 0;
 
   return {
     name,
@@ -418,12 +708,32 @@ export const analyzeExcelSheet = (
     descriptionColumn,
     detectedRows: rows,
     detectedColumns: columns,
+    importConfig,
+    importIssues,
+    mappingPreviewRows: rows.slice(0, 5).map((row) => ({
+      rowNumber: Number(row.id.replace("excel-row-", "")),
+      description: row.desc,
+      dept: row.dept,
+      accCodes: row.accCodes,
+    })),
     previewRows: rows.slice(0, 5).map((row) => row.desc),
-    isRecommended:
-      !NON_REPORT_SHEET.test(name) &&
-      rows.length >= 2 &&
-      columns.length >= 2 &&
-      reportDataRowCount >= 2,
+    isRecommended,
+  };
+};
+
+export const configureExcelSheetImport = (sheet, importConfig) => {
+  if (!sheet?.source) return sheet;
+  const configured = analyzeExcelSheet(
+    sheet.name,
+    sheet.source.matrix,
+    sheet.source.cellMatrix,
+    sheet.source.cellStyles,
+    importConfig,
+  );
+  return {
+    ...configured,
+    source: sheet.source,
+    autoImportConfig: sheet.autoImportConfig || sheet.importConfig,
   };
 };
 
@@ -449,12 +759,22 @@ export const parseExcelWorkbook = async (file) => {
         blankrows: true,
         raw: false,
       });
-      return analyzeExcelSheet(
-        name,
+      const source = {
         matrix,
-        sheet,
-        parseSheetStyles(workbook, sheetIndex, styles, XLSX),
+        cellMatrix: sheet,
+        cellStyles: parseSheetStyles(workbook, sheetIndex, styles, XLSX),
+      };
+      const analyzed = analyzeExcelSheet(
+        name,
+        source.matrix,
+        source.cellMatrix,
+        source.cellStyles,
       );
+      return {
+        ...analyzed,
+        source,
+        autoImportConfig: analyzed.importConfig,
+      };
     }),
   };
 };

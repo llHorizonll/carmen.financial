@@ -6,7 +6,7 @@
   "packageManager": "bun@1.3.9",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node scripts/prerender-login.mjs && node scripts/critical-css.mjs",
+    "build": "vite build && node scripts/copy-production-config.mjs && node scripts/prerender-login.mjs && node scripts/critical-css.mjs",
     "preview": "vite preview",
     "perf:bundle": "node scripts/performance-audit.mjs --bundle-only",
     "perf:audit": "node scripts/performance-audit.mjs",

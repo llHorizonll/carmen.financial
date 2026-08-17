@@ -10,6 +10,7 @@ import {
   Import,
   LoaderCircle,
   RotateCcw,
+  Settings2,
   UploadCloud,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge.jsx";
@@ -26,9 +27,11 @@ import { Checkbox } from "@/components/ui/checkbox.jsx";
 import { ScrollArea } from "@/components/ui/scroll-area.jsx";
 import { cn } from "@/lib/utils.js";
 import {
+  configureExcelSheetImport,
   createReportsFromExcelSheets,
   parseExcelWorkbook,
 } from "../lib/excelTemplateImport.js";
+import ExcelImportAdvancedSettings from "./ExcelImportAdvancedSettings.jsx";
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
 const STEPS = [
@@ -50,6 +53,7 @@ export default function ExcelTemplateImportWizard({
   const [file, setFile] = useState(null);
   const [workbook, setWorkbook] = useState(null);
   const [selectedSheetNames, setSelectedSheetNames] = useState(new Set());
+  const [configuredSheetName, setConfiguredSheetName] = useState("");
   const [isReading, setIsReading] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -61,12 +65,24 @@ export default function ExcelTemplateImportWizard({
     [workbook],
   );
   const activeStepIndex = getStepIndex(step);
+  const configuredSheet = useMemo(
+    () => workbook?.sheets.find((sheet) => sheet.name === configuredSheetName),
+    [configuredSheetName, workbook],
+  );
+  const invalidSelectedSheets = useMemo(
+    () =>
+      workbook?.sheets.filter(
+        (sheet) => selectedSheetNames.has(sheet.name) && !sheet.isRecommended,
+      ) || [],
+    [selectedSheetNames, workbook],
+  );
 
   const resetWizard = () => {
     setStep("upload");
     setFile(null);
     setWorkbook(null);
     setSelectedSheetNames(new Set());
+    setConfiguredSheetName("");
     setError("");
     setImportedReports([]);
   };
@@ -99,6 +115,11 @@ export default function ExcelTemplateImportWizard({
             .map((sheet) => sheet.name),
         ),
       );
+      setConfiguredSheetName(
+        nextWorkbook.sheets.find((sheet) => sheet.isRecommended)?.name ||
+          nextWorkbook.sheets[0]?.name ||
+          "",
+      );
       setStep("select");
     } catch (readError) {
       setError(
@@ -119,8 +140,40 @@ export default function ExcelTemplateImportWizard({
     });
   };
 
+  const updateSheetImportConfig = (sheetName, importConfig) => {
+    setWorkbook((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        sheets: current.sheets.map((sheet) =>
+          sheet.name === sheetName
+            ? configureExcelSheetImport(sheet, importConfig)
+            : sheet,
+        ),
+      };
+    });
+  };
+
+  const resetSheetImportConfig = (sheetName) => {
+    const sheet = workbook?.sheets.find((item) => item.name === sheetName);
+    if (!sheet) return;
+    updateSheetImportConfig(
+      sheetName,
+      sheet.autoImportConfig || sheet.importConfig,
+    );
+  };
+
   const handleImport = async () => {
-    if (!workbook || selectedSheetNames.size === 0) return;
+    if (
+      !workbook ||
+      selectedSheetNames.size === 0 ||
+      invalidSelectedSheets.length > 0
+    ) {
+      setError(
+        "Resolve worksheet import setting errors before creating templates.",
+      );
+      return;
+    }
     setIsImporting(true);
     setError("");
     try {
@@ -271,7 +324,10 @@ export default function ExcelTemplateImportWizard({
                 role="alert"
                 className="mt-4 flex items-start gap-3 rounded-xl border border-destructive/25 bg-destructive/8 p-3 text-destructive"
               >
-                <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                <AlertCircle
+                  className="mt-0.5 size-4 shrink-0"
+                  aria-hidden="true"
+                />
                 <p className="text-sm leading-5">{error}</p>
               </section>
             )}
@@ -285,7 +341,10 @@ export default function ExcelTemplateImportWizard({
             <section className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <section className="min-w-0">
                 <CardTitle className="flex items-center gap-2 text-base font-semibold sm:text-lg">
-                  <FileCheck2 className="size-5 text-primary" aria-hidden="true" />
+                  <FileCheck2
+                    className="size-5 text-primary"
+                    aria-hidden="true"
+                  />
                   Select worksheets
                 </CardTitle>
                 <CardDescription className="mt-1 truncate">
@@ -321,44 +380,47 @@ export default function ExcelTemplateImportWizard({
           </CardHeader>
 
           <CardContent className="p-0">
-            <ScrollArea className="h-96 sm:h-120">
+            <ScrollArea className="h-80 sm:h-96">
               <ul aria-label="Worksheets" className="divide-y divide-border">
                 {workbook.sheets.map((sheet) => {
                   const isSelected = selectedSheetNames.has(sheet.name);
+                  const isConfigured = configuredSheetName === sheet.name;
                   const checkboxId = `sheet-${sheet.name.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
                   return (
                     <li
                       key={sheet.name}
                       className={cn(
                         "transition-colors",
-                        isSelected ? "bg-primary/5" : "hover:bg-muted/35",
+                        isSelected || isConfigured
+                          ? "bg-primary/5"
+                          : "hover:bg-muted/35",
                       )}
                     >
-                      <label
-                        htmlFor={checkboxId}
-                        className={cn(
-                          "flex min-h-16 items-center gap-3 px-4 py-3",
-                          sheet.isRecommended
-                            ? "cursor-pointer"
-                            : "cursor-not-allowed opacity-65",
-                        )}
-                      >
+                      <section className="flex min-h-16 items-center gap-3 px-4 py-3">
                         <Checkbox
                           id={checkboxId}
                           checked={isSelected}
-                          disabled={!sheet.isRecommended}
+                          disabled={!sheet.isRecommended && !isSelected}
                           onCheckedChange={(checked) =>
                             setSheetSelected(sheet.name, checked === true)
                           }
                           aria-label={`Import worksheet ${sheet.name}`}
                         />
-                        <section className="min-w-0 flex-1">
+                        <label
+                          htmlFor={checkboxId}
+                          className={cn(
+                            "min-w-0 flex-1",
+                            sheet.isRecommended || isSelected
+                              ? "cursor-pointer"
+                              : "cursor-not-allowed opacity-65",
+                          )}
+                        >
                           <p className="truncate text-sm font-medium text-foreground">
                             {sheet.name}
                           </p>
                           <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                            {sheet.rowCount} populated rows · {sheet.columnCount}{" "}
-                            populated columns
+                            {sheet.rowCount} populated rows ·{" "}
+                            {sheet.columnCount} populated columns
                             {sheet.isRecommended
                               ? ` · ${sheet.detectedRows.length} template rows · ${sheet.detectedColumns.length} report columns`
                               : " · Not a report worksheet"}
@@ -368,19 +430,41 @@ export default function ExcelTemplateImportWizard({
                               {sheet.previewRows.join(" · ")}
                             </p>
                           )}
-                        </section>
+                        </label>
                         <Badge
-                          variant={sheet.isRecommended ? "secondary" : "outline"}
+                          variant={
+                            sheet.isRecommended ? "secondary" : "destructive"
+                          }
                           className="rounded-lg"
                         >
-                          {sheet.isRecommended ? "Ready" : "Skipped"}
+                          {sheet.isRecommended ? "Ready" : "Check settings"}
                         </Badge>
-                      </label>
+                        <Button
+                          type="button"
+                          variant={isConfigured ? "secondary" : "outline"}
+                          size="sm"
+                          onClick={() => setConfiguredSheetName(sheet.name)}
+                        >
+                          <Settings2 aria-hidden="true" />
+                          Configure
+                        </Button>
+                      </section>
                     </li>
                   );
                 })}
               </ul>
             </ScrollArea>
+            {configuredSheet && (
+              <section className="border-t border-border">
+                <ExcelImportAdvancedSettings
+                  sheet={configuredSheet}
+                  onChange={(importConfig) =>
+                    updateSheetImportConfig(configuredSheet.name, importConfig)
+                  }
+                  onReset={() => resetSheetImportConfig(configuredSheet.name)}
+                />
+              </section>
+            )}
           </CardContent>
 
           {error && (
@@ -388,7 +472,10 @@ export default function ExcelTemplateImportWizard({
               role="alert"
               className="mx-4 mb-4 flex items-start gap-3 rounded-xl border border-destructive/25 bg-destructive/8 p-3 text-destructive"
             >
-              <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              <AlertCircle
+                className="mt-0.5 size-4 shrink-0"
+                aria-hidden="true"
+              />
               <p className="text-sm leading-5">{error}</p>
             </section>
           )}
@@ -400,7 +487,11 @@ export default function ExcelTemplateImportWizard({
             </Button>
             <Button
               type="button"
-              disabled={selectedSheetNames.size === 0 || isImporting}
+              disabled={
+                selectedSheetNames.size === 0 ||
+                invalidSelectedSheets.length > 0 ||
+                isImporting
+              }
               onClick={handleImport}
             >
               {isImporting ? (

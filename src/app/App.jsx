@@ -721,6 +721,7 @@ export default function App({ onLogout = null }) {
     writeStoredReports(reports);
   }, [reports, reportsLoaded]);
 
+  // react-doctor-disable-next-line no-set-state-after-await-in-effect -- Cleanup flips isCancelled before any late request can update effect-owned notice state.
   useEffect(() => {
     if (
       !apiConfigured ||

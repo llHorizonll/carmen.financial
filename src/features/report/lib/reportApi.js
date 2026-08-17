@@ -158,7 +158,7 @@ export const isCarmenApiConfigured = () => Boolean(getStoredCarmenSession()?.acc
 export const fetchBusinessUnitsByUsername = async (username) => {
   const trimmedUserName = String(username || '').trim();
   const { adminToken } = getCarmenApiConfig();
-  if (!adminToken) throw new Error('Carmen adminToken not found in public/config.js.');
+  if (!adminToken) throw new Error('Carmen adminToken not found in config.js.');
   if (!trimmedUserName) return [];
 
   const url = `${getBusinessUnitApiBaseUrl().replace(/\/$/, '')}/api/userTenant/tenantListIn/${encodeURIComponent(adminToken)}/${encodeURIComponent(trimmedUserName)}`;
@@ -264,7 +264,7 @@ const canAccessCarmenReportDefinition = (report, userId) => {
 export const loginWithCarmenCredentials = async ({ userName, password, tenant, language }) => {
   const { adminToken } = getCarmenApiConfig();
   if (!adminToken) {
-    throw new Error('Carmen adminToken not found in public/config.js.');
+    throw new Error('Carmen adminToken not found in config.js.');
   }
 
   const response = await fetchWithNetworkHandling(buildUrl('/api/login', {

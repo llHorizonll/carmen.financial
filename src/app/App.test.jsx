@@ -257,6 +257,17 @@ describe('App shell', () => {
     resolveApply({ actualRows: [], budgetRows: [] });
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Loading report data' })).not.toBeInTheDocument());
 
+    const publishedApiError = Object.assign(
+      new Error('Unable to reach Carmen API. Check your network connection or contact the administrator.'),
+      { name: 'CarmenApiError' },
+    );
+    reportApiMocks.fetchCarmenReportData.mockRejectedValue(publishedApiError);
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Loading report data' })).not.toBeInTheDocument());
+
+    expect(await screen.findByText('Notice')).toBeInTheDocument();
+    expect(screen.getByText(publishedApiError.message)).toBeInTheDocument();
+
     expect(screen.queryByRole('button', { name: /^GL$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^BUD$/i })).not.toBeInTheDocument();
   });
