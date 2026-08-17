@@ -82,6 +82,10 @@ function ReportAccessSummary({
   masterData,
   setIsAccessModalOpen,
 }) {
+  const assignedUsersLabel = activeReport.assignedUsers.length > 0
+    ? activeReport.assignedUsers.map((uid) => masterData?.users?.find((user) => user.id === uid)?.name || uid).join(', ')
+    : 'None';
+
   return (
     <div className="space-y-3 rounded-xl border border-border bg-muted/10 p-4">
       <div className="space-y-1">
@@ -91,15 +95,17 @@ function ReportAccessSummary({
         </div>
         <p className="text-sm text-muted-foreground">Assigned users and visibility control.</p>
       </div>
-      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
+      <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[auto_minmax(0,1fr)]">
         <Button type="button" variant="outline" className={`shrink-0 ${friendlyButtonClassName}`} onClick={() => setIsAccessModalOpen(true)}>
           Manage access
         </Button>
-        <div className="flex h-8 min-w-0 items-center rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm text-foreground dark:bg-input/30">
-          {activeReport.assignedUsers.length > 0
-            ? activeReport.assignedUsers.map((uid) => masterData?.users?.find((user) => user.id === uid)?.name || uid).join(', ')
-            : 'None'}
-        </div>
+        <p
+          aria-label="Assigned users"
+          className="min-h-8 min-w-0 break-words rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm leading-5 text-foreground dark:bg-input/30"
+          title={assignedUsersLabel}
+        >
+          {assignedUsersLabel}
+        </p>
       </div>
     </div>
   );

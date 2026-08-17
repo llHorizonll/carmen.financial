@@ -34,6 +34,7 @@ import {
 import ExcelImportAdvancedSettings from "./ExcelImportAdvancedSettings.jsx";
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
+const EMPTY_MAPPING_CATALOG = [];
 const STEPS = [
   { id: "upload", label: "Upload workbook" },
   { id: "select", label: "Select worksheets" },
@@ -46,6 +47,8 @@ export default function ExcelTemplateImportWizard({
   companyName,
   userIds,
   owner,
+  departments = EMPTY_MAPPING_CATALOG,
+  accountCodes = EMPTY_MAPPING_CATALOG,
   onImportTemplates,
   onOpenImportedReport,
 }) {
@@ -59,6 +62,10 @@ export default function ExcelTemplateImportWizard({
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState("");
   const [importedReports, setImportedReports] = useState([]);
+  const mappingCatalogs = useMemo(
+    () => ({ depts: departments, accCodes: accountCodes }),
+    [accountCodes, departments],
+  );
 
   const recommendedSheets = useMemo(
     () => workbook?.sheets.filter((sheet) => sheet.isRecommended) || [],
@@ -106,7 +113,7 @@ export default function ExcelTemplateImportWizard({
     setWorkbook(null);
     setIsReading(true);
     try {
-      const nextWorkbook = await parseExcelWorkbook(nextFile);
+      const nextWorkbook = await parseExcelWorkbook(nextFile, mappingCatalogs);
       setWorkbook(nextWorkbook);
       setSelectedSheetNames(
         new Set(
@@ -147,7 +154,7 @@ export default function ExcelTemplateImportWizard({
         ...current,
         sheets: current.sheets.map((sheet) =>
           sheet.name === sheetName
-            ? configureExcelSheetImport(sheet, importConfig)
+            ? configureExcelSheetImport(sheet, importConfig, mappingCatalogs)
             : sheet,
         ),
       };

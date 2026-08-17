@@ -5,6 +5,7 @@ import {
   createReportsFromExcelSheets,
   excelColumnToIndex,
   excelIndexToColumn,
+  resolveLinkedMappingValue,
 } from "./excelTemplateImport.js";
 
 describe("Excel template import", () => {
@@ -13,6 +14,24 @@ describe("Excel template import", () => {
     expect(excelColumnToIndex("BZ")).toBe(77);
     expect(excelIndexToColumn(78)).toBe("CA");
     expect(excelColumnToIndex("A1")).toBe(-1);
+  });
+
+  it("expands numeric mapping ranges using only codes present in master data", () => {
+    const resolved = resolveLinkedMappingValue(
+      "6000102-6000106, 6000500",
+      [
+        { id: "6000102" },
+        { id: "6000104" },
+        { id: "6000106" },
+        { id: "7000000" },
+      ],
+    );
+
+    expect(resolved.value).toBe("6000102, 6000104, 6000106");
+    expect(resolved.rangeMatches).toEqual([
+      { token: "6000102-6000106", count: 3 },
+    ]);
+    expect(resolved.invalidTokens).toEqual(["6000500"]);
   });
 
   it("detects a description column and creates a safe report template", () => {
@@ -114,6 +133,89 @@ describe("Excel template import", () => {
       accCodes: "4100001, 4100100",
       isHeader: false,
     });
+  });
+
+  it("validates linked ranges and direct codes before creating a template", () => {
+    const sheet = analyzeExcelSheet(
+      "PL-RANGES",
+      [
+        [
+          "Actual",
+          "Budget",
+          "Description",
+          "Dept Code (Linked)",
+          "Account Code (Linked)",
+        ],
+        [100, 90, "Rooms", "100-103", "6000102-6000106, 6000500"],
+        [50, 45, "F&B", "201", "7000000"],
+      ],
+      [],
+      new Map(),
+      {
+        reportStartColumn: "A",
+        reportEndColumn: "B",
+        descriptionColumn: "C",
+        mappingHeaderRow: 1,
+        deptMappingColumn: "D",
+        accountMappingColumn: "E",
+      },
+      {
+        depts: [{ id: "100" }, { id: "102" }, { id: "201" }],
+        accCodes: [
+          { id: "6000102" },
+          { id: "6000104" },
+          { id: "6000106" },
+          { id: "7000000" },
+        ],
+      },
+    );
+
+    expect(sheet.detectedRows[0]).toMatchObject({
+      dept: "100, 102",
+      accCodes: "6000102, 6000104, 6000106",
+    });
+    expect(sheet.mappingChecks).toContain(
+      "Row 2 (Rooms): Account range 6000102-6000106 matched 3 system codes.",
+    );
+    expect(sheet.importIssues.warnings).toContain(
+      "Row 2 (Rooms): ignored account mapping values not found in the system: 6000500.",
+    );
+  });
+
+  it("blocks linked mapping import when system master data is unavailable", () => {
+    const sheet = analyzeExcelSheet(
+      "PL-NO-MASTER",
+      [
+        [
+          "Actual",
+          "Budget",
+          "Description",
+          "Dept Code (Linked)",
+          "Account Code (Linked)",
+        ],
+        [100, 90, "Rooms", "100-103", "6000102-6000106"],
+        [50, 45, "F&B", "201", "7000000"],
+      ],
+      [],
+      new Map(),
+      {
+        reportStartColumn: "A",
+        reportEndColumn: "B",
+        descriptionColumn: "C",
+        mappingHeaderRow: 1,
+        deptMappingColumn: "D",
+        accountMappingColumn: "E",
+      },
+      { depts: [], accCodes: [] },
+    );
+
+    expect(sheet.isRecommended).toBe(false);
+    expect(sheet.importIssues.errors).toEqual(
+      expect.arrayContaining([
+        "Department master data is unavailable. Linked department mappings cannot be verified.",
+        "Account master data is unavailable. Linked account mappings cannot be verified.",
+      ]),
+    );
   });
 
   it("re-analyzes a worksheet with explicit data and mapping coordinates", () => {

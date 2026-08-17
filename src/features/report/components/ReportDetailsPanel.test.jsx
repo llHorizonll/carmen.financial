@@ -63,5 +63,10 @@ describe('ReportDetailsPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Manage access' }));
     expect(setIsAccessModalOpen).toHaveBeenCalledWith(true);
+
+    const assignedUsers = screen.getByLabelText('Assigned users');
+    expect(assignedUsers).toHaveTextContent('Admin User');
+    expect(assignedUsers).toHaveClass('min-h-8', 'break-words');
+    expect(assignedUsers).not.toHaveClass('h-8');
   });
 });

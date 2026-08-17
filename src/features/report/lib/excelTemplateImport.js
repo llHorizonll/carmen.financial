@@ -1,3 +1,8 @@
+import {
+  normalizeAccLookupCode,
+  normalizeDeptLookupCode,
+} from "./normalizeCode.js";
+
 const ERROR_VALUE = /^#(?:NAME\?|REF!|DIV\/0!|VALUE!|N\/A|NULL!|NUM!)/i;
 const NUMBER_VALUE = /^\(?-?[\d,.]+\)?%?$/;
 const FINANCIAL_NUMBER_VALUE = /^\(?-?\s*(?:[$฿€£¥]\s*)?[\d,.]+\s*\)?\s*%?$/;
@@ -119,6 +124,78 @@ const detectLinkedMappingColumns = (matrix, options = {}) => {
 const cleanMappingValue = (value) => {
   const text = cleanText(value);
   return !text || ERROR_VALUE.test(text) || EMPTY_VALUE.test(text) ? "" : text;
+};
+
+const getCatalogCodes = (items, normalizeCode) => {
+  if (!Array.isArray(items)) return null;
+  return [
+    ...new Set(
+      items
+        .map((item) => item?.id ?? item?.code ?? item)
+        .map(normalizeCode)
+        .filter(Boolean),
+    ),
+  ].sort((left, right) =>
+    left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" }),
+  );
+};
+
+export const resolveLinkedMappingValue = (
+  value,
+  catalogItems,
+  normalizeCode = normalizeAccLookupCode,
+) => {
+  const rawValue = cleanMappingValue(value);
+  if (!rawValue) {
+    return { value: "", invalidTokens: [], rangeMatches: [] };
+  }
+
+  const catalogCodes = getCatalogCodes(catalogItems, normalizeCode);
+  if (catalogCodes === null) {
+    return { value: rawValue, invalidTokens: [], rangeMatches: [] };
+  }
+
+  const catalogSet = new Set(catalogCodes);
+  const resolvedCodes = [];
+  const resolvedSet = new Set();
+  const invalidTokens = [];
+  const rangeMatches = [];
+  const addCode = (code) => {
+    if (resolvedSet.has(code)) return;
+    resolvedSet.add(code);
+    resolvedCodes.push(code);
+  };
+
+  rawValue
+    .split(/[,;|\r\n]+/)
+    .map(cleanText)
+    .filter(Boolean)
+    .forEach((token) => {
+      const range = token.match(/^(\d+)\s*[-–—]\s*(\d+)$/);
+      if (range) {
+        const start = BigInt(range[1]);
+        const end = BigInt(range[2]);
+        const matches = start <= end
+          ? catalogCodes.filter(
+              (code) => /^\d+$/.test(code) && BigInt(code) >= start && BigInt(code) <= end,
+            )
+          : [];
+        matches.forEach(addCode);
+        rangeMatches.push({ token, count: matches.length });
+        if (matches.length === 0) invalidTokens.push(token);
+        return;
+      }
+
+      const normalized = normalizeCode(token);
+      if (catalogSet.has(normalized)) addCode(normalized);
+      else invalidTokens.push(token);
+    });
+
+  return {
+    value: resolvedCodes.join(", "),
+    invalidTokens,
+    rangeMatches,
+  };
 };
 
 const detectColumns = (
@@ -426,6 +503,7 @@ const detectRows = (
   cellStyles = new Map(),
   linkedMappingColumns = { dept: -1, accCodes: -1 },
   options = {},
+  mappingCatalogs = {},
 ) => {
   const descriptionHeaderIndex = matrix.findIndex((row) =>
     DESCRIPTION_HEADER.test(cleanText(row[descriptionColumn])),
@@ -434,6 +512,9 @@ const detectRows = (
   const configuredEndRow = toPositiveInteger(options.dataEndRow);
   let hasSection = false;
   const sourceRowNumbers = [];
+  const mappingChecks = [];
+  const mappingWarnings = [];
+  const mappingRequirements = { dept: false, accCodes: false };
 
   const rows = matrix.flatMap((sourceRow, sourceIndex) => {
     const sourceRowNumber = sourceIndex + 1;
@@ -460,11 +541,41 @@ const detectRows = (
       style,
       original,
     );
-    const dept = cleanMappingValue(sourceRow[linkedMappingColumns.dept]);
-    const accCodes = cleanMappingValue(
+    const rawDept = cleanMappingValue(sourceRow[linkedMappingColumns.dept]);
+    const rawAccCodes = cleanMappingValue(
       sourceRow[linkedMappingColumns.accCodes],
     );
-    const hasLinkedMapping = Boolean(dept || accCodes);
+    const deptResolution = resolveLinkedMappingValue(
+      rawDept,
+      mappingCatalogs.depts,
+      normalizeDeptLookupCode,
+    );
+    const accountResolution = resolveLinkedMappingValue(
+      rawAccCodes,
+      mappingCatalogs.accCodes,
+      normalizeAccLookupCode,
+    );
+    const dept = deptResolution.value;
+    const accCodes = accountResolution.value;
+    const hasLinkedMapping = Boolean(rawDept || rawAccCodes);
+    mappingRequirements.dept ||= Boolean(rawDept);
+    mappingRequirements.accCodes ||= Boolean(rawAccCodes);
+
+    [
+      ["Department", deptResolution],
+      ["Account", accountResolution],
+    ].forEach(([label, resolution]) => {
+      resolution.rangeMatches.forEach(({ token, count }) => {
+        mappingChecks.push(
+          `Row ${sourceRowNumber} (${desc}): ${label} range ${token} matched ${count} system code${count === 1 ? "" : "s"}.`,
+        );
+      });
+      if (resolution.invalidTokens.length > 0) {
+        mappingWarnings.push(
+          `Row ${sourceRowNumber} (${desc}): ignored ${label.toLowerCase()} mapping values not found in the system: ${resolution.invalidTokens.join(", ")}.`,
+        );
+      }
+    });
     const indent = isStyleBoundary
       ? 0
       : hasSection
@@ -498,7 +609,13 @@ const detectRows = (
     ];
   });
 
-  return { rows, sourceRowNumbers };
+  return {
+    rows,
+    sourceRowNumbers,
+    mappingChecks,
+    mappingWarnings,
+    mappingRequirements,
+  };
 };
 
 const getImportConfigIssues = ({
@@ -508,6 +625,9 @@ const getImportConfigIssues = ({
   linkedMappingColumns,
   rowCount,
   columnCount,
+  mappingCatalogs,
+  mappingRequirements,
+  mappingWarnings,
 }) => {
   const errors = [];
   const warnings = [];
@@ -600,6 +720,25 @@ const getImportConfigIssues = ({
   if (rowCount < 2) errors.push("At least 2 report rows are required.");
   if (columnCount < 2)
     errors.push("At least 2 report value columns are required.");
+  if (
+    mappingRequirements.dept &&
+    Array.isArray(mappingCatalogs.depts) &&
+    getCatalogCodes(mappingCatalogs.depts, normalizeDeptLookupCode).length === 0
+  ) {
+    errors.push(
+      "Department master data is unavailable. Linked department mappings cannot be verified.",
+    );
+  }
+  if (
+    mappingRequirements.accCodes &&
+    Array.isArray(mappingCatalogs.accCodes) &&
+    getCatalogCodes(mappingCatalogs.accCodes, normalizeAccLookupCode).length === 0
+  ) {
+    errors.push(
+      "Account master data is unavailable. Linked account mappings cannot be verified.",
+    );
+  }
+  warnings.push(...mappingWarnings);
   return { errors, warnings };
 };
 
@@ -609,19 +748,27 @@ export const analyzeExcelSheet = (
   cellMatrix = [],
   cellStyles = new Map(),
   options = {},
+  mappingCatalogs = {},
 ) => {
   const descriptionColumn = detectDescriptionColumn(
     matrix,
     options.descriptionColumn,
   );
   const linkedMappingColumns = detectLinkedMappingColumns(matrix, options);
-  const { rows, sourceRowNumbers } = detectRows(
+  const {
+    rows,
+    sourceRowNumbers,
+    mappingChecks,
+    mappingWarnings,
+    mappingRequirements,
+  } = detectRows(
     matrix,
     descriptionColumn,
     cellMatrix,
     cellStyles,
     linkedMappingColumns,
     options,
+    mappingCatalogs,
   );
   const { columns, sourceColumnIndexes } = detectColumns(
     matrix,
@@ -693,6 +840,9 @@ export const analyzeExcelSheet = (
     linkedMappingColumns,
     rowCount: rows.length,
     columnCount: columns.length,
+    mappingCatalogs,
+    mappingRequirements,
+    mappingWarnings,
   });
   const isRecommended =
     !NON_REPORT_SHEET.test(name) &&
@@ -710,6 +860,7 @@ export const analyzeExcelSheet = (
     detectedColumns: columns,
     importConfig,
     importIssues,
+    mappingChecks,
     mappingPreviewRows: rows.slice(0, 5).map((row) => ({
       rowNumber: Number(row.id.replace("excel-row-", "")),
       description: row.desc,
@@ -721,7 +872,11 @@ export const analyzeExcelSheet = (
   };
 };
 
-export const configureExcelSheetImport = (sheet, importConfig) => {
+export const configureExcelSheetImport = (
+  sheet,
+  importConfig,
+  mappingCatalogs = {},
+) => {
   if (!sheet?.source) return sheet;
   const configured = analyzeExcelSheet(
     sheet.name,
@@ -729,6 +884,7 @@ export const configureExcelSheetImport = (sheet, importConfig) => {
     sheet.source.cellMatrix,
     sheet.source.cellStyles,
     importConfig,
+    mappingCatalogs,
   );
   return {
     ...configured,
@@ -737,7 +893,7 @@ export const configureExcelSheetImport = (sheet, importConfig) => {
   };
 };
 
-export const parseExcelWorkbook = async (file) => {
+export const parseExcelWorkbook = async (file, mappingCatalogs = {}) => {
   const xlsxModule = await import("xlsx");
   const XLSX = xlsxModule.default || xlsxModule;
   const workbook = XLSX.read(new Uint8Array(await file.arrayBuffer()), {
@@ -769,6 +925,8 @@ export const parseExcelWorkbook = async (file) => {
         source.matrix,
         source.cellMatrix,
         source.cellStyles,
+        {},
+        mappingCatalogs,
       );
       return {
         ...analyzed,

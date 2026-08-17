@@ -1959,6 +1959,8 @@ export default function App({ onLogout = null }) {
                       }
                       userIds={reportUsers.map((user) => user.id)}
                       owner={currentUser?.id || ""}
+                      departments={masterData.depts}
+                      accountCodes={masterData.accCodes}
                       onImportTemplates={handleImportExcelTemplates}
                       onOpenImportedReport={(reportId) => {
                         if (reportId) setCurrentReportId(reportId);

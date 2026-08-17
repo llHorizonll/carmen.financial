@@ -61,6 +61,8 @@ describe("ExcelTemplateImportWizard", () => {
         companyName="Carmen"
         userIds={["admin"]}
         owner="admin"
+        departments={[{ id: "110" }]}
+        accountCodes={[{ id: "6000102" }]}
         onImportTemplates={vi.fn()}
         onOpenImportedReport={vi.fn()}
       />,
@@ -90,5 +92,9 @@ describe("ExcelTemplateImportWizard", () => {
     expect(screen.getAllByRole("button", { name: "Configure" })).toHaveLength(1);
 
     await waitFor(() => expect(parseExcelWorkbook).toHaveBeenCalledTimes(1));
+    expect(parseExcelWorkbook).toHaveBeenCalledWith(expect.any(File), {
+      depts: [{ id: "110" }],
+      accCodes: [{ id: "6000102" }],
+    });
   });
 });
