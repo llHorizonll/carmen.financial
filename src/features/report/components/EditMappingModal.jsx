@@ -1,7 +1,6 @@
 import React from 'react';
-import { SearchIcon, Settings2, X } from 'lucide-react';
+import { SearchIcon, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
-import { Badge } from '@/components/ui/badge.jsx';
 import {
   Dialog,
   DialogContent,
@@ -54,13 +53,6 @@ export default function EditMappingModal({
         { id: 'I', label: 'Income Statement' },
         { id: 'B', label: 'Balance Sheet' },
       ];
-  const accountCodeTokens = String(editingRow.accCodes || '')
-    .split(',')
-    .flatMap((item) => {
-      const trimmed = item.trim();
-      return trimmed ? [trimmed] : [];
-    });
-
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
@@ -202,16 +194,8 @@ export default function EditMappingModal({
                   Select Account Detail
                 </Button>
               </div>
-              {accountCodeTokens.length > 0 && (
-                <div className="flex flex-wrap gap-2 rounded-xl border border-border bg-background/70 p-3">
-                  {accountCodeTokens.map((token) => (
-                    <Badge key={token} variant="secondary" className="rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.12em]">
-                      {token}
-                    </Badge>
-                  ))}
-                </div>
-              )}
               <Textarea
+                aria-label="Account codes"
                 value={editingRow.accCodes}
                 onChange={(e) => setEditingRow({ ...editingRow, accCodes: e.target.value })}
                 placeholder="e.g. 4001, 4002"

@@ -125,4 +125,42 @@ describe('EditMappingModal', () => {
       ],
     }));
   });
+
+  it('keeps more than 100 account codes fully editable without duplicate chips', () => {
+    const setEditingRow = vi.fn();
+    const accountCodes = Array.from(
+      { length: 120 },
+      (_, index) => String(6000000 + index),
+    ).join(', ');
+
+    render(
+      <EditMappingModal
+        isOpen={true}
+        editingRow={{
+          desc: 'Wages & Benefits',
+          dept: '',
+          groupLevel: 'L4',
+          groups: '',
+          accCodes: accountCodes,
+        }}
+        setEditingRow={setEditingRow}
+        masterData={{ depts: [], deptGroups: [], groups: { L4: [] }, accCodes: [] }}
+        modalAccCategory="ALL"
+        setModalAccCategory={() => {}}
+        onOpenDetailSelector={() => {}}
+        onApply={() => {}}
+        onClose={() => {}}
+      />,
+    );
+
+    const accountCodesInput = screen.getByRole('textbox', { name: 'Account codes' });
+    expect(accountCodesInput).toHaveValue(accountCodes);
+    expect(document.querySelector('[data-slot="badge"]')).not.toBeInTheDocument();
+
+    const updatedCodes = `${accountCodes}, 7000000`;
+    fireEvent.change(accountCodesInput, { target: { value: updatedCodes } });
+    expect(setEditingRow).toHaveBeenCalledWith(
+      expect.objectContaining({ accCodes: updatedCodes }),
+    );
+  });
 });
