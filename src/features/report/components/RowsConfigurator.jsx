@@ -32,7 +32,6 @@ const isRowUnmapped = (row) => ![
 export default function RowsConfigurator({
   activeReport,
   masterData,
-  themeMode = 'light',
   handleAddRow,
   handleUpdateRow,
   handleUpdateRowMulti,
@@ -245,7 +244,7 @@ export default function RowsConfigurator({
         )}
 
         <div className="overflow-auto">
-          <Table className="min-w-[1000px]">
+          <Table className="min-w-[1000px] table-fixed [&_td]:px-1 [&_th]:px-1">
             <TableHeader className="sticky top-0 z-10 bg-muted/50">
               <TableRow>
                 {bulkMode && (
@@ -258,12 +257,15 @@ export default function RowsConfigurator({
                   </TableHead>
                 )}
                 <TableHead className="w-16 text-center align-middle">Del</TableHead>
-                <TableHead className="w-24 text-center align-middle">Type</TableHead>
-                <TableHead className="min-w-[16rem]">Description</TableHead>
+                <TableHead className="w-32 text-center align-middle">Type</TableHead>
+                <TableHead className="w-48">Description</TableHead>
                 <TableHead className="w-24 text-center align-middle">Indent</TableHead>
                 <TableHead className="w-24 text-center align-middle">Row</TableHead>
                 <TableHead className="w-24 text-center align-middle">% Base</TableHead>
-                <TableHead className="min-w-[24rem]">Mapping Rules Setup</TableHead>
+                <TableHead className="w-96 min-w-96 max-w-96 whitespace-normal">Mapping Rules Setup</TableHead>
+                <TableHead className="sticky right-0 z-20 w-24 border-l bg-muted/95 text-center align-middle">
+                  Action
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody ref={containerRef}>
@@ -377,7 +379,7 @@ export default function RowsConfigurator({
                         />
                       ) : null}
                     </TableCell>
-                    <TableCell className="px-2 py-2 align-middle">
+                    <TableCell className="w-96 min-w-96 max-w-96 whitespace-normal px-2 py-2 align-middle">
                       {isHeader ? (
                         <span className="inline-flex rounded-full border border-border bg-background px-2.5 py-1 text-sm text-muted-foreground">Header Row (No data mapping)</span>
                       ) : isTotal ? (
@@ -391,60 +393,49 @@ export default function RowsConfigurator({
                           />
                         </div>
                       ) : (
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1 space-y-1 text-sm text-muted-foreground">
-                            <div className="truncate"><span className="font-medium text-foreground">DEPT:</span> {row.dept || '-'}</div>
-                            <div className="truncate"><span className="font-medium text-foreground">DEPT GRP:</span> {row.deptGroup || '-'}</div>
-                            <div className="truncate"><span className="font-medium text-foreground">GRP ({row.groupLevel || 'L4'}):</span> {row.groups || '-'}</div>
-                            <div className="truncate"><span className="font-medium text-foreground">CODE:</span> {row.accCodes || '-'}</div>
-                            <div className="truncate"><span className="font-medium text-foreground">DIM:</span> {[row.dim1, row.dim2].filter(Boolean).join(', ') || '-'}</div>
-                            {rowWarnings.length > 0 && (
-                              <div className="space-y-1 pt-1">
-                            {rowWarnings.map((warning) => {
-                              const isUnknown = /unknown/i.test(warning);
-                              const isDuplicate = /double count/i.test(warning);
-                              return isUnknown ? (
-                                <Badge
-                                  key={warning}
-                                  variant="destructive"
-                                  className="h-auto whitespace-normal rounded-md px-2 py-1 text-left text-xs font-normal normal-case tracking-normal"
-                                  style={{
-                                    backgroundColor: 'color-mix(in oklch, var(--destructive) 16%, transparent)',
-                                    borderColor: 'color-mix(in oklch, var(--destructive) 30%, transparent)',
-                                  }}
-                                >
-                                  {warning}
-                                </Badge>
-                              ) : isDuplicate ? (
-                                <Badge
-                                  key={warning}
-                                  variant="outline"
-                                  className="h-auto whitespace-normal rounded-md border-amber-500/60 bg-amber-500/10 px-2 py-1 text-left text-xs font-semibold normal-case tracking-normal shadow-sm"
-                                  style={{ color: themeMode === 'dark' ? '#ffffff' : '#000000' }}
-                                >
-                                  {warning}
-                                </Badge>
-                              ) : (
-                                <div key={warning} className="rounded-md border border-destructive/20 bg-destructive/5 px-2 py-1 text-xs text-destructive">
-                                  {warning}
-                                </div>
-                              );
-                            })}
-                          </div>
-                            )}
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="icon-sm"
-                            aria-label={`Edit mapping for row ${row.id}`}
-                            title={`Edit mapping for row ${row.id}`}
-                            onClick={() => setEditingRow({ ...row })}
-                            className="mt-0.5 shrink-0"
-                          >
-                            <Edit3 />
-                          </Button>
-                        </div>
+                        <section className="min-w-0 space-y-1 text-sm text-muted-foreground">
+                          <p className="truncate"><span className="font-medium text-foreground">DEPT:</span> {row.dept || '-'}</p>
+                          <p className="truncate"><span className="font-medium text-foreground">DEPT GRP:</span> {row.deptGroup || '-'}</p>
+                          <p className="truncate"><span className="font-medium text-foreground">GRP ({row.groupLevel || 'L4'}):</span> {row.groups || '-'}</p>
+                          <p className="truncate"><span className="font-medium text-foreground">CODE:</span> {row.accCodes || '-'}</p>
+                          <p className="truncate"><span className="font-medium text-foreground">DIM:</span> {[row.dim1, row.dim2].filter(Boolean).join(', ') || '-'}</p>
+                          {rowWarnings.length > 0 && (
+                            <section className="min-w-0 space-y-1 pt-1">
+                              {rowWarnings.map((warning) => {
+                                const isUnknown = /unknown/i.test(warning);
+                                return isUnknown ? (
+                                  <Badge
+                                    key={warning}
+                                    variant="destructive"
+                                    className="h-auto max-w-full whitespace-normal break-words rounded-md border-destructive/30 bg-destructive/15 px-2 py-1 text-left text-xs font-normal normal-case tracking-normal"
+                                  >
+                                    {warning}
+                                  </Badge>
+                                ) : (
+                                  <section key={warning} className="max-w-full break-words rounded-md border border-destructive/20 bg-destructive/5 px-2 py-1 text-xs text-destructive">
+                                    {warning}
+                                  </section>
+                                );
+                              })}
+                            </section>
+                          )}
+                        </section>
                       )}
+                    </TableCell>
+                    <TableCell className="sticky right-0 z-10 w-24 border-l bg-card px-2 py-2 text-center align-middle">
+                      {!isHeader && !isTotal ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          aria-label={`Edit mapping for row ${row.id}`}
+                          title={`Edit mapping for row ${row.id}`}
+                          onClick={() => setEditingRow({ ...row })}
+                          className="mx-auto"
+                        >
+                          <Edit3 />
+                          Edit
+                        </Button>
+                      ) : null}
                     </TableCell>
                   </TableRow>
                 );

@@ -59,6 +59,10 @@ describe('RowsConfigurator', () => {
       />
     );
 
+    expect(screen.getByRole('table').className).toMatch(/\[&_td\]:px-1/);
+    expect(screen.getByRole('columnheader', { name: 'Type' }).className).toMatch(/w-32/);
+    expect(screen.getByRole('columnheader', { name: 'Description' }).className).toMatch(/w-48/);
+
     fireEvent.click(screen.getByRole('button', { name: '+ Add Data Row' }));
     expect(handleAddRow).toHaveBeenCalledWith('data');
     expect(screen.getByRole('button', { name: '+ Add Data Row' }).className).toMatch(/blue/);
@@ -119,6 +123,54 @@ describe('RowsConfigurator', () => {
       'r2',
       expect.objectContaining({ isTotal: false, isHeader: false })
     );
+  });
+
+  it('keeps the edit action visible when a mapping warning is long', () => {
+    render(
+      <RowsConfigurator
+        activeReport={{
+          rows: [
+            {
+              id: 'r-long-warning',
+              desc: 'Imported revenue mapping',
+              indent: 0,
+              isHeader: false,
+              isTotal: false,
+              percentBase: '',
+              formula: '',
+              dept: '',
+              deptGroup: '',
+              groups: '',
+              accCodes: 'UNKNOWN-001, UNKNOWN-002, UNKNOWN-003, UNKNOWN-004, UNKNOWN-005',
+              groupLevel: 'L4',
+            },
+          ],
+        }}
+        masterData={{
+          depts: [],
+          deptGroups: [],
+          accCodes: [{ id: 'KNOWN-001', name: 'Known account' }],
+          groups: { L4: [] },
+        }}
+        handleAddRow={vi.fn()}
+        handleUpdateRow={vi.fn()}
+        handleUpdateRowMulti={vi.fn()}
+        handleBulkUpdateRows={vi.fn()}
+        moveRow={vi.fn()}
+        handleDeleteRow={vi.fn()}
+        setEditingRow={vi.fn()}
+        setConfirmAction={vi.fn()}
+      />,
+    );
+
+    const warning = screen.getByText(/unknown account code\(s\)/i);
+    const editButton = screen.getByRole('button', {
+      name: 'Edit mapping for row r-long-warning',
+    });
+
+    expect(warning.className).toMatch(/break-words/);
+    expect(editButton.closest('td')?.className).toMatch(/sticky right-0/);
+    expect(screen.getByRole('columnheader', { name: 'Action' }).className).toMatch(/sticky right-0/);
   });
 
   it('bulk maps selected data rows, saves a preset, and supports undo', async () => {

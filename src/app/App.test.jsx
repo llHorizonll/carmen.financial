@@ -606,7 +606,7 @@ describe('App shell', () => {
     expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalledWith(expect.objectContaining({ id: 'rep-daily-invalid' }));
   });
 
-  it('warns about duplicate row mappings but allows saving anyway', async () => {
+  it('saves duplicate row mappings without showing a duplicate warning', async () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
       currentUser: {
@@ -667,8 +667,8 @@ describe('App shell', () => {
           { id: 'C1', label: 'Actual', isActive: true, isFormula: false, isPercent: false, yearMode: 'current', periodMode: 'current', type: 'AC', width: '' },
         ],
         rows: [
-          { id: 'r1', desc: 'Revenue', isActive: true, isHeader: false, isTotal: false, dept: '101', groupLevel: 'L4', groups: 'FOOD', accCodes: '', dim1: 'A', dim2: 'X', percentBase: '', formula: '', indent: 0 },
-          { id: 'r2', desc: 'Revenue Copy', isActive: true, isHeader: false, isTotal: false, dept: '101', groupLevel: 'L4', groups: 'FOOD', accCodes: '', dim1: 'A', dim2: 'X', percentBase: '', formula: '', indent: 0 },
+          { id: 'r1', desc: 'Revenue', isActive: true, isHeader: false, isTotal: false, dept: '101', groupLevel: 'L4', groups: '', accCodes: '', dim1: 'A', dim2: 'X', percentBase: '', formula: '', indent: 0 },
+          { id: 'r2', desc: 'Revenue Copy', isActive: true, isHeader: false, isTotal: false, dept: '101', groupLevel: 'L4', groups: '', accCodes: '', dim1: 'A', dim2: 'X', percentBase: '', formula: '', indent: 0 },
         ],
       },
     ]);
@@ -680,10 +680,9 @@ describe('App shell', () => {
     const reportName = await screen.findByDisplayValue('Duplicate Mapping');
     fireEvent.change(reportName, { target: { value: 'Duplicate Mapping Edit' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-    expect(await screen.findByText(/Row R1 \(Revenue\).*double count/i)).toBeInTheDocument();
-    expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Save anyway' }));
     await waitFor(() => expect(reportApiMocks.saveCarmenReport).toHaveBeenCalledWith(expect.objectContaining({ id: 'rep-duplicate-mapping' })));
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Loading report data' })).not.toBeInTheDocument());
+    expect(screen.queryByText(/double count/i)).not.toBeInTheDocument();
   });
 
   it('warns when manual row codes do not exist in API master data', async () => {

@@ -195,7 +195,7 @@ describe('reportLogic helpers', () => {
     ]);
   });
 
-  it('flags conflicting and duplicate row mappings before save', () => {
+  it('flags conflicting and invalid row mappings without warning about duplicates', () => {
     const rows = [
       { id: 'r1', desc: 'Revenue', dept: '101', groups: 'FOOD', groupLevel: 'L4', accCodes: '', dim1: 'A', dim2: 'X' },
       { id: 'r2', desc: 'Duplicate Revenue', dept: '101', groups: 'FOOD', groupLevel: 'L4', accCodes: '', dim1: 'A', dim2: 'X' },
@@ -205,7 +205,7 @@ describe('reportLogic helpers', () => {
     expect(getRowMappingWarnings(rows[0], rows, {
       depts: [{ id: '101' }],
       accCodes: [{ id: '4001' }],
-    })).toContain('This mapping duplicates another data row and may double count.');
+    })).not.toContain('This mapping duplicates another data row and may double count.');
     expect(getRowMappingWarnings(rows[2], rows, {
       depts: [{ id: '101' }, { id: '102' }],
       accCodes: [{ id: '5001' }],
@@ -711,6 +711,109 @@ describe('buildReportData', () => {
 
     expect(html.indexOf('Actual')).toBeLessThan(html.indexOf('Description'));
     expect(html.indexOf('100.00')).toBeLessThan(html.indexOf('Revenue'));
+  });
+
+  it('calculates an imported-report-sized dataset within the interactive calculation budget', () => {
+    const dataRowCount = 77;
+    const accountCodesByRow = Array.from({ length: dataRowCount }, (_, index) => {
+      const count = index < 52 ? 3 : 2;
+      return Array.from({ length: count }, (__, accountIndex) => String(4000 + (index * 3) + accountIndex));
+    });
+    const rows = Array.from({ length: dataRowCount }, (_, index) => ({
+      id: `r${index + 1}`,
+      desc: `Account ${index + 1}`,
+      dept: String(100 + (index % 27)),
+      accCodes: accountCodesByRow[index].join(','),
+      groupLevel: 'L4',
+      groups: '',
+      dim1: index < 16 ? `SEG${index % 4}` : '',
+      isHeader: false,
+      isTotal: false,
+      percentBase: 'R1',
+    }));
+    rows.push(
+      ...Array.from({ length: 6 }, (_, index) => ({
+        id: `total-${index + 1}`,
+        desc: `Total ${index + 1}`,
+        isTotal: true,
+        formula: 'R1+R2+R3',
+        percentBase: 'R1',
+      })),
+    );
+
+    const columns = [
+      { id: 'C1', type: 'AC', yearMode: 'current', periodMode: 'current' },
+      { id: 'C2', type: 'ACC', yearMode: 'current', periodMode: 'current' },
+      { id: 'C3', type: 'AC', yearMode: '-1', periodMode: 'current' },
+      { id: 'C4', type: 'AC', yearMode: 'current', periodMode: '-1' },
+      { id: 'C5', type: 'AC', yearMode: 'current', periodMode: 'Q1' },
+      { id: 'C6', type: 'AC', yearMode: 'current', periodMode: 'Q2' },
+      { id: 'C7', type: 'BUD', yearMode: 'current', periodMode: 'current' },
+      { id: 'C8', type: 'BUDACC', yearMode: 'current', periodMode: 'current' },
+      { id: 'C9', type: 'BUD', yearMode: 'current', periodMode: 'FY' },
+      { id: 'C10', type: 'BCC', yearMode: 'current', periodMode: 'current' },
+      { id: 'C11', isFormula: true, formula: 'C1-C7' },
+      { id: 'C12', isFormula: true, formula: 'C2-C8' },
+      { id: 'C13', isFormula: true, formula: 'C5+C6' },
+      { id: 'C14', isPercent: true, targetCol: 'C1' },
+      { id: 'C15', isPercent: true, targetCol: 'C7' },
+      { id: 'C16', isFormula: true, formula: 'C9-C10' },
+    ];
+
+    const engineData = Array.from({ length: 38_624 }, (_, index) => {
+      const mappingIndex = index % dataRowCount;
+      const mappedAccounts = accountCodesByRow[mappingIndex];
+      return {
+        year: index % 9 === 0 ? '2025' : '2026',
+        deptcode: String(100 + (mappingIndex % 27)),
+        acccode: mappedAccounts[Math.floor(index / dataRowCount) % mappedAccounts.length],
+        accnature: 'I',
+        dim1: mappingIndex < 16 ? `SEG${mappingIndex % 4}` : '',
+        amt1: '1',
+        amt2: '2',
+        amt3: '3',
+        amt4: '4',
+        amt5: '5',
+        amt6: '6',
+        bfamt2: '10',
+      };
+    });
+    const budgetData = Array.from({ length: 787 }, (_, index) => {
+      const mappingIndex = index % dataRowCount;
+      const mappedAccounts = accountCodesByRow[mappingIndex];
+      return {
+        year: '2026',
+        revision: index % 5 === 0 ? '1' : '0',
+        deptcode: String(100 + (mappingIndex % 27)),
+        acccode: mappedAccounts[Math.floor(index / dataRowCount) % mappedAccounts.length],
+        accnature: 'I',
+        dim1: mappingIndex < 16 ? `SEG${mappingIndex % 4}` : '',
+        amt1: '1',
+        amt2: '2',
+        amt3: '3',
+        amt4: '4',
+        amt5: '5',
+        amt6: '6',
+      };
+    });
+
+    const startedAt = performance.now();
+    const result = buildReportData({
+      activeReport: { category: ['ALL'], rows, columns },
+      engineData,
+      budgetData,
+      appliedDepts: [],
+      appliedYear: '2026',
+      appliedPeriod: '2',
+      appliedRevision: '0',
+      masterData: { ...INITIAL_MASTER_DATA, accCodes: [] },
+    });
+    const elapsedMs = performance.now() - startedAt;
+
+    expect(result).toHaveLength(83);
+    expect(result[0].results.C11).toBe(result[0].results.C1 - result[0].results.C7);
+    expect(result[77].results.C1).toBe(result[0].results.C1 + result[1].results.C1 + result[2].results.C1);
+    expect(elapsedMs).toBeLessThan(750);
   });
 });
 

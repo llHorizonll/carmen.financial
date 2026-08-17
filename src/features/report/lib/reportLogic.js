@@ -395,45 +395,6 @@ const evaluateArithmeticExpression = (expression) => {
   return Number.isFinite(value) ? value : 0;
 };
 
-const normalizeRowDimensions = (row) => {
-  const dimensions = [];
-  if (Array.isArray(row?.dimensions)) {
-    row.dimensions.forEach((item) => {
-      if (!item) return;
-      const key = String(item.key || item.name || item.field || '').trim();
-      const value = String(item.value || item.id || item.code || '').trim();
-      if (key && value) dimensions.push({ key, value });
-    });
-  }
-
-  ['dim1', 'dim2', 'dim3', 'dim4'].forEach((field) => {
-    if (row?.[field]) {
-      dimensions.push({ key: field, value: String(row[field]).trim() });
-    }
-  });
-
-  return dimensions;
-};
-
-const matchesRowDimensions = (row, sourceRow) => {
-  const rowDimensions = normalizeRowDimensions(row);
-  if (rowDimensions.length === 0) return true;
-
-  const valuesByKey = new Map();
-  rowDimensions.forEach(({ key, value }) => {
-    const normalizedKey = String(key || '').trim().toLowerCase();
-    if (!normalizedKey) return;
-    const values = String(value || '').split(',').map((item) => item.trim().toUpperCase()).filter(Boolean);
-    if (!valuesByKey.has(normalizedKey)) valuesByKey.set(normalizedKey, new Set());
-    values.forEach((item) => valuesByKey.get(normalizedKey).add(item));
-  });
-
-  return [...valuesByKey].every(([key, values]) => {
-    const sourceValue = String(sourceRow?.[key] || sourceRow?.[key.toLowerCase()] || sourceRow?.[key.toUpperCase()] || '').trim().toUpperCase();
-    return values.has(sourceValue);
-  });
-};
-
 const INDENT_CLASSES = ['pl-0', 'pl-4', 'pl-8', 'pl-12', 'pl-16', 'pl-20', 'pl-24', 'pl-28'];
 export const getIndentClass = (level) => INDENT_CLASSES[Math.min(7, Math.max(0, Math.round(Number(level) || 0)))];
 
@@ -502,47 +463,12 @@ export const findBrokenReferences = (report) => {
   return issues;
 };
 
-const buildRowMappingSignature = (row) => {
-  if (!row) return '';
-
-  const parts = [];
-  const deptGroup = String(row.deptGroup || row.DeptGroup || '').trim().toUpperCase();
-  const depts = row.dept ? String(row.dept).split(',').map(normalizeDeptLookupCode).filter(Boolean).sort() : [];
-  const accs = row.accCodes ? String(row.accCodes).split(',').map(normalizeAccLookupCode).filter(Boolean).sort() : [];
-  const grps = row.groups ? String(row.groups).split(',').map((value) => String(value).trim().toUpperCase()).filter(Boolean).sort() : [];
-  const dimensions = normalizeRowDimensions(row)
-    .map(({ key, value }) => `${String(key).trim().toLowerCase()}:${String(value).trim().toUpperCase()}`)
-    .filter(Boolean)
-    .sort();
-
-  if (depts.length > 0) parts.push(`dept=${depts.join('|')}`);
-  if (accs.length > 0) parts.push(`acc=${accs.join('|')}`);
-  if (grps.length > 0) parts.push(`grp=${grps.join('|')}`);
-  if (dimensions.length > 0) parts.push(`dim=${dimensions.join('|')}`);
-
-  if (deptGroup) parts.push('deptGroup=' + deptGroup);
-
-  const groupLevel = String(row.groupLevel || '').trim().toUpperCase();
-  if (groupLevel) parts.push(`lvl=${groupLevel}`);
-
-  return parts.join('::');
-};
-
 const getMasterListIds = (items) =>
   Array.isArray(items)
     ? items.map((item) => String(item?.id || item?.code || item?.DeptCode || item?.AccCode || '').trim()).filter(Boolean)
     : [];
 
-export const createRowMappingWarningContext = (allRows = [], masterData = null) => {
-  const signatureCounts = new Map();
-  (Array.isArray(allRows) ? allRows : []).forEach((row) => {
-    if (!row || row.isHeader || row.isTotal) return;
-    const signature = buildRowMappingSignature(row);
-    if (signature) signatureCounts.set(signature, (signatureCounts.get(signature) || 0) + 1);
-  });
-
-  return {
-    signatureCounts,
+export const createRowMappingWarningContext = (_allRows = [], masterData = null) => ({
     masterDeptIds: new Set(getMasterListIds(masterData?.depts)),
     masterAccIds: new Set(getMasterListIds(masterData?.accCodes)),
     masterDeptGroupIds: new Set(
@@ -550,8 +476,7 @@ export const createRowMappingWarningContext = (allRows = [], masterData = null) 
         .map((group) => String(group?.id || '').trim().toUpperCase())
         .filter(Boolean),
     ),
-  };
-};
+  });
 
 export const getRowMappingWarnings = (row, allRows = [], masterData = null, warningContext = null) => {
   const warnings = [];
@@ -570,11 +495,6 @@ export const getRowMappingWarnings = (row, allRows = [], masterData = null, warn
   if (hasDept && hasGroups) warnings.push('Dept and group mapping are both set.');
   if (hasAccCodes && hasGroups) warnings.push('Account code and group mapping are both set.');
   if (groupLevel !== 'L4' && hasAccCodes) warnings.push('Grouped rows should not mix with explicit account codes.');
-
-  const signature = buildRowMappingSignature(row);
-  if (signature && (context.signatureCounts.get(signature) || 0) > 1) {
-    warnings.push('This mapping duplicates another data row and may double count.');
-  }
 
   if (context.masterDeptIds.size > 0 && hasDept) {
     const invalidDepts = String(row.dept || '')
@@ -638,6 +558,14 @@ const filterEngineRows = (row, masterData) => {
         .map((field) => (row[field] ? { key: field, value: String(row[field]).trim() } : null))
         .filter(Boolean);
   const groupLevelKey = (row.groupLevel === 'L1' ? 'group1' : row.groupLevel === 'L2' ? 'group2' : row.groupLevel === 'L3' ? 'group3' : 'group4');
+  const dimensionSets = new Map();
+  dimensions.forEach(({ key, value }) => {
+    const normalizedKey = String(key || '').trim().toLowerCase();
+    if (!normalizedKey) return;
+    if (!dimensionSets.has(normalizedKey)) dimensionSets.set(normalizedKey, new Set());
+    String(value || '').split(',').map((item) => item.trim().toUpperCase()).filter(Boolean)
+      .forEach((item) => dimensionSets.get(normalizedKey).add(item));
+  });
   return {
     depts,
     accs,
@@ -646,20 +574,12 @@ const filterEngineRows = (row, masterData) => {
     accSet: new Set(accs),
     grpSet: new Set(grps),
     dimensions,
+    dimensionSets,
     groupLevelKey,
     hasDeptMap: depts.length > 0,
     hasAccMap: accs.length > 0,
     hasGrpMap: grps.length > 0,
   };
-};
-
-const resolveAccType = (d, masterData, dAccCode) => {
-  let dAccType = (d.acctype || d.accnature || d.type || '').toString().trim().toUpperCase();
-  if (!dAccType && masterData?.accCodes) {
-    const mAcc = masterData.accCodes.find(a => normalizeAccLookupCode(a.id) === dAccCode);
-    if (mAcc) dAccType = (mAcc.type || '').toString().trim().toUpperCase();
-  }
-  return dAccType;
 };
 
 const matchesReportCategory = ({ reportCategories, dAccType, hasAccMap, dAccCode, accSet }) => {
@@ -673,47 +593,82 @@ const matchesReportCategory = ({ reportCategories, dAccType, hasAccMap, dAccCode
   return !hasAccMap || accSet.has(dAccCode);
 };
 
-const sumActuals = ({ col, rowConfig, engineData, appliedDepts, appliedYear, appliedPeriod, appliedDay, periodOptions, reportCategories, masterData }) => {
+const prepareSourceRows = (sourceRows, masterData) => {
+  const masterAccTypes = new Map();
+  (masterData?.accCodes || []).forEach((account) => {
+    const code = normalizeAccLookupCode(account?.id);
+    if (!masterAccTypes.has(code)) {
+      masterAccTypes.set(code, String(account?.type || '').trim().toUpperCase());
+    }
+  });
+
+  return (sourceRows || []).map((source) => {
+    const accCode = normalizeAccLookupCode(source.acccode || source.account || source.accountcode || '');
+    const directAccType = String(source.acctype || source.accnature || source.type || '').trim().toUpperCase();
+    return {
+      source,
+      year: String(source.year || source.yr || '').trim(),
+      period: Number.parseInt(source.period || source.month || source.period_no, 10),
+      day: Number.parseInt(source.day || source.Day || source.docDay || source.transactionDay || source.date_day || source.day_no, 10),
+      revision: String(source.revision || source.rev || '0').trim(),
+      deptCode: normalizeDeptLookupCode(source.deptcode || source.dept || source.department || ''),
+      accCode,
+      accType: directAccType || masterAccTypes.get(accCode) || '',
+    };
+  });
+};
+
+const matchesPreparedDimensions = (dimensionSets, source) => {
+  if (dimensionSets.size === 0) return true;
+  for (const [key, values] of dimensionSets) {
+    const sourceValue = String(source?.[key] || source?.[key.toLowerCase()] || source?.[key.toUpperCase()] || '').trim().toUpperCase();
+    if (!values.has(sourceValue)) return false;
+  }
+  return true;
+};
+
+const filterPreparedRows = ({ preparedRows, rowConfig, appliedDeptSet, reportCategories, filterRevision = false, appliedRevision }) =>
+  preparedRows.filter((prepared) => {
+    if (filterRevision && prepared.revision !== appliedRevision) return false;
+    if (appliedDeptSet.size > 0 && !appliedDeptSet.has(prepared.deptCode)) return false;
+    if (rowConfig.hasDeptMap && !rowConfig.deptSet.has(prepared.deptCode)) return false;
+    if (rowConfig.hasAccMap && !rowConfig.accSet.has(prepared.accCode)) return false;
+    const sourceGroup = String(prepared.source[rowConfig.groupLevelKey] || prepared.source.group || '').trim().toUpperCase();
+    if (rowConfig.hasGrpMap && !rowConfig.grpSet.has(sourceGroup)) return false;
+    if (!matchesPreparedDimensions(rowConfig.dimensionSets, prepared.source)) return false;
+    return matchesReportCategory({
+      reportCategories,
+      dAccType: prepared.accType,
+      hasAccMap: rowConfig.hasAccMap,
+      dAccCode: prepared.accCode,
+      accSet: rowConfig.accSet,
+    });
+  });
+
+const sumActuals = ({ col, matchedRows, appliedYear, appliedPeriod, appliedDay, periodOptions }) => {
   const { effYear, targetMonths } = resolveTime(col, appliedYear, appliedPeriod, periodOptions);
-  const normalizedAppliedDepts = appliedDepts.map(normalizeDeptLookupCode).filter(Boolean);
-  const appliedDeptSet = new Set(normalizedAppliedDepts);
   const type = String(col.type || '').trim().toUpperCase();
   const monthsToEvaluate = ['BUDACC', 'BCC'].includes(type) && col.periodMode === 'FY' ? [targetMonths[0]] : targetMonths;
   const targetDay = Number.parseInt(appliedDay, 10);
+  const valueMode = getColumnValueMode(col.type);
   let sum = 0;
 
   monthsToEvaluate.forEach(m => {
-    engineData.forEach(d => {
-      const dYear = (d.year || d.yr || '').toString().trim();
-      if (dYear && dYear !== effYear) return;
+    matchedRows.forEach((prepared) => {
+      const d = prepared.source;
+      if (prepared.year && prepared.year !== effYear) return;
       if (type === 'DAC' || type === 'PTD') {
-        const dPeriod = Number.parseInt(d.period || d.month || d.period_no, 10);
-        const dDay = Number.parseInt(d.day || d.Day || d.docDay || d.transactionDay || d.date_day || d.day_no, 10);
-        if (Number.isInteger(dPeriod) && dPeriod !== m) return;
+        if (Number.isInteger(prepared.period) && prepared.period !== m) return;
         if (Number.isInteger(targetDay)) {
-          if (!Number.isInteger(dDay)) return;
-          if (type === 'DAC' && dDay !== targetDay) return;
-          if (type === 'PTD' && (dDay < 1 || dDay > targetDay)) return;
+          if (!Number.isInteger(prepared.day)) return;
+          if (type === 'DAC' && prepared.day !== targetDay) return;
+          if (type === 'PTD' && (prepared.day < 1 || prepared.day > targetDay)) return;
         }
       }
-
-      const dDeptCode = normalizeDeptLookupCode(d.deptcode || d.dept || d.department || '');
-      const dAccCode = normalizeAccLookupCode(d.acccode || d.account || d.accountcode || '');
-      const dGroup = (d[rowConfig.groupLevelKey] || d.group || '').toString().trim().toUpperCase();
-
-      if (appliedDeptSet.size > 0 && !appliedDeptSet.has(dDeptCode)) return;
-      if (rowConfig.hasDeptMap && !rowConfig.deptSet.has(dDeptCode)) return;
-      if (rowConfig.hasAccMap && !rowConfig.accSet.has(dAccCode)) return;
-      if (rowConfig.hasGrpMap && !rowConfig.grpSet.has(dGroup)) return;
-      if (!matchesRowDimensions(rowConfig, d)) return;
-
-      const dAccType = resolveAccType(d, masterData, dAccCode);
-      if (!matchesReportCategory({ reportCategories, dAccType, hasAccMap: rowConfig.hasAccMap, dAccCode, accSet: rowConfig.accSet })) return;
 
       const amtM = d['amt' + m] !== undefined && d['amt' + m] !== '' ? d['amt' + m] : (d['amt0' + m] !== undefined && d['amt0' + m] !== '' ? d['amt0' + m] : 0);
       const bfAmtM = d['bfamt' + m] !== undefined && d['bfamt' + m] !== '' ? d['bfamt' + m] : (d['bfamt0' + m] !== undefined && d['bfamt0' + m] !== '' ? d['bfamt0' + m] : 0);
 
-      const valueMode = getColumnValueMode(col.type);
       if (type === 'DAC' || type === 'PTD') {
         sum += parseAmount(d.amount ?? d.amt ?? d.val ?? amtM);
       } else if (valueMode === 'ac') sum += parseAmount(amtM);
@@ -724,50 +679,29 @@ const sumActuals = ({ col, rowConfig, engineData, appliedDepts, appliedYear, app
   return sum;
 };
 
-const sumBudget = ({ col, rowConfig, budgetData, appliedDepts, appliedYear, appliedPeriod, appliedDay, appliedRevision, periodOptions, reportCategories, masterData }) => {
+const sumBudget = ({ col, matchedRows, appliedYear, appliedPeriod, appliedDay, periodOptions }) => {
   const { effYear, targetMonths } = resolveTime(col, appliedYear, appliedPeriod, periodOptions);
-  const normalizedAppliedDepts = appliedDepts.map(normalizeDeptLookupCode).filter(Boolean);
-  const appliedDeptSet = new Set(normalizedAppliedDepts);
   const type = String(col.type || '').trim().toUpperCase();
   const monthsToEvaluate = ['BUDACC', 'BCC'].includes(type) && col.periodMode === 'FY' ? [targetMonths[0]] : targetMonths;
   const targetDay = Number.parseInt(appliedDay, 10);
+  const valueMode = getColumnValueMode(col.type);
   let sum = 0;
 
   monthsToEvaluate.forEach(m => {
-    budgetData.forEach(d => {
-      const dYear = (d.year || d.yr || '').toString().trim();
-      if (dYear && dYear !== effYear) return;
+    matchedRows.forEach((prepared) => {
+      const d = prepared.source;
+      if (prepared.year && prepared.year !== effYear) return;
       if (type === 'DACBG' || type === 'PTDBG') {
-        const dPeriod = Number.parseInt(d.period || d.month || d.period_no, 10);
-        const dDay = Number.parseInt(d.day || d.Day || d.docDay || d.transactionDay || d.date_day || d.day_no, 10);
-        if (Number.isInteger(dPeriod) && dPeriod !== m) return;
-        if (Number.isInteger(targetDay) && Number.isInteger(dDay)) {
-          if (type === 'DACBG' && dDay !== targetDay) return;
-          if (type === 'PTDBG' && (dDay < 1 || dDay > targetDay)) return;
+        if (Number.isInteger(prepared.period) && prepared.period !== m) return;
+        if (Number.isInteger(targetDay) && Number.isInteger(prepared.day)) {
+          if (type === 'DACBG' && prepared.day !== targetDay) return;
+          if (type === 'PTDBG' && (prepared.day < 1 || prepared.day > targetDay)) return;
         }
       }
 
-      const dRev = (d.revision || d.rev || '0').toString().trim();
-      if (dRev !== appliedRevision) return;
-
-      const dDeptCode = normalizeDeptLookupCode(d.deptcode || d.dept || d.department || '');
-      const dAccCode = normalizeAccLookupCode(d.acccode || d.account || d.accountcode || '');
-      const dGroup = (d[rowConfig.groupLevelKey] || d.group || '').toString().trim().toUpperCase();
-
-      if (appliedDeptSet.size > 0 && !appliedDeptSet.has(dDeptCode)) return;
-      if (rowConfig.hasDeptMap && !rowConfig.deptSet.has(dDeptCode)) return;
-      if (rowConfig.hasAccMap && !rowConfig.accSet.has(dAccCode)) return;
-      if (rowConfig.hasGrpMap && !rowConfig.grpSet.has(dGroup)) return;
-      if (!matchesRowDimensions(rowConfig, d)) return;
-
-      const dAccType = resolveAccType(d, masterData, dAccCode);
-      if (!matchesReportCategory({ reportCategories, dAccType, hasAccMap: rowConfig.hasAccMap, dAccCode, accSet: rowConfig.accSet })) return;
-
-      const valueMode = getColumnValueMode(col.type);
       if (type === 'DACBG' || type === 'PTDBG') {
         const amtM = d['amt' + m] !== undefined && d['amt' + m] !== '' ? d['amt' + m] : (d['amt0' + m] !== undefined && d['amt0' + m] !== '' ? d['amt0' + m] : 0);
-        const dDay = Number.parseInt(d.day || d.Day || d.docDay || d.transactionDay || d.date_day || d.day_no, 10);
-        if (Number.isInteger(dDay)) {
+        if (Number.isInteger(prepared.day)) {
           sum += parseAmount(d.amount ?? d.amt ?? d.val ?? amtM);
         } else {
           const daysInPeriod = Number.parseInt(d['days' + m], 10) || new Date(Number(effYear), m, 0).getDate();
@@ -859,6 +793,9 @@ export const buildReportData = ({
   const rowRefMap = {};
   rows.forEach(r => rowRefMap[r.id] = {});
   const reportCategories = Array.isArray(activeReport?.category) ? activeReport.category : ['ALL'];
+  const appliedDeptSet = new Set((appliedDepts || []).map(normalizeDeptLookupCode).filter(Boolean));
+  const preparedActualRows = prepareSourceRows(engineData, masterData);
+  const preparedBudgetRows = prepareSourceRows(budgetData, masterData);
 
   rows.filter(r => !r.isTotal && !r.isHeader).forEach((row) => {
     const rowConfig = filterEngineRows(row, masterData);
@@ -868,32 +805,39 @@ export const buildReportData = ({
       return;
     }
 
+    const matchedActualRows = filterPreparedRows({
+      preparedRows: preparedActualRows,
+      rowConfig,
+      appliedDeptSet,
+      reportCategories,
+    });
+    const matchedBudgetRows = filterPreparedRows({
+      preparedRows: preparedBudgetRows,
+      rowConfig,
+      appliedDeptSet,
+      reportCategories,
+      filterRevision: true,
+      appliedRevision,
+    });
+
     columns.filter(c => !c.isFormula && !c.isPercent).forEach(col => {
-        rowRefMap[row.id][col.id] = sumActuals({
-          col,
-          rowConfig,
-          engineData,
-          appliedDepts,
-          appliedYear,
-          appliedPeriod,
-          appliedDay,
-          periodOptions,
-          reportCategories,
-          masterData,
-        });
       if (BUDGET_COLUMN_TYPES.has(String(col.type || '').trim().toUpperCase())) {
         rowRefMap[row.id][col.id] = sumBudget({
           col,
-          rowConfig,
-          budgetData,
-          appliedDepts,
+          matchedRows: matchedBudgetRows,
           appliedYear,
           appliedPeriod,
           appliedDay,
-          appliedRevision,
           periodOptions,
-          reportCategories,
-          masterData,
+        });
+      } else {
+        rowRefMap[row.id][col.id] = sumActuals({
+          col,
+          matchedRows: matchedActualRows,
+          appliedYear,
+          appliedPeriod,
+          appliedDay,
+          periodOptions,
         });
       }
     });

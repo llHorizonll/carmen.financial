@@ -381,7 +381,10 @@ export default function ExcelTemplateImportWizard({
 
           <CardContent className="p-0">
             <ScrollArea className="h-80 sm:h-96">
-              <ul aria-label="Worksheets" className="divide-y divide-border">
+              <ul
+                aria-label="Worksheets"
+                className="w-full min-w-0 max-w-full divide-y divide-border overflow-hidden"
+              >
                 {workbook.sheets.map((sheet) => {
                   const isSelected = selectedSheetNames.has(sheet.name);
                   const isConfigured = configuredSheetName === sheet.name;
@@ -390,13 +393,13 @@ export default function ExcelTemplateImportWizard({
                     <li
                       key={sheet.name}
                       className={cn(
-                        "transition-colors",
+                        "w-full min-w-0 max-w-full overflow-hidden transition-colors",
                         isSelected || isConfigured
                           ? "bg-primary/5"
                           : "hover:bg-muted/35",
                       )}
                     >
-                      <section className="flex min-h-16 items-center gap-3 px-4 py-3">
+                      <section className="grid min-h-16 w-full min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 px-4 py-3 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
                         <Checkbox
                           id={checkboxId}
                           checked={isSelected}
@@ -431,23 +434,29 @@ export default function ExcelTemplateImportWizard({
                             </p>
                           )}
                         </label>
-                        <Badge
-                          variant={
-                            sheet.isRecommended ? "secondary" : "destructive"
-                          }
-                          className="rounded-lg"
-                        >
-                          {sheet.isRecommended ? "Ready" : "Check settings"}
-                        </Badge>
-                        <Button
-                          type="button"
-                          variant={isConfigured ? "secondary" : "outline"}
-                          size="sm"
-                          onClick={() => setConfiguredSheetName(sheet.name)}
-                        >
-                          <Settings2 aria-hidden="true" />
-                          Configure
-                        </Button>
+                        {sheet.isRecommended && (
+                          <section
+                            data-slot="worksheet-actions"
+                            className="col-start-2 flex min-w-0 flex-wrap items-center gap-2 sm:col-start-3 sm:flex-nowrap sm:justify-self-end"
+                          >
+                            <Badge
+                              variant="secondary"
+                              className="max-w-full rounded-lg"
+                            >
+                              <CheckCircle2 aria-hidden="true" />
+                              Ready
+                            </Badge>
+                            <Button
+                              type="button"
+                              variant={isConfigured ? "secondary" : "outline"}
+                              size="sm"
+                              onClick={() => setConfiguredSheetName(sheet.name)}
+                            >
+                              <Settings2 aria-hidden="true" />
+                              Configure
+                            </Button>
+                          </section>
+                        )}
                       </section>
                     </li>
                   );
