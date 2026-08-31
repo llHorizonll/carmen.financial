@@ -153,7 +153,11 @@ describe('reportAdapters', () => {
       reportType: 'Daily',
       day: '28',
       theme: 'green',
-      columns: [{ id: 'C1', label: 'Actual' }],
+      columns: [
+        { id: 'C1', label: 'Actual', type: 'AC' },
+        { id: 'C2', label: 'Budget', type: 'BUD' },
+        { id: 'C3', label: 'Year Budget', Type: 'BUDACC' },
+      ],
       rows: [{
         id: 'r1',
         desc: 'Revenue',
@@ -171,7 +175,11 @@ describe('reportAdapters', () => {
       owner: 'admin',
       reportType: 'Daily',
       day: '28',
-      columns: [{ id: 'C1', label: 'Actual' }],
+      columns: [
+        expect.objectContaining({ id: 'C1', type: 'AC' }),
+        expect.objectContaining({ id: 'C2', type: 'BC' }),
+        expect.objectContaining({ id: 'C3', type: 'BCC' }),
+      ],
       rows: expect.arrayContaining([
         expect.objectContaining({
           id: 'r1',

@@ -17,6 +17,7 @@ import {
   getStoredCarmenSession,
   saveCarmenSession,
 } from './carmenSession.js';
+import { reportCarmenApiFailure } from '../../../lib/carmenApiFailure.js';
 
 export {
   clearCarmenSession,
@@ -27,6 +28,12 @@ export {
 };
 
 const DEFAULT_BASE_URL = 'http://localhost/Carmen.WebApi';
+const normalizeColumnType = (value) => {
+  const type = String(value || '').trim().toUpperCase();
+  if (type === 'BUD') return 'BC';
+  if (type === 'BUDACC') return 'BCC';
+  return type;
+};
 const toTrimmedStringArray = (value) =>
   Array.isArray(value)
     ? value.flatMap((item) => {
@@ -39,6 +46,10 @@ const getWindowConfig = () => (typeof window !== 'undefined' ? window.__CARMEN_C
 const joinUrl = (baseUrl, path) => `${baseUrl.replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
 
 const publishCarmenApiError = (error) => {
+  if (error.affectsSession) {
+    clearCarmenSession();
+    reportCarmenApiFailure(error);
+  }
   if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return;
   window.dispatchEvent(new CustomEvent('carmen-api-error', {
     detail: {
@@ -58,7 +69,7 @@ const createCarmenApiError = (message, details = {}) => {
   return error;
 };
 
-const fetchWithNetworkHandling = async (url, options, path = '') => {
+const fetchWithNetworkHandling = async (url, options, { path = '', affectsSession = false } = {}) => {
   try {
     return await fetch(url, options);
   } catch (cause) {
@@ -67,7 +78,7 @@ const fetchWithNetworkHandling = async (url, options, path = '') => {
       isOffline
         ? 'You are offline. Reconnect to the internet and try again.'
         : 'Unable to reach Carmen API. Check your network connection or contact the administrator.',
-      { kind: isOffline ? 'offline' : 'network', path, cause },
+      { kind: isOffline ? 'offline' : 'network', path, cause, affectsSession },
     );
   }
 };
@@ -110,10 +121,9 @@ const throwResponseError = async (response, { path, context, isAuthenticated = f
 
   const unauthorized = isAuthenticated && [401, 419, 440].includes(response.status);
   if (unauthorized) {
-    clearCarmenSession();
     throw createCarmenApiError(
       'Your Carmen session expired. Please sign in again.',
-      { kind: 'session', status: response.status, path },
+      { kind: 'session', status: response.status, path, affectsSession: true },
     );
   }
 
@@ -125,6 +135,7 @@ const throwResponseError = async (response, { path, context, isAuthenticated = f
     kind: response.status === 401 || response.status === 403 ? 'authorization' : 'api',
     status: response.status,
     path,
+    affectsSession: isAuthenticated,
   });
 };
 
@@ -164,7 +175,7 @@ export const fetchBusinessUnitsByUsername = async (username) => {
   if (!trimmedUserName) return [];
 
   const url = `${getBusinessUnitApiBaseUrl().replace(/\/$/, '')}/api/userTenant/tenantListIn/${encodeURIComponent(adminToken)}/${encodeURIComponent(trimmedUserName)}`;
-  const response = await fetchWithNetworkHandling(url, undefined, '/api/userTenant/tenantListIn');
+  const response = await fetchWithNetworkHandling(url, undefined, { path: '/api/userTenant/tenantListIn' });
   if (!response.ok) {
     await throwResponseError(response, {
       path: '/api/userTenant/tenantListIn',
@@ -281,7 +292,7 @@ export const loginWithCarmenCredentials = async ({ userName, password, tenant, l
       Password: password,
       UserName: userName,
     }),
-  }, '/api/login');
+  }, { path: '/api/login' });
 
   if (!response.ok) {
     await throwResponseError(response, { path: '/api/login', context: 'Carmen login' });
@@ -316,7 +327,7 @@ const requestCarmenJson = async (path, options = {}) => {
         ...(options.headers || {}),
       },
       body: options.body ? JSON.stringify(options.body) : undefined,
-    }, path);
+    }, { path, affectsSession: true });
 
     if (!response.ok) {
       await throwResponseError(response, {
@@ -510,7 +521,14 @@ export const buildReportDefinitionPayload = (report) => ({
   descriptionPosition: Number.isInteger(Number(report?.descriptionPosition))
     ? Number(report.descriptionPosition)
     : 0,
-  columns: Array.isArray(report?.columns) ? report.columns : [],
+  columns: Array.isArray(report?.columns)
+    ? report.columns.map((column) => {
+        const rawType = column?.type ?? column?.Type;
+        return rawType == null
+          ? column
+          : { ...column, type: normalizeColumnType(rawType) };
+      })
+    : [],
   rows: Array.isArray(report?.rows) ? report.rows.map(normalizeReportRowForPayload) : [],
   access: Array.isArray(report?.access) && report.access.length > 0
     ? report.access

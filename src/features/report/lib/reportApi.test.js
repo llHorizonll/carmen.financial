@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildReportDefinitionPayload, cloneCarmenReport, deleteCarmenReport, fetchCarmenAccountGroups, fetchCarmenDepartmentGroups, fetchCarmenDimensions, fetchCarmenReport, fetchCarmenReportOptions, fetchCarmenUsers, loginWithCarmenCredentials, saveCarmenReport, saveCarmenReports } from './reportApi.js';
+import { clearCarmenApiFailure, getCarmenApiFailure } from '../../../lib/carmenApiFailure.js';
 
 const createSessionStorageMock = (session = {}) => {
   const storage = new Map();
@@ -30,13 +31,14 @@ const createSessionStorageMock = (session = {}) => {
 };
 
 afterEach(() => {
+  clearCarmenApiFailure();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
 describe('reportApi helpers', () => {
   it('coalesces concurrent identical GET requests during StrictMode remounts', async () => {
-    createSessionStorageMock({
+    const storage = createSessionStorageMock({
       accessToken: 'token',
       businessUnit: { tenant: 'tenant-1' },
     });
@@ -417,7 +419,7 @@ describe('reportApi helpers', () => {
   });
 
   it('classifies offline fetch failures and publishes a global API error event', async () => {
-    createSessionStorageMock({
+    const storage = createSessionStorageMock({
       accessToken: 'token',
       businessUnit: { tenant: 'carmencloud' },
     });
@@ -435,6 +437,8 @@ describe('reportApi helpers', () => {
     expect(apiErrorListener).toHaveBeenCalledWith(expect.objectContaining({
       detail: expect.objectContaining({ kind: 'offline' }),
     }));
+    expect(storage.has('carmen_access_token')).toBe(false);
+    expect(getCarmenApiFailure()).toEqual(expect.objectContaining({ kind: 'offline' }));
 
     window.removeEventListener('carmen-api-error', apiErrorListener);
   });

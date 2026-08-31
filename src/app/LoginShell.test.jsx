@@ -2,6 +2,8 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import LoginShell from './LoginShell.jsx';
+import { clearCarmenApiFailure, reportCarmenApiFailure } from '../lib/carmenApiFailure.js';
+import { clearCarmenSession } from '../features/report/lib/carmenSession.js';
 
 vi.mock('./App.jsx', () => ({
   default: () => <main>Report workspace</main>,
@@ -10,6 +12,7 @@ vi.mock('./App.jsx', () => ({
 describe('LoginShell', () => {
   beforeEach(() => {
     window.localStorage.clear();
+    clearCarmenApiFailure();
   });
 
   it('renders the login hero and form content', async () => {
@@ -35,6 +38,18 @@ describe('LoginShell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Back to sign in' }));
     await waitFor(() => expect(screen.queryByRole('alertdialog', { name: 'Session expired' })).not.toBeInTheDocument());
+    expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument();
+  });
+
+  it('shows the popup even when the API fails before LoginShell mounts', async () => {
+    window.localStorage.setItem('carmen_access_token', 'token');
+    reportCarmenApiFailure({ kind: 'network', message: 'Unable to reach Carmen API.' });
+    clearCarmenSession();
+
+    render(<LoginShell />);
+
+    expect(await screen.findByRole('alertdialog', { name: 'Session expired' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to sign in' }));
     expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument();
   });
 });

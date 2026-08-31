@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useState } from 'react';
+import React, { Suspense, lazy, useState, useSyncExternalStore } from 'react';
 import { BarChart3 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge.jsx';
 import { Skeleton } from '@/components/ui/skeleton.jsx';
@@ -12,6 +12,12 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog.jsx';
 import { clearCarmenSession, getStoredCarmenSession } from '../features/report/lib/carmenSession.js';
+import {
+  clearCarmenApiFailure,
+  getCarmenApiFailure,
+  reportCarmenApiFailure,
+  subscribeToCarmenApiFailure,
+} from '../lib/carmenApiFailure.js';
 import { initializeTheme } from '../lib/theme.js';
 
 const App = lazy(() => import('./App.jsx'));
@@ -21,7 +27,17 @@ const hasSession = () => Boolean(getStoredCarmenSession()?.accessToken);
 
 export default function LoginShell() {
   const [isAuthenticated, setIsAuthenticated] = useState(hasSession);
-  const [sessionNotice, setSessionNotice] = useState(null);
+  const apiFailure = useSyncExternalStore(
+    subscribeToCarmenApiFailure,
+    getCarmenApiFailure,
+    () => null,
+  );
+  const sessionNotice = apiFailure && {
+    title: 'Session expired',
+    message: apiFailure.kind === 'session'
+      ? 'Your Carmen session has expired. Please sign in again.'
+      : 'The Carmen API request failed, so this session was closed. Please sign in again.',
+  };
 
   React.useEffect(() => {
     initializeTheme();
@@ -30,15 +46,8 @@ export default function LoginShell() {
   React.useEffect(() => {
     const handleApiError = (event) => {
       if (!isAuthenticated) return;
-      const detail = event?.detail || {};
       clearCarmenSession();
-      setIsAuthenticated(false);
-      setSessionNotice({
-        title: 'Session expired',
-        message: detail.kind === 'session'
-          ? 'Your Carmen session has expired. Please sign in again.'
-          : 'The Carmen API request failed, so this session was closed. Please sign in again.',
-      });
+      reportCarmenApiFailure(event?.detail || {});
     };
 
     window.addEventListener('carmen-api-error', handleApiError);
@@ -55,11 +64,12 @@ export default function LoginShell() {
     };
   }, []);
 
-  const content = isAuthenticated ? (
+  const content = isAuthenticated && !apiFailure ? (
       <Suspense fallback={<div className="flex min-h-dvh items-center justify-center bg-background text-sm text-muted-foreground">Loading Carmen Financial BI...</div>}>
         <App
           onLogout={() => {
             clearCarmenSession();
+            clearCarmenApiFailure();
             setIsAuthenticated(false);
           }}
         />
@@ -81,7 +91,10 @@ export default function LoginShell() {
             </Suspense>
           </section>
           <Suspense fallback={<Skeleton className="order-1 h-148 w-full max-w-md self-center rounded-xl lg:order-2" aria-label="Loading sign-in form" />}>
-            <LoginForm onAuthenticated={() => setIsAuthenticated(true)} />
+            <LoginForm onAuthenticated={() => {
+              clearCarmenApiFailure();
+              setIsAuthenticated(true);
+            }} />
           </Suspense>
         </div>
       </div>
@@ -91,14 +104,14 @@ export default function LoginShell() {
   return (
     <>
       {content}
-      <AlertDialog open={Boolean(sessionNotice)} onOpenChange={(open) => !open && setSessionNotice(null)}>
+      <AlertDialog open={Boolean(sessionNotice)} onOpenChange={(open) => !open && clearCarmenApiFailure()}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{sessionNotice?.title}</AlertDialogTitle>
             <AlertDialogDescription>{sessionNotice?.message}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction onClick={() => setSessionNotice(null)}>Back to sign in</AlertDialogAction>
+            <AlertDialogAction onClick={clearCarmenApiFailure}>Back to sign in</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

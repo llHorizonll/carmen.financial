@@ -1,7 +1,8 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import App, { getAccessibleReports } from './App.jsx';
+import App from './App.jsx';
+import { getAccessibleReports } from './reportAccess.js';
 import { INITIAL_MASTER_DATA } from '../features/report/lib/reportLogic.js';
 
 const reportApiMocks = vi.hoisted(() => ({

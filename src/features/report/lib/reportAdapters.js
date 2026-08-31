@@ -332,6 +332,13 @@ const normalizeReportRow = (row) => {
   return normalizedRow;
 };
 
+const normalizeReportColumn = (column) => {
+  if (!column || typeof column !== 'object') return column;
+  const rawType = String(column.type || column.Type || '').trim().toUpperCase();
+  const type = rawType === 'BUD' ? 'BC' : rawType === 'BUDACC' ? 'BCC' : rawType;
+  return { ...column, type };
+};
+
 export const adaptCarmenReportDefinition = (report) => {
   if (!report) return null;
 
@@ -361,7 +368,7 @@ export const adaptCarmenReportDefinition = (report) => {
     descriptionPosition: Number.isInteger(Number(report.descriptionPosition ?? report.DescriptionPosition))
       ? Number(report.descriptionPosition ?? report.DescriptionPosition)
       : 0,
-    columns: toArray(report.columns || report.Columns),
+    columns: toArray(report.columns || report.Columns).map(normalizeReportColumn),
     rows: toArray(report.rows || report.Rows).map(normalizeReportRow),
     access,
   };

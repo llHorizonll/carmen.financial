@@ -65,11 +65,10 @@ export default function GroupSelectDropdown({
             className="h-8 border-0 bg-transparent p-0 shadow-none focus-visible:ring-0"
           />
         </section>
-        <section role="listbox" aria-label={`${ariaLabel} options`} className="max-h-72 overflow-y-auto p-1">
+        <section aria-label={`${ariaLabel} options`} className="max-h-72 overflow-y-auto p-1">
           <button
             type="button"
-            role="option"
-            aria-selected={!selectedGroup}
+            aria-pressed={!selectedGroup}
             onClick={() => chooseGroup('__none__')}
             className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-muted-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50"
           >
@@ -82,8 +81,7 @@ export default function GroupSelectDropdown({
               <button
                 key={group.id}
                 type="button"
-                role="option"
-                aria-selected={isSelected}
+                aria-pressed={isSelected}
                 onClick={() => chooseGroup(group.id)}
                 className={cn(
                   'flex w-full items-start gap-2 rounded-md px-2 py-2 text-left text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50',
