@@ -29,7 +29,7 @@ export default function ReportView({
   return (
     <Card className="flex h-full min-h-0 flex-col border border-border shadow-none ring-0">
       <CardHeader className="space-y-1 border-b px-4 pt-3 pb-3 sm:px-5 sm:pt-4 sm:pb-4">
-        <CardTitle className="text-center text-[1.55rem] font-semibold tracking-tight text-foreground sm:text-2xl lg:text-[2rem]">
+        <CardTitle className="text-center text-2xl font-semibold tracking-tight text-balance text-foreground lg:text-3xl">
           {displayCompanyLabel}
         </CardTitle>
         <CardDescription className="text-center text-sm font-medium text-foreground/80 sm:text-[0.95rem]">
@@ -41,7 +41,7 @@ export default function ReportView({
         <CardDescription className="text-center text-sm text-muted-foreground">
           {displayPeriodLabel}
         </CardDescription>
-        <div className="pt-1 text-center text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground sm:hidden">
+        <div className="pt-1 text-center text-xs font-medium text-muted-foreground sm:hidden">
           Swipe horizontally to inspect columns
         </div>
       </CardHeader>
@@ -59,7 +59,7 @@ export default function ReportView({
                   {displayColumns.map((col) => col.isDescription ? (
                     <TableHead
                       key={col.id}
-                      className={`${descriptionIsFirst ? 'sticky left-0 z-30' : ''} min-w-[240px] border-r text-center text-[10px] uppercase tracking-[0.2em] sm:min-w-[300px] ${currentTheme.header}`}
+                      className={`${descriptionIsFirst ? 'sticky left-0 z-30' : ''} min-w-[240px] border-r text-center text-xs font-semibold sm:min-w-[300px] ${currentTheme.header}`}
                     >
                       Description
                     </TableHead>
@@ -69,12 +69,12 @@ export default function ReportView({
                       style={{ width: col.width ? `${col.width}px` : 'auto', minWidth: col.width ? `${col.width}px` : '96px' }}
                       className={`border-r text-center ${currentTheme.header}`}
                     >
-                      <div className="text-[10px] tracking-[0.16em] sm:text-[11px] sm:tracking-wider">{col.label}</div>
+                      <div className="text-xs font-semibold">{col.label}</div>
                     </TableHead>
                   ))}
                 </TableRow>
               </TableHeader>
-              <TableBody className="bg-background text-xs font-medium">
+              <TableBody className="bg-background text-sm font-medium">
                 {reportData.map((row) => {
                   const isHeader = row.isHeader || false;
                   const isTotal = row.isTotal || false;

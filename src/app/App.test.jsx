@@ -1,7 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import App from './App.jsx';
+import App, { getAccessibleReports } from './App.jsx';
 import { INITIAL_MASTER_DATA } from '../features/report/lib/reportLogic.js';
 
 const reportApiMocks = vi.hoisted(() => ({
@@ -17,6 +17,28 @@ const reportApiMocks = vi.hoisted(() => ({
   cloneCarmenReport: vi.fn(),
   deleteCarmenReport: vi.fn(),
 }));
+
+describe('report access filtering', () => {
+  const reports = [
+    { id: 'owned-inactive', owner: 'owner', assignedUsers: [], isActive: false },
+    { id: 'assigned-inactive', owner: 'other', assignedUsers: ['viewer'], isActive: false },
+    { id: 'assigned-active', owner: 'other', assignedUsers: ['viewer'], isActive: true },
+    { id: 'hidden-active', owner: 'other', assignedUsers: [], isActive: true },
+  ];
+
+  it('keeps inactive reports visible to their owner and hides them from access-list viewers', () => {
+    const owner = { id: 'owner', permissions: { financialReport: { view: true } } };
+    const viewer = { id: 'viewer', permissions: { financialReport: { view: true } } };
+
+    expect(getAccessibleReports(reports, owner).map((report) => report.id)).toEqual(['owned-inactive']);
+    expect(getAccessibleReports(reports, viewer).map((report) => report.id)).toEqual(['assigned-active']);
+  });
+
+  it('keeps every report visible to report administrators', () => {
+    const admin = { id: 'admin', permissions: { financialReport: { view: true, update: true } } };
+    expect(getAccessibleReports(reports, admin)).toEqual(reports);
+  });
+});
 
 vi.mock('../features/report/lib/reportApi.js', () => reportApiMocks);
 
@@ -125,7 +147,7 @@ describe('App shell', () => {
       await screen.findByRole('heading', { name: 'Excel template import' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/without changing the existing GL, budget, or OCR import flows/i),
+      screen.getByText(/review its mappings before saving/i),
     ).toBeInTheDocument();
   });
 
@@ -365,7 +387,7 @@ describe('App shell', () => {
     expect(reportApiMocks.saveCarmenReport).toHaveBeenCalledTimes(1);
   });
 
-  it('falls back to localStorage report definitions when the API catalog load fails', async () => {
+  it('does not fall back to localStorage report definitions when the API catalog load fails', async () => {
     const storedReports = [
       {
         id: 'rep-local-storage',
@@ -438,10 +460,10 @@ describe('App shell', () => {
     reportApiMocks.fetchCarmenReportData.mockResolvedValue({ actualRows: [], budgetRows: [] });
     reportApiMocks.fetchCarmenReports.mockRejectedValue(new Error('catalog unavailable'));
 
-    const { container } = render(<App />);
+    render(<App />);
 
-    const elements = await screen.findAllByText('Local Storage Report');
-    expect(elements.length).toBeGreaterThan(0);
+    await waitFor(() => expect(reportApiMocks.fetchCarmenReports).toHaveBeenCalled());
+    expect(screen.queryByText('Local Storage Report')).not.toBeInTheDocument();
   });
 
   it('ignores the revision selector for reports without budget columns', async () => {

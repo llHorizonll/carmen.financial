@@ -5,31 +5,31 @@ export const THEMES = {
   blue: {
     name: 'Classic Blue',
     header: 'bg-[#2D4A8C] text-white border-[#1e3263]',
-    subHeader: 'bg-blue-100/40 text-blue-900 font-black',
-    total: 'bg-blue-50 text-slate-900 font-black',
-    rowHover: 'hover:bg-blue-50/50',
-    borderColor: 'border-blue-100',
-    cellBorder: 'border-blue-50',
+    subHeader: 'bg-blue-100/60 text-blue-950 font-bold dark:bg-blue-950/60 dark:text-blue-100',
+    total: 'bg-blue-50 text-slate-950 font-bold dark:bg-blue-950/40 dark:text-blue-50',
+    rowHover: 'hover:bg-blue-50/60 dark:hover:bg-blue-950/30',
+    borderColor: 'border-blue-100 dark:border-blue-900/60',
+    cellBorder: 'border-blue-100/80 dark:border-blue-900/50',
     hexHeader: '#2D4A8C', hexSubHeader: '#dbeafe', hexTotal: '#eff6ff', hexCellBorder: '#eff6ff'
   },
   green: {
     name: 'Emerald Green',
     header: 'bg-emerald-700 text-white border-emerald-800',
-    subHeader: 'bg-emerald-100/50 text-emerald-900 font-black',
-    total: 'bg-emerald-50 text-slate-900 font-black',
-    rowHover: 'hover:bg-emerald-50/50',
-    borderColor: 'border-emerald-200',
-    cellBorder: 'border-emerald-50',
+    subHeader: 'bg-emerald-100/60 text-emerald-950 font-bold dark:bg-emerald-950/60 dark:text-emerald-100',
+    total: 'bg-emerald-50 text-slate-950 font-bold dark:bg-emerald-950/40 dark:text-emerald-50',
+    rowHover: 'hover:bg-emerald-50/60 dark:hover:bg-emerald-950/30',
+    borderColor: 'border-emerald-200 dark:border-emerald-900/60',
+    cellBorder: 'border-emerald-100/80 dark:border-emerald-900/50',
     hexHeader: '#047857', hexSubHeader: '#d1fae5', hexTotal: '#ecfdf5', hexCellBorder: '#ecfdf5'
   },
   gray: {
     name: 'Slate Gray',
     header: 'bg-slate-700 text-white border-slate-800',
-    subHeader: 'bg-slate-200/60 text-slate-900 font-black',
-    total: 'bg-slate-100 text-slate-900 font-black',
-    rowHover: 'hover:bg-slate-100/50',
-    borderColor: 'border-slate-300',
-    cellBorder: 'border-slate-100',
+    subHeader: 'bg-slate-200/70 text-slate-950 font-bold dark:bg-slate-700/70 dark:text-slate-50',
+    total: 'bg-slate-100 text-slate-950 font-bold dark:bg-slate-800 dark:text-slate-50',
+    rowHover: 'hover:bg-slate-100/60 dark:hover:bg-slate-800/70',
+    borderColor: 'border-slate-300 dark:border-slate-700',
+    cellBorder: 'border-slate-200/80 dark:border-slate-800',
     hexHeader: '#334155', hexSubHeader: '#e2e8f0', hexTotal: '#f1f5f9', hexCellBorder: '#f1f5f9'
   }
 };
@@ -40,6 +40,7 @@ export const INITIAL_MASTER_DATA = {
     { id: 'admin', name: 'admin', role: 'Admin' }
   ],
   depts: [],
+  accountGroups: [],
   deptGroups: [
     { id: 'ROOMS', name: 'Rooms Division', deptIds: ['101'] },
     { id: 'FOOD_BEVERAGE', name: 'Food & Beverage', deptIds: ['201', '202'] },
@@ -47,21 +48,6 @@ export const INITIAL_MASTER_DATA = {
   ],
   groups: { L1: [], L2: [], L3: [], L4: [] },
   accCodes: []
-};
-
-export const splitCSVRow = (text, delimiter = ',') => {
-  const result = [];
-  let start = 0;
-  let inQuotes = false;
-  for (let i = 0; i < text.length; i++) {
-    if (text[i] === '"') inQuotes = !inQuotes;
-    else if (text[i] === delimiter && !inQuotes) {
-      result.push(text.substring(start, i));
-      start = i + 1;
-    }
-  }
-  result.push(text.substring(start));
-  return result.map(s => s.replace(/^"|"$/g, '').trim());
 };
 
 export const parseAmount = (val) => {
@@ -73,120 +59,6 @@ export const parseAmount = (val) => {
   }
   const parsedVal = parseFloat(cleanVal);
   return isNaN(parsedVal) ? 0 : parsedVal;
-};
-
-export const detectDelimiter = (headerLine) => {
-  if (headerLine.includes(';') && !headerLine.includes(',')) return ';';
-  if (headerLine.includes('\t')) return '\t';
-  return ',';
-};
-
-const normalizeHeaders = (headers) => headers.map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
-
-const buildCsvRowObject = (headers, normHeaders, values) => {
-  const rowObj = {};
-  headers.forEach((header, index) => {
-    const val = values[index] !== undefined ? values[index] : '';
-    rowObj[header] = val;
-    rowObj[normHeaders[index]] = val;
-  });
-  return rowObj;
-};
-
-const normalizeImportedRow = (rowObj) => ({
-  ...rowObj,
-  year: rowObj.year || rowObj.yr || '',
-  revision: rowObj.revision || rowObj.rev || '0',
-  deptcode: rowObj.deptcode || rowObj.dept || rowObj.department || '',
-  acccode: rowObj.acccode || rowObj.account || rowObj.accountcode || '',
-  accname: rowObj.accnamee || rowObj.accnamet || rowObj.accname || rowObj.caption || '',
-  acctype: rowObj.acctype || rowObj.accnature || rowObj.type || '',
-});
-
-const buildImportMasterData = ({ rowObj, newDeptsMap, newAccCodesMap, newGroups = { L1: new Map(), L2: new Map(), L3: new Map(), L4: new Map() }, defaultAccType = 'I' }) => {
-  const rDept = normalizeDeptLookupCode(rowObj.deptcode);
-  const rAcc = normalizeAccLookupCode(rowObj.acccode);
-  const rAccName = rowObj.accname || rAcc;
-  const rAccType = (rowObj.acctype || defaultAccType || 'I').toString().trim().toUpperCase();
-
-  if (rDept) newDeptsMap.set(rDept, { id: rDept, name: `Dept ${rDept}` });
-  if (rAcc) newAccCodesMap.set(rAcc, { id: rAcc, name: rAccName, type: rAccType });
-
-  const g1 = rowObj.group1; if (g1) newGroups.L1.set(g1.toUpperCase(), { id: g1.toUpperCase(), name: g1 });
-  const g2 = rowObj.group2; if (g2) newGroups.L2.set(g2.toUpperCase(), { id: g2.toUpperCase(), name: g2 });
-  const g3 = rowObj.group3; if (g3) newGroups.L3.set(g3.toUpperCase(), { id: g3.toUpperCase(), name: g3 });
-  const g4 = rowObj.group4; if (g4) newGroups.L4.set(g4.toUpperCase(), { id: g4.toUpperCase(), name: g4 });
-};
-
-export const parseGlCsvText = (text) => {
-  const lines = text.split(/\r?\n/);
-  if (lines.length < 2) {
-    return { error: 'INVALID_FILE' };
-  }
-
-  const delimiter = detectDelimiter(lines[0]);
-  const headers = splitCSVRow(lines[0], delimiter).map(h => h.replace(/^\uFEFF/, '').trim());
-  const normHeaders = normalizeHeaders(headers);
-
-  const parsedData = [];
-  const newDeptsMap = new Map();
-  const newAccCodesMap = new Map();
-  const newGroups = { L1: new Map(), L2: new Map(), L3: new Map(), L4: new Map() };
-  let detectedYear = null;
-
-  for (let i = 1; i < lines.length; i++) {
-    if (!lines[i].trim()) continue;
-    const values = splitCSVRow(lines[i], delimiter);
-    const rowObj = normalizeImportedRow(buildCsvRowObject(headers, normHeaders, values));
-
-    if (!detectedYear && rowObj.year && rowObj.year !== '\\N') detectedYear = rowObj.year;
-    buildImportMasterData({ rowObj, newDeptsMap, newAccCodesMap, newGroups });
-
-    parsedData.push(rowObj);
-  }
-
-  return { parsedData, newDeptsMap, newAccCodesMap, newGroups, detectedYear };
-};
-
-export const parseBudgetCsvText = (text) => {
-  const lines = text.split(/\r?\n/);
-  if (lines.length < 2) {
-    return { error: 'INVALID_FILE' };
-  }
-
-  const delimiter = detectDelimiter(lines[0]);
-  const headers = splitCSVRow(lines[0], delimiter).map(h => h.replace(/^\uFEFF/, '').trim());
-  const normHeaders = normalizeHeaders(headers);
-
-  const parsedData = [];
-  const newDeptsMap = new Map();
-  const newAccCodesMap = new Map();
-
-  for (let i = 1; i < lines.length; i++) {
-    if (!lines[i].trim()) continue;
-    const values = splitCSVRow(lines[i], delimiter);
-    const rowObj = normalizeImportedRow(buildCsvRowObject(headers, normHeaders, values));
-
-    buildImportMasterData({
-      rowObj: { ...rowObj, accname: rowObj.caption || rowObj.accname },
-      newDeptsMap,
-      newAccCodesMap,
-      defaultAccType: 'I',
-    });
-
-    parsedData.push(rowObj);
-  }
-
-  return { parsedData, newDeptsMap, newAccCodesMap };
-};
-
-export const mergeAndSort = (oldArr, newMap) => {
-  const combinedMap = new Map();
-  oldArr.forEach(item => combinedMap.set(String(item.id).trim(), item));
-  newMap.forEach((value, key) => combinedMap.set(String(key).trim(), value));
-  return Array.from(combinedMap.values()).sort((a, b) =>
-    String(a.id).localeCompare(String(b.id), undefined, { numeric: true, sensitivity: 'base' })
-  );
 };
 
 export const formatAutoPeriod = (year, period, formatType) => {
@@ -476,6 +348,11 @@ export const createRowMappingWarningContext = (_allRows = [], masterData = null)
         .map((group) => String(group?.id || '').trim().toUpperCase())
         .filter(Boolean),
     ),
+    masterAccGroupIds: new Set(
+      (Array.isArray(masterData?.accountGroups) ? masterData.accountGroups : [])
+        .map((group) => String(group?.id || '').trim().toUpperCase())
+        .filter(Boolean),
+    ),
   });
 
 export const getRowMappingWarnings = (row, allRows = [], masterData = null, warningContext = null) => {
@@ -488,13 +365,16 @@ export const getRowMappingWarnings = (row, allRows = [], masterData = null, warn
   const deptGroup = String(row.deptGroup || row.DeptGroup || '').trim().toUpperCase();
   const hasDeptGroup = Boolean(deptGroup);
   const hasAccCodes = Boolean(String(row.accCodes || '').trim());
-  const hasGroups = Boolean(String(row.groups || '').trim());
-  const groupLevel = String(row.groupLevel || 'L4').trim().toUpperCase();
+  const accountGroup = String(row.groups || '').trim().toUpperCase();
+  const hasAccountGroup = Boolean(accountGroup);
 
-  if (hasDept && hasDeptGroup) warnings.push('Department and department group are both set.');
-  if (hasDept && hasGroups) warnings.push('Dept and group mapping are both set.');
-  if (hasAccCodes && hasGroups) warnings.push('Account code and group mapping are both set.');
-  if (groupLevel !== 'L4' && hasAccCodes) warnings.push('Grouped rows should not mix with explicit account codes.');
+  if (hasDeptGroup && hasDept) {
+    warnings.push('department group and department codes cannot be mapped together.');
+  }
+
+  if (hasAccountGroup && hasAccCodes) {
+    warnings.push('account group and account codes cannot be mapped together.');
+  }
 
   if (context.masterDeptIds.size > 0 && hasDept) {
     const invalidDepts = String(row.dept || '')
@@ -509,6 +389,10 @@ export const getRowMappingWarnings = (row, allRows = [], masterData = null, warn
 
   if (hasDeptGroup && context.masterDeptGroupIds.size > 0 && !context.masterDeptGroupIds.has(deptGroup)) {
     warnings.push('unknown department group: ' + deptGroup + '.');
+  }
+
+  if (hasAccountGroup && context.masterAccGroupIds.size > 0 && !context.masterAccGroupIds.has(accountGroup)) {
+    warnings.push('unknown account group: ' + accountGroup + '.');
   }
 
   if (context.masterAccIds.size > 0 && hasAccCodes) {
@@ -542,11 +426,23 @@ export const findRowMappingConflicts = (report, masterData = null) => {
 const filterEngineRows = (row, masterData) => {
   const deptGroupId = String(row.deptGroup || row.DeptGroup || '').trim().toUpperCase();
   const deptGroup = (masterData?.deptGroups || []).find((group) => String(group?.id || '').trim().toUpperCase() === deptGroupId);
-  const depts = deptGroupId
-    ? (deptGroup?.deptIds || []).map(normalizeDeptLookupCode).filter(Boolean)
-    : row.dept ? String(row.dept).split(',').map(normalizeDeptLookupCode).filter(Boolean) : [];
-  const accs = row.accCodes ? String(row.accCodes).split(',').map(normalizeAccLookupCode).filter(Boolean) : [];
-  const grps = row.groups ? String(row.groups).split(',').map(s => s.trim().toUpperCase()).filter(Boolean) : [];
+  const explicitDepts = row.dept ? String(row.dept).split(',').map(normalizeDeptLookupCode).filter(Boolean) : [];
+  const depts = explicitDepts.length > 0
+    ? explicitDepts
+    : deptGroupId
+      ? (deptGroup?.deptIds || []).map(normalizeDeptLookupCode).filter(Boolean)
+      : [];
+  const accountGroupId = String(row.groups || '').trim().toUpperCase();
+  const accountGroup = (masterData?.accountGroups || []).find((group) => String(group?.id || '').trim().toUpperCase() === accountGroupId);
+  const explicitAccs = row.accCodes ? String(row.accCodes).split(',').map(normalizeAccLookupCode).filter(Boolean) : [];
+  const accs = explicitAccs.length > 0
+    ? explicitAccs
+    : accountGroup
+      ? (accountGroup.accountIds || []).map(normalizeAccLookupCode).filter(Boolean)
+      : [];
+  const grps = accs.length === 0 && accountGroupId
+    ? String(row.groups).split(',').map(s => s.trim().toUpperCase()).filter(Boolean)
+    : [];
   const dimensions = Array.isArray(row.dimensions)
     ? row.dimensions
         .map((item) => ({

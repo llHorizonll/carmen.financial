@@ -1,7 +1,9 @@
 import {
   adaptCarmenAccountCodes,
+  adaptCarmenAccountGroups,
   adaptCarmenBudgetRevisions,
   adaptCarmenCompany,
+  adaptCarmenDepartmentGroups,
   adaptCarmenDepartments,
   adaptCarmenGlPeriods,
   adaptCarmenReportDefinition,
@@ -351,6 +353,7 @@ export const fetchCarmenReportOptions = async () => {
     periodFormats: Array.isArray(options?.periodFormats) ? options.periodFormats : [],
     accountCategories: Array.isArray(options?.accountCategories) ? options.accountCategories : [],
     columnTypes: Array.isArray(options?.columnTypes) ? options.columnTypes : [],
+    columnLogicTypes: Array.isArray(options?.columnLogicTypes) ? options.columnLogicTypes : [],
     yearModes: Array.isArray(options?.yearModes) ? options.yearModes : [],
     periodModes: Array.isArray(options?.periodModes) ? options.periodModes : [],
     rowTypes: Array.isArray(options?.rowTypes) ? options.rowTypes : [],
@@ -424,6 +427,31 @@ export const fetchCarmenUsers = async () => {
     })
     .filter((user) => user.id)
     .sort((left, right) => left.name.localeCompare(right.name));
+};
+
+const fetchCarmenLookupSearch = async (path) => requestCarmenJson(path, {
+  method: 'POST',
+  body: {
+    Limit: 0,
+    Page: 1,
+    WhereGroupList: [],
+  },
+});
+
+export const fetchCarmenAccountGroups = async () => {
+  if (!isCarmenApiConfigured()) {
+    throw new Error('Carmen API session is not configured.');
+  }
+  const response = await fetchCarmenLookupSearch('/api/accountGroup/search');
+  return adaptCarmenAccountGroups(response);
+};
+
+export const fetchCarmenDepartmentGroups = async () => {
+  if (!isCarmenApiConfigured()) {
+    throw new Error('Carmen API session is not configured.');
+  }
+  const response = await fetchCarmenLookupSearch('/api/DepartmentCategory/search');
+  return adaptCarmenDepartmentGroups(response);
 };
 
 export const fetchCarmenReportPeriods = async ({ year } = {}) => {
@@ -565,9 +593,11 @@ export const fetchCarmenMasterData = async ({ year }) => {
   const session = getStoredCarmenSession();
   const usersPromise = fetchCarmenUsers().catch(() => []);
   try {
-    const [masterData, users] = await Promise.all([
+    const [masterData, users, accountGroups, deptGroups] = await Promise.all([
       requestCarmenJson(`/api/report-master-data?year=${encodeURIComponent(year)}`),
       usersPromise,
+      fetchCarmenAccountGroups().catch(() => []),
+      fetchCarmenDepartmentGroups().catch(() => []),
     ]);
     const currentUser = masterData?.currentUser || session?.user || null;
     return {
@@ -578,6 +608,8 @@ export const fetchCarmenMasterData = async ({ year }) => {
       companyProfile: adaptCarmenCompany(masterData?.companyProfile),
       depts: adaptCarmenDepartments(masterData?.depts),
       accCodes: adaptCarmenAccountCodes(masterData?.accCodes),
+      accountGroups,
+      deptGroups,
       periods: adaptCarmenGlPeriods(masterData?.periods),
       budgetRevisions: adaptCarmenBudgetRevisions(masterData?.budgetRevisions),
       groups: {
@@ -618,6 +650,8 @@ export const fetchCarmenMasterData = async ({ year }) => {
       companyProfile: adaptCarmenCompany(company),
       depts: adaptCarmenDepartments(departments),
       accCodes: adaptCarmenAccountCodes(accountCodes),
+      accountGroups: [],
+      deptGroups: [],
       periods: adaptCarmenGlPeriods(periods),
       budgetRevisions: adaptCarmenBudgetRevisions(budgets),
       groups: {

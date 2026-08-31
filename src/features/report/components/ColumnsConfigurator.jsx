@@ -20,18 +20,15 @@ const EMPTY_REPORT_OPTIONS = {};
 const COLUMN_CLASY_MAP = {
   formula: {
     label: 'Formula',
-    borderClass: 'border-t-2 border-t-purple-500 dark:border-t-purple-400',
-    badgeClass: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300 border border-purple-200/50 dark:border-purple-800/50',
+    badgeClass: 'border-border bg-muted text-foreground',
   },
   percent: {
     label: 'Mix %',
-    borderClass: 'border-t-2 border-t-emerald-500 dark:border-t-emerald-400',
-    badgeClass: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-800/50',
+    badgeClass: 'border-border bg-muted text-foreground',
   },
   data: {
     label: 'Data',
-    borderClass: 'border-t-2 border-t-blue-500 dark:border-t-blue-400',
-    badgeClass: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200/50 dark:border-blue-800/50',
+    badgeClass: 'border-border bg-muted text-foreground',
   },
 };
 
@@ -81,6 +78,13 @@ export default function ColumnsConfigurator({
         { id: 'BC', label: 'BC' },
         { id: 'BCC', label: 'BCC' },
       ]).filter((option) => allowedColumnTypes.has(option.id));
+  const logicTypeLabels = new Map((reportOptions.columnLogicTypes?.length > 0
+    ? reportOptions.columnLogicTypes
+    : [
+        { id: 'DATA', label: 'Data' },
+        { id: 'FORMULA', label: 'Formula' },
+        { id: 'MIX', label: 'Mix %' },
+      ]).map((option) => [String(option.id).toUpperCase(), option.label]));
   const yearModeOptions = reportOptions.yearModes?.length > 0
     ? reportOptions.yearModes
     : [
@@ -124,10 +128,7 @@ export default function ColumnsConfigurator({
     axis: 'horizontal',
     itemLabel: (id) => id === '__description__' ? 'Description column' : `column ${id}`,
   });
-  const headerActionClassName = 'w-full justify-center rounded-xl border shadow-sm transition-colors duration-150';
-  const dataActionClassName = 'border-blue-200 bg-blue-50/50 text-blue-700 hover:bg-blue-100/60 dark:border-blue-900/30 dark:bg-blue-950/20 dark:text-blue-400 dark:hover:bg-blue-950/40';
-  const formulaActionClassName = 'border-purple-200 bg-purple-50/50 text-purple-700 hover:bg-purple-100/60 dark:border-purple-900/30 dark:bg-purple-950/20 dark:text-purple-400 dark:hover:bg-purple-950/40';
-  const percentActionClassName = 'border-emerald-200 bg-emerald-50/50 text-emerald-700 hover:bg-emerald-100/60 dark:border-emerald-900/30 dark:bg-emerald-950/20 dark:text-emerald-400 dark:hover:bg-emerald-950/40';
+  const headerActionClassName = 'w-full justify-center border shadow-none';
 
   return (
     <Card className="w-full max-w-full min-h-0 overflow-hidden border border-border bg-card/95 shadow-none ring-0">
@@ -138,11 +139,11 @@ export default function ColumnsConfigurator({
             <CardDescription className="text-sm text-muted-foreground">Set column details, then drag the grip to reorder.</CardDescription>
           </div>
           <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[24rem]">
-            <Button variant="outline" size="sm" className={`${headerActionClassName} ${dataActionClassName}`} onClick={() => handleAddCol('data')}>+ Data</Button>
-            <Button variant="outline" size="sm" className={`${headerActionClassName} ${formulaActionClassName}`} onClick={() => handleAddCol('formula')}>+ Formula</Button>
-            <Button variant="outline" size="sm" className={`${headerActionClassName} ${percentActionClassName}`} onClick={() => handleAddCol('percent')}>
+            <Button variant="outline" size="sm" className={headerActionClassName} onClick={() => handleAddCol('data')}>+ {logicTypeLabels.get('DATA') || 'Data'}</Button>
+            <Button variant="outline" size="sm" className={headerActionClassName} onClick={() => handleAddCol('formula')}>+ {logicTypeLabels.get('FORMULA') || 'Formula'}</Button>
+            <Button variant="outline" size="sm" className={headerActionClassName} onClick={() => handleAddCol('percent')}>
               <Percent className="size-4" />
-              Mix %
+              {logicTypeLabels.get('MIX') || 'Mix %'}
             </Button>
           </div>
         </div>
@@ -162,7 +163,6 @@ export default function ColumnsConfigurator({
         )}
 
         <div className="relative w-full overflow-hidden">
-          <div className="pointer-events-none absolute inset-y-0 right-0 z-20 hidden w-10 bg-gradient-to-l from-background via-background/80 to-transparent md:block" />
           <div ref={containerRef} className="flex gap-4 overflow-x-auto px-4 scrollbar-thin scrollbar-thumb-muted-foreground/20 pb-6 w-full">
             {displayColumns.map((col, visualIndex) => {
               if (col.isDescription) {
@@ -171,14 +171,14 @@ export default function ColumnsConfigurator({
                     key={col.id}
                     {...getItemProps(col.id)}
                     data-testid="description-column-card"
-                    className="column-card flex min-h-0 w-[310px] shrink-0 flex-col rounded-xl border border-border border-t-2 border-t-amber-500 bg-card shadow-sm transition-[opacity,box-shadow,transform] duration-200 ease-out hover:shadow-md data-[dragging=true]:opacity-40 data-[drag-over=true]:ring-2 data-[drag-over=true]:ring-primary/40 motion-reduce:transition-none dark:border-t-amber-400"
+                    className="column-card flex min-h-0 w-[310px] shrink-0 flex-col rounded-xl border border-border bg-card transition-[opacity,box-shadow,transform] duration-200 ease-out data-[dragging=true]:opacity-40 data-[drag-over=true]:ring-2 data-[drag-over=true]:ring-primary/40 motion-reduce:transition-none"
                   >
                     <header className="flex w-full flex-row items-center justify-between gap-2 overflow-hidden rounded-t-xl border-b border-border bg-muted/30 px-3 py-2.5">
                       <h3 className="flex min-w-0 flex-1 items-center gap-1.5">
                         <Badge variant="secondary" className="shrink-0 px-2 py-0.5 text-xs font-semibold">
                           Description
                         </Badge>
-                        <Badge variant="outline" className="shrink-0 rounded-md border-amber-200/50 bg-amber-100 px-1.5 py-0 text-[10px] font-medium text-amber-800 dark:border-amber-800/50 dark:bg-amber-900/40 dark:text-amber-300">
+                        <Badge variant="outline" className="shrink-0 rounded-md bg-muted px-1.5 py-0 text-xs font-medium text-muted-foreground">
                           Label
                         </Badge>
                       </h3>
@@ -214,7 +214,7 @@ export default function ColumnsConfigurator({
                   key={col.id}
                   {...getItemProps(col.id)}
                   data-testid="column-card"
-                  className={`column-card w-[310px] shrink-0 border border-border bg-card shadow-sm hover:shadow-md transition-[opacity,box-shadow,transform] duration-200 ease-out rounded-xl flex flex-col min-h-0 data-[dragging=true]:opacity-40 data-[drag-over=true]:ring-2 data-[drag-over=true]:ring-primary/40 motion-reduce:transition-none ${colClassy.borderClass}`}
+                  className="column-card flex min-h-0 w-[310px] shrink-0 flex-col rounded-xl border border-border bg-card transition-[opacity,box-shadow,transform] duration-200 ease-out data-[dragging=true]:opacity-40 data-[drag-over=true]:ring-2 data-[drag-over=true]:ring-primary/40 motion-reduce:transition-none"
                 >
                   {/* Card Header: Reordering, visibility, deletion */}
                   <div className="flex flex-row items-center justify-between border-b border-border bg-muted/30 px-3 py-2.5 rounded-t-xl gap-2 w-full overflow-hidden">
@@ -222,10 +222,10 @@ export default function ColumnsConfigurator({
                       <Badge variant="secondary" className="font-mono text-xs font-semibold px-2 py-0.5 shrink-0">
                         C{idx + 1}
                       </Badge>
-                      <Badge variant="outline" className={`text-[10px] font-medium px-1.5 py-0 rounded-md shrink-0 ${colClassy.badgeClass}`}>
+                      <Badge variant="outline" className={`shrink-0 rounded-md px-1.5 py-0 text-xs font-medium ${colClassy.badgeClass}`}>
                         {colClassy.label}
                       </Badge>
-                      <span className="text-[10px] text-muted-foreground font-mono font-medium truncate" title={col.id}>{col.id}</span>
+                      <span className="truncate font-mono text-xs font-medium text-muted-foreground" title={col.id}>{col.id}</span>
                     </div>
                   
                   <div className="flex items-center gap-1 shrink-0">
@@ -272,7 +272,7 @@ export default function ColumnsConfigurator({
                 <div className="p-4 space-y-4">
                   {/* Label */}
                   <div className="space-y-1.5">
-                    <label htmlFor={fieldId('label')} className="text-xs font-semibold text-foreground/80 tracking-wide">Column Label</label>
+                    <label htmlFor={fieldId('label')} className="text-sm font-medium text-foreground">Column label</label>
                     <Input
                       id={fieldId('label')}
                       value={col.label}
@@ -286,26 +286,26 @@ export default function ColumnsConfigurator({
                     <div className="grid grid-cols-2 gap-3.5">
                       {/* Formula (Span 2) */}
                       <div className="col-span-2 space-y-1.5">
-                        <label htmlFor={fieldId('formula')} className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Formula</label>
+                        <label htmlFor={fieldId('formula')} className="text-xs font-medium text-muted-foreground">Formula</label>
                         <Input
                           id={fieldId('formula')}
                           value={col.formula || ''}
                           onChange={(e) => handleUpdateCol(col.id, 'formula', e.target.value)}
                           placeholder="e.g. C1-C2+C3"
-                          className="h-8.5 text-xs font-mono"
+                          className="h-9 font-mono text-sm"
                         />
                       </div>
 
                       {/* Width */}
                       <div className="space-y-1.5">
-                        <label htmlFor={fieldId('formula-width')} className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Width (px)</label>
+                        <label htmlFor={fieldId('formula-width')} className="text-xs font-medium text-muted-foreground">Width (px)</label>
                         <Input
                           id={fieldId('formula-width')}
                           value={col.width || ''}
                           onChange={(e) => handleUpdateCol(col.id, 'width', e.target.value)}
                           type="number"
                           placeholder="Auto"
-                          className="h-8.5 text-xs text-center"
+                          className="h-9 text-center text-sm"
                         />
                       </div>
 
@@ -324,26 +324,26 @@ export default function ColumnsConfigurator({
                     <div className="grid grid-cols-2 gap-3.5">
                       {/* Target Column (Span 2) */}
                       <div className="col-span-2 space-y-1.5">
-                        <label htmlFor={fieldId('target-column')} className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Target Column</label>
+                        <label htmlFor={fieldId('target-column')} className="text-xs font-medium text-muted-foreground">Target column</label>
                         <Input
                           id={fieldId('target-column')}
                           value={col.targetCol || ''}
                           onChange={(e) => handleUpdateCol(col.id, 'targetCol', e.target.value)}
                           placeholder="e.g. C1"
-                          className="h-8.5 text-xs font-mono"
+                          className="h-9 font-mono text-sm"
                         />
                       </div>
 
                       {/* Width */}
                       <div className="col-span-2 space-y-1.5">
-                        <label htmlFor={fieldId('percent-width')} className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Width (px)</label>
+                        <label htmlFor={fieldId('percent-width')} className="text-xs font-medium text-muted-foreground">Width (px)</label>
                         <Input
                           id={fieldId('percent-width')}
                           value={col.width || ''}
                           onChange={(e) => handleUpdateCol(col.id, 'width', e.target.value)}
                           type="number"
                           placeholder="Auto"
-                          className="h-8.5 text-xs text-center"
+                          className="h-9 text-center text-sm"
                         />
                       </div>
                     </div>
@@ -351,12 +351,12 @@ export default function ColumnsConfigurator({
                     <div className="grid grid-cols-2 gap-3.5">
                       {/* Type */}
                       <div className="space-y-1.5">
-                        <label htmlFor={fieldId('type')} className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Type</label>
+                        <label htmlFor={fieldId('type')} className="text-xs font-medium text-muted-foreground">Type</label>
                         <Select
                           value={col.type || (reportType === 'Daily' ? 'DAC' : 'AC')}
                           onValueChange={(value) => handleUpdateCol(col.id, 'type', value)}
                         >
-                          <SelectTrigger id={fieldId('type')} className="h-8.5 w-full text-xs rounded-lg">
+                          <SelectTrigger id={fieldId('type')} className="h-9 w-full text-sm">
                             <SelectValue placeholder="Type" />
                           </SelectTrigger>
                           <SelectContent position="popper">
@@ -374,14 +374,14 @@ export default function ColumnsConfigurator({
 
                       {/* Target */}
                       <div className="space-y-1.5">
-                        <label htmlFor={fieldId('target')} className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Target</label>
+                        <label htmlFor={fieldId('target')} className="text-xs font-medium text-muted-foreground">Target</label>
                         <Select
                           value={col.targetCol || '__blank__'}
                           onValueChange={(value) => handleUpdateCol(col.id, 'targetCol', value === '__blank__' ? '' : value)}
                         >
                           <SelectTrigger
                             id={fieldId('target')}
-                            className={`h-8.5 w-full text-xs rounded-lg ${
+                            className={`h-9 w-full text-sm ${
                               String(col.targetCol || '').includes('!REF!') ||
                               brokenColumnReferences.some((issue) => issue.id === col.id && issue.field === 'targetCol')
                                 ? 'border-destructive bg-destructive/5 text-destructive'
@@ -403,12 +403,12 @@ export default function ColumnsConfigurator({
 
                       {/* Year */}
                       <div className="space-y-1.5">
-                        <label htmlFor={fieldId('year')} className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Year</label>
+                        <label htmlFor={fieldId('year')} className="text-xs font-medium text-muted-foreground">Year</label>
                         <Select
                           value={col.yearMode || 'current'}
                           onValueChange={(value) => handleUpdateCol(col.id, 'yearMode', value)}
                         >
-                          <SelectTrigger id={fieldId('year')} className="h-8.5 w-full text-xs rounded-lg">
+                          <SelectTrigger id={fieldId('year')} className="h-9 w-full text-sm">
                             <SelectValue placeholder="Year" />
                           </SelectTrigger>
                           <SelectContent position="popper">
@@ -426,19 +426,19 @@ export default function ColumnsConfigurator({
                             value={col.specificYear || ''}
                             onChange={(event) => handleUpdateCol(col.id, 'specificYear', event.target.value)}
                             placeholder="2026"
-                            className="mt-2 h-8.5 text-xs"
+                            className="mt-2 h-9 text-sm"
                           />
                         )}
                       </div>
 
                       {/* Period */}
                       <div className="space-y-1.5">
-                        <label htmlFor={fieldId('period')} className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Period</label>
+                        <label htmlFor={fieldId('period')} className="text-xs font-medium text-muted-foreground">Period</label>
                         <Select
                           value={col.periodMode || 'current'}
                           onValueChange={(value) => handleUpdateCol(col.id, 'periodMode', value)}
                         >
-                          <SelectTrigger id={fieldId('period')} className="h-8.5 w-full text-xs rounded-lg">
+                          <SelectTrigger id={fieldId('period')} className="h-9 w-full text-sm">
                             <SelectValue placeholder="Period" />
                           </SelectTrigger>
                           <SelectContent position="popper">
@@ -453,14 +453,14 @@ export default function ColumnsConfigurator({
 
                       {/* Width */}
                       <div className="col-span-2 space-y-1.5">
-                        <label htmlFor={fieldId('data-width')} className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Width (px)</label>
+                        <label htmlFor={fieldId('data-width')} className="text-xs font-medium text-muted-foreground">Width (px)</label>
                         <Input
                           id={fieldId('data-width')}
                           value={col.width || ''}
                           onChange={(e) => handleUpdateCol(col.id, 'width', e.target.value)}
                           type="number"
                           placeholder="Auto"
-                          className="h-8.5 text-xs text-center"
+                          className="h-9 text-center text-sm"
                         />
                       </div>
                     </div>

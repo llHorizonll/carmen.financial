@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/select.jsx';
 import { Textarea } from '@/components/ui/textarea.jsx';
 import MultiSelectDropdown from './MultiSelectDropdown.jsx';
+import GroupSelectDropdown from './GroupSelectDropdown.jsx';
 
 const EMPTY_REPORT_OPTIONS = {};
 const EMPTY_DIMENSION_OPTIONS = {};
@@ -44,7 +45,7 @@ export default function EditMappingModal({
   onClose,
 }) {
   if (!isOpen || !editingRow) return null;
-  const friendlyButtonClassName = 'border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150';
+  const friendlyButtonClassName = 'border-border bg-background text-foreground hover:bg-muted';
 
   const accountCategoryOptions = reportOptions.accountCategories?.length > 0
     ? reportOptions.accountCategories
@@ -53,12 +54,15 @@ export default function EditMappingModal({
         { id: 'I', label: 'Income Statement' },
         { id: 'B', label: 'Balance Sheet' },
       ];
+  const accountGroups = masterData.accountGroups || [];
+  const departmentGroups = masterData.deptGroups || [];
+  const selectedAccountGroup = accountGroups.find((group) => String(group.id).toUpperCase() === String(editingRow.groups || '').toUpperCase());
+  const selectedDepartmentGroup = departmentGroups.find((group) => String(group.id).toUpperCase() === String(editingRow.deptGroup || '').toUpperCase());
+  const hasAccountGroup = Boolean(selectedAccountGroup);
+  const hasDepartmentGroup = Boolean(selectedDepartmentGroup);
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent
-        className="w-[calc(100vw-1rem)] bg-popover sm:w-[calc(100vw-1rem)]"
-        style={{ width: 'min(96vw, 72rem)', maxWidth: 'min(96vw, 72rem)' }}
-      >
+      <DialogContent className="w-full bg-popover sm:max-w-6xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings2 className="size-4" />
@@ -67,14 +71,38 @@ export default function EditMappingModal({
           <DialogDescription>Adjust row mapping details and detail selectors.</DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 max-h-[72vh] overflow-y-auto pr-1">
-          <div className="space-y-2">
+        <section className="grid max-h-dvh gap-4 overflow-y-auto pr-1">
+          <section className="space-y-2">
             <Label>Description</Label>
             <Input value={editingRow.desc} onChange={(e) => setEditingRow({ ...editingRow, desc: e.target.value })} />
-          </div>
+          </section>
 
-          <div className="space-y-2 rounded-xl border border-border bg-background p-4">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <section className="space-y-3 rounded-xl border border-border bg-background p-4">
+            <section className="space-y-2">
+              <Label>Department Group</Label>
+              <GroupSelectDropdown
+                ariaLabel="Department group"
+                emptyLabel="No department group"
+                groups={departmentGroups}
+                memberKey="deptIds"
+                value={selectedDepartmentGroup?.id || '__none__'}
+                onChange={(value) => {
+                  const group = departmentGroups.find((item) => item.id === value);
+                  setEditingRow({
+                    ...editingRow,
+                    deptGroup: group?.id || '',
+                    ...(group ? { dept: '' } : {}),
+                  });
+                }}
+              />
+              {selectedDepartmentGroup && (
+                <p className="text-xs text-muted-foreground">
+                  This group maps {selectedDepartmentGroup.deptIds?.length || 0} department(s). Clear the group before selecting individual departments.
+                </p>
+              )}
+            </section>
+
+            <section className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <Label>Departments</Label>
               <Button
                 type="button"
@@ -82,91 +110,53 @@ export default function EditMappingModal({
                 size="sm"
                 className={`w-full justify-start sm:w-auto ${friendlyButtonClassName}`}
                 aria-label="Select departments"
+                disabled={hasDepartmentGroup}
                 onClick={() => onOpenDetailSelector({ field: 'dept', title: 'Select Departments', subTitle: editingRow.desc, items: masterData.depts })}
               >
                 <SearchIcon />
                 Select Departments
               </Button>
-            </div>
+            </section>
             <Input
               value={editingRow.dept}
-              onChange={(e) => setEditingRow({ ...editingRow, dept: e.target.value, deptGroup: '' })}
+              onChange={(e) => setEditingRow({ ...editingRow, dept: e.target.value })}
               placeholder="e.g. 101, 102"
+              disabled={hasDepartmentGroup}
+            />
+          </section>
+
+          <section className="space-y-3 rounded-xl border border-border bg-background p-4">
+            <section className="space-y-2">
+              <Label>Account Group</Label>
+              <GroupSelectDropdown
+                ariaLabel="Account group"
+                emptyLabel="No account group"
+                groups={accountGroups}
+                memberKey="accountIds"
+                value={selectedAccountGroup?.id || '__none__'}
+                onChange={(value) => {
+                  const group = accountGroups.find((item) => item.id === value);
+                  setEditingRow({
+                    ...editingRow,
+                    groups: group?.id || '',
+                    ...(group ? {
+                      groupLevel: group.level,
+                      accCodes: '',
+                    } : {}),
+                  });
+                }}
               />
-          </div>
+              {selectedAccountGroup && (
+                <p className="text-xs text-muted-foreground">
+                  This {selectedAccountGroup.level} group maps {selectedAccountGroup.accountIds?.length || 0} account code(s). Clear the group before selecting individual accounts.
+                </p>
+              )}
+            </section>
 
-          <div className="space-y-3 rounded-xl border border-border bg-background p-4">
-            <div className="space-y-2">
-              <Label>Department Group</Label>
-              <Select
-                value={editingRow.deptGroup || '__none__'}
-                onValueChange={(value) => setEditingRow({
-                  ...editingRow,
-                  deptGroup: value === '__none__' ? '' : value,
-                  dept: value === '__none__' ? editingRow.dept : '',
-                })}
-              >
-                <SelectTrigger className="h-10 w-full rounded-xl">
-                  <SelectValue placeholder="Select department group" />
-                </SelectTrigger>
-                <SelectContent position="popper">
-                  <SelectItem value="__none__">No department group</SelectItem>
-                  {(masterData.deptGroups || []).map((group) => (
-                    <SelectItem key={group.id} value={group.id}>
-                      {group.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <Label>Group Level Target</Label>
-              <Select
-                value={editingRow.groupLevel || 'L4'}
-                onValueChange={(value) => setEditingRow({ ...editingRow, groupLevel: value, groups: '' })}
-              >
-                <SelectTrigger className="h-10 w-full rounded-xl sm:w-40">
-                  <SelectValue placeholder="Select level" />
-                </SelectTrigger>
-                <SelectContent position="popper">
-                  <SelectItem value="L1">L1 (Category)</SelectItem>
-                  <SelectItem value="L2">L2 (Sub Category)</SelectItem>
-                  <SelectItem value="L3">L3 (Group)</SelectItem>
-                  <SelectItem value="L4">L4 (Detail)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <Label>Group Names</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className={`w-full justify-start sm:w-auto ${friendlyButtonClassName}`}
-                  aria-label="Select groups"
-                  onClick={() => onOpenDetailSelector({ field: 'groups', title: 'Select Groups', subTitle: editingRow.desc, items: masterData.groups[editingRow.groupLevel || 'L4'] })}
-                >
-                  <SearchIcon />
-                  Select Groups
-                </Button>
-              </div>
-              <Input
-                value={editingRow.groups}
-                onChange={(e) => setEditingRow({ ...editingRow, groups: e.target.value })}
-                placeholder="e.g. Food Revenue"
-              />
-            </div>
-
-          </div>
-
-          <div className="space-y-2 rounded-xl border border-border bg-background p-4">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <section className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <Label>Account Codes Filter</Label>
-              <Select value={modalAccCategory} onValueChange={setModalAccCategory}>
-                <SelectTrigger className="h-10 w-full rounded-xl sm:w-40">
+              <Select value={modalAccCategory} onValueChange={setModalAccCategory} disabled={hasAccountGroup}>
+                <SelectTrigger className="h-9 w-full sm:w-40">
                   <SelectValue placeholder="All Categories" />
                 </SelectTrigger>
                 <SelectContent position="popper">
@@ -177,10 +167,10 @@ export default function EditMappingModal({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+            </section>
 
-            <div className="space-y-2">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <section className="space-y-2">
+              <section className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <Label>Account Codes</Label>
                 <Button
                   type="button"
@@ -188,25 +178,27 @@ export default function EditMappingModal({
                   size="sm"
                   className={`w-full justify-start sm:w-auto ${friendlyButtonClassName}`}
                   aria-label="Select account details"
+                  disabled={hasAccountGroup}
                   onClick={() => onOpenDetailSelector({ field: 'accCodes', title: 'Select Account Detail', subTitle: editingRow.desc, items: masterData.accCodes.filter((item) => modalAccCategory === 'ALL' || item.type === modalAccCategory) })}
                 >
                   <SearchIcon />
                   Select Account Detail
                 </Button>
-              </div>
+              </section>
               <Textarea
                 aria-label="Account codes"
                 value={editingRow.accCodes}
                 onChange={(e) => setEditingRow({ ...editingRow, accCodes: e.target.value })}
                 placeholder="e.g. 4001, 4002"
                 className="min-h-24"
+                disabled={hasAccountGroup}
               />
-            </div>
-          </div>
+            </section>
+          </section>
 
-          <div className="space-y-3 rounded-xl border border-border bg-background p-4">
+          <section className="space-y-3 rounded-xl border border-border bg-background p-4">
             <Label>Dimensions</Label>
-            <div className="grid gap-3 md:grid-cols-2">
+            <section className="grid gap-3 md:grid-cols-2">
               {DIMENSION_FIELDS.map(({ key, label }) => {
                 const selected = parseDimensionValues(editingRow[key]);
                 const options = [...new Set([...(dimensionOptions[key] || []), ...selected])];
@@ -223,9 +215,9 @@ export default function EditMappingModal({
                   />
                 );
               })}
-            </div>
-          </div>
-        </div>
+            </section>
+          </section>
+        </section>
 
         <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button variant="outline" size="sm" className={`w-full sm:w-auto ${friendlyButtonClassName}`} onClick={onClose}>

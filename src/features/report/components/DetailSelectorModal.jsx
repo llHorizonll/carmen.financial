@@ -27,7 +27,7 @@ export default function DetailSelectorModal({
 }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [tempSelected, setTempSelected] = useState(() => toSelectedIds(selectedItems));
-  const friendlyButtonClassName = 'border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150';
+  const friendlyButtonClassName = 'border-border bg-background text-foreground hover:bg-muted';
 
   const uniqueSortedAvailable = useMemo(() => {
     const uniqueMap = new Map();
@@ -73,8 +73,7 @@ export default function DetailSelectorModal({
   return (
     <Dialog open onOpenChange={(open) => !open && onCancel()}>
       <DialogContent
-        className="max-h-[calc(100vh-1rem)] w-[calc(100vw-1rem)] max-w-6xl overflow-y-auto"
-        style={{ width: 'min(98vw, 90rem)', maxWidth: 'min(98vw, 90rem)' }}
+        className="max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] max-w-6xl overflow-y-auto"
       >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
@@ -109,7 +108,9 @@ export default function DetailSelectorModal({
 
           <div className="rounded-xl border border-border bg-background">
             <div className="flex items-center justify-between gap-2 border-b bg-muted/30 p-3">
-              <div className="text-sm font-medium">{tempSelected.length} Items selected</div>
+              <div className="text-sm font-medium tabular-nums">
+                {tempSelected.length} {tempSelected.length === 1 ? 'item' : 'items'} selected
+              </div>
               <Button
                 type="button"
                 variant="destructive"
@@ -140,6 +141,7 @@ export default function DetailSelectorModal({
                     </button>
                   );
                 })}
+                {tempSelected.length === 0 && <div className="p-6 text-center text-sm text-muted-foreground">No items selected</div>}
               </div>
             </ScrollArea>
           </div>

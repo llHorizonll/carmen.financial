@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils.js';
 export default function MultiSelectDropdown({ options, selected, onChange, label, testIdPrefix, normalizeValue = normalizeDeptLookupCode, searchPlaceholder = 'Search department...', emptyLabel = 'All' }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const friendlyButtonClassName = 'border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150';
+  const friendlyButtonClassName = 'border-border bg-background text-foreground hover:bg-muted';
 
   const validOptions = useMemo(() => {
     const unique = [];
@@ -73,12 +73,12 @@ export default function MultiSelectDropdown({ options, selected, onChange, label
       <PopoverTrigger asChild>
         <Button
           variant="outline"
-          className={`h-8 w-full justify-between gap-2 rounded-lg px-2.5 text-left ${friendlyButtonClassName}`}
+          className={`h-9 w-full justify-between gap-2 px-3 text-left ${friendlyButtonClassName}`}
           data-testid={`dropdown-${testIdPrefix}`}
         >
           <span className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-            <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">{label}</span>
-            <span className="truncate text-[13px] font-medium leading-4" data-testid={`selected-value-${testIdPrefix}`}>
+            <span className="shrink-0 text-xs font-medium text-muted-foreground">{label}</span>
+            <span className="truncate text-sm font-medium" data-testid={`selected-value-${testIdPrefix}`}>
               {selected.length === 0
                 ? emptyLabel
                 : isAllSelected
@@ -92,7 +92,7 @@ export default function MultiSelectDropdown({ options, selected, onChange, label
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-[min(28rem,calc(100vw-2rem))] overflow-hidden border border-border p-0 shadow-[0_24px_72px_-24px_rgba(15,23,42,0.22)] ring-1 ring-black/5"
+        className="w-[min(28rem,calc(100vw-2rem))] overflow-hidden border border-border p-0 shadow-lg ring-1 ring-foreground/10"
         align="start"
       >
         <div className="border-b border-border/60 px-3 py-2">
@@ -116,7 +116,7 @@ export default function MultiSelectDropdown({ options, selected, onChange, label
               type="button"
               variant="ghost"
               size="xs"
-              className="h-7 rounded-full px-3 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+              className="h-8 px-3 text-xs font-medium text-muted-foreground hover:text-foreground"
               onClick={selectAll}
               disabled={validOptions.length === 0 || isAllSelected}
             >
@@ -126,7 +126,7 @@ export default function MultiSelectDropdown({ options, selected, onChange, label
               type="button"
               variant="ghost"
               size="xs"
-              className="h-7 rounded-full px-3 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+              className="h-8 px-3 text-xs font-medium text-muted-foreground hover:text-foreground"
               onClick={clearAll}
               disabled={selected.length === 0}
             >
@@ -146,7 +146,7 @@ export default function MultiSelectDropdown({ options, selected, onChange, label
                   type="button"
                   onClick={() => toggleSelected(option.id)}
                   className={cn(
-                    'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none transition-colors hover:bg-zinc-100 hover:text-zinc-950 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
+                    'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm outline-none transition-colors duration-150 ease-out hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50',
                     selectedState && 'bg-muted text-foreground'
                   )}
                   data-testid={`check-${testIdPrefix}-${option.id}`}

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   adaptCarmenAccountCodes,
+  adaptCarmenAccountGroups,
   adaptCarmenBudgetRevisions,
   adaptCarmenCompany,
   adaptCarmenDepartments,
+  adaptCarmenDepartmentGroups,
   adaptCarmenGlPeriods,
   adaptCarmenReportDefinition,
   adaptCarmenLoginUser,
@@ -56,6 +58,41 @@ describe('reportAdapters', () => {
       { id: '1', label: 'Revision 1' },
       { id: '2', label: 'Revision 2' },
     ]);
+  });
+
+  it('normalizes account and department groups with their editable members', () => {
+    expect(adaptCarmenAccountGroups({
+      Data: [{
+        AccGroupCode: 'REV',
+        AccGroupName: 'Revenue',
+        Level: 'L3',
+        Account: [
+          { AccCode: '04001', Description: 'Rooms' },
+          { AccCode: '04002', Description: 'Food' },
+        ],
+      }],
+    })).toEqual([expect.objectContaining({
+      id: 'REV',
+      name: 'Revenue',
+      level: 'L3',
+      accountIds: ['4001', '4002'],
+    })]);
+
+    expect(adaptCarmenDepartmentGroups({
+      Data: [{
+        DeptCateCode: 'OPERATIONS',
+        Description: 'Operations',
+        Active: true,
+        Departments: [
+          { DeptCode: '0101', Description: 'Rooms' },
+          { DeptCode: '0201', Description: 'Restaurant' },
+        ],
+      }],
+    })).toEqual([expect.objectContaining({
+      id: 'OPERATIONS',
+      name: 'Operations',
+      deptIds: ['101', '201'],
+    })]);
   });
 
   it('derives setup access from Carmen financial report permissions', () => {

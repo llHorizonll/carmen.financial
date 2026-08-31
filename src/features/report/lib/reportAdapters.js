@@ -103,6 +103,57 @@ export const adaptCarmenAccountCodes = (accounts) =>
     }))
     .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' }));
 
+const normalizeAccountGroupLevel = (value) => {
+  const normalized = String(value || '').trim().toUpperCase();
+  const match = normalized.match(/[1-4]/);
+  return match ? `L${match[0]}` : 'L4';
+};
+
+export const adaptCarmenAccountGroups = (groups) =>
+  toArray(groups)
+    .filter((group) => group?.AccGroupCode || group?.accGroupCode || group?.id)
+    .map((group) => {
+      const accounts = toArray(group?.Account || group?.account || group?.accounts)
+        .map((account) => ({
+          id: normalizeAccLookupCode(account?.AccCode || account?.accCode || account?.id),
+          name: account?.Description || account?.description || account?.Description2 || account?.name || '',
+        }))
+        .filter((account) => account.id);
+      const id = String(group.AccGroupCode || group.accGroupCode || group.id).trim();
+      return {
+        id,
+        name: group.AccGroupName || group.accGroupName || group.name || id,
+        level: normalizeAccountGroupLevel(group.Level || group.level),
+        accountIds: [...new Set(accounts.map((account) => account.id))],
+        accounts,
+      };
+    })
+    .sort((left, right) => (
+      left.level.localeCompare(right.level)
+      || left.id.localeCompare(right.id, undefined, { numeric: true, sensitivity: 'base' })
+    ));
+
+export const adaptCarmenDepartmentGroups = (groups) =>
+  toArray(groups)
+    .filter((group) => group?.DeptCateCode || group?.deptCateCode || group?.id)
+    .filter((group) => group?.Active !== false && group?.active !== false)
+    .map((group) => {
+      const departments = toArray(group?.Departments || group?.departments)
+        .map((department) => ({
+          id: normalizeDeptLookupCode(department?.DeptCode || department?.deptCode || department?.id),
+          name: department?.Description || department?.description || department?.name || '',
+        }))
+        .filter((department) => department.id);
+      const id = String(group.DeptCateCode || group.deptCateCode || group.id).trim();
+      return {
+        id,
+        name: group.Description || group.description || group.name || id,
+        deptIds: [...new Set(departments.map((department) => department.id))],
+        departments,
+      };
+    })
+    .sort((left, right) => left.id.localeCompare(right.id, undefined, { numeric: true, sensitivity: 'base' }));
+
 const formatDateLabel = (dateValue) => {
   const date = new Date(dateValue);
   if (Number.isNaN(date.getTime())) return '';

@@ -161,13 +161,13 @@ const canViewFinancialReports = (user) => {
   return Boolean(user);
 };
 
-const getAccessibleReports = (reports, user) => {
+export const getAccessibleReports = (reports, user) => {
   if (!canViewFinancialReports(user)) return [];
   if (canSetupFinancialReports(user)) return reports;
   const userId = String(user?.id || "").trim();
   return reports.filter((report) => {
-    if (report?.isActive === false) return false;
     if (String(report?.owner || "").trim() === userId) return true;
+    if (report?.isActive === false) return false;
     if (
       Array.isArray(report?.assignedUsers) &&
       report.assignedUsers.includes(userId)
@@ -216,6 +216,11 @@ const DEFAULT_REPORT_OPTIONS = {
     { id: "PTDBG", label: "PTDBG" },
     { id: "BC", label: "BC (Budget Month)" },
     { id: "BCC", label: "BCC (Budget YTD)" },
+  ],
+  columnLogicTypes: [
+    { id: "DATA", label: "Data" },
+    { id: "FORMULA", label: "Formula" },
+    { id: "MIX", label: "Mix %" },
   ],
   yearModes: [
     { id: "current", label: "Current Year" },
@@ -271,6 +276,8 @@ const isSessionExpiredError = (error) =>
   String(error?.message || "")
     .toLowerCase()
     .includes("session expired");
+const isBlockingSetupWarning = (warning) =>
+  String(warning || "").includes("cannot be mapped together");
 
 const getSetupWarnings = (report, masterData) => {
   if (!report) return [];
@@ -327,6 +334,10 @@ const mergeReportOptions = (defaults, loaded) => ({
     loaded?.accountCategories,
   ),
   columnTypes: mergeOptionArrays(defaults.columnTypes, loaded?.columnTypes),
+  columnLogicTypes: mergeOptionArrays(
+    defaults.columnLogicTypes,
+    loaded?.columnLogicTypes,
+  ),
   yearModes: mergeOptionArrays(defaults.yearModes, loaded?.yearModes),
   periodModes: mergeOptionArrays(defaults.periodModes, loaded?.periodModes),
   rowTypes: mergeOptionArrays(defaults.rowTypes, loaded?.rowTypes),
@@ -335,9 +346,9 @@ const mergeReportOptions = (defaults, loaded) => ({
 
 const REPORT_STORAGE_KEY = "carmen_bi_reports_config_v5_23";
 const NEUTRAL_BUTTON_CLASS =
-  "border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors duration-150";
+  "border-border bg-background text-foreground hover:bg-muted transition-colors duration-150";
 const NEUTRAL_FILTER_TRIGGER_CLASS =
-  "border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors duration-150";
+  "border-border bg-background text-foreground hover:bg-muted transition-colors duration-150";
 const MODE_SWITCH_CLASS =
   "inline-flex items-center rounded-xl border border-border bg-muted/60 p-1 shadow-inner";
 const ACTIVE_MODE_CLASS =
@@ -598,6 +609,14 @@ export default function App({ onLogout = null }) {
           depts: apiData.depts.length > 0 ? apiData.depts : prev.depts,
           accCodes:
             apiData.accCodes.length > 0 ? apiData.accCodes : prev.accCodes,
+          accountGroups:
+            apiData.accountGroups?.length > 0
+              ? apiData.accountGroups
+              : prev.accountGroups,
+          deptGroups:
+            apiData.deptGroups?.length > 0
+              ? apiData.deptGroups
+              : prev.deptGroups,
           groups: {
             L1:
               apiData.groups?.L1?.length > 0
@@ -683,8 +702,7 @@ export default function App({ onLogout = null }) {
             optionsResult.status === "rejected"
               ? optionsResult.reason
               : reportsResult.reason;
-          const fallbackReports = readStoredReports() || getDefaultReports();
-          setReports(fallbackReports);
+          setReports([]);
           setReportsLoaded(true);
           throw reason || new Error("Unable to load Carmen report catalog.");
         }
@@ -695,8 +713,7 @@ export default function App({ onLogout = null }) {
             onLogout();
             return;
           }
-          const fallbackReports = readStoredReports() || getDefaultReports();
-          setReports(fallbackReports);
+          setReports([]);
           setReportsLoaded(true);
           setReportCatalogError(
             error.message || "Unable to load Carmen report catalog.",
@@ -1315,7 +1332,7 @@ export default function App({ onLogout = null }) {
             }
           }}
         >
-          <SelectTrigger className="h-10 w-full rounded-xl">
+          <SelectTrigger className="h-9 w-full">
             <SelectValue placeholder="Select user" />
           </SelectTrigger>
           <SelectContent position="popper">
@@ -1333,7 +1350,7 @@ export default function App({ onLogout = null }) {
         <div className="p-3">
           {canSetupReports && (
             <>
-              <div className="mb-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              <div className="mb-2 px-1 text-xs font-medium text-muted-foreground">
                 Template tools
               </div>
               <Button
@@ -1349,7 +1366,7 @@ export default function App({ onLogout = null }) {
               </Button>
             </>
           )}
-          <div className="mb-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          <div className="mb-2 px-1 text-xs font-medium text-muted-foreground">
             Reports
           </div>
           <div className="flex flex-col gap-1">
@@ -1378,7 +1395,7 @@ export default function App({ onLogout = null }) {
   );
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
+    <div className="flex min-h-dvh bg-background text-foreground">
       {alertMsg && (
         <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 px-4 sm:right-4 sm:left-auto sm:w-full sm:max-w-136 sm:px-0">
           <Card className="pointer-events-auto mx-auto w-full max-w-136 border border-border/80 bg-background/98 shadow-xl ring-1 ring-black/5 backdrop-blur-sm">
@@ -1463,9 +1480,15 @@ export default function App({ onLogout = null }) {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Save incomplete report template?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {setupSaveWarnings.some(isBlockingSetupWarning)
+                ? "Fix invalid row mappings"
+                : "Save incomplete report template?"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This template can be saved, but report data may be incomplete or incorrect until these items are fixed.
+              {setupSaveWarnings.some(isBlockingSetupWarning)
+                ? "Group mappings and individual-code mappings are mutually exclusive. Clear one mapping type before saving."
+                : "This template can be saved, but report data may be incomplete or incorrect until these items are fixed."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <ScrollArea className="max-h-72 rounded-lg border border-border">
@@ -1482,14 +1505,16 @@ export default function App({ onLogout = null }) {
             <AlertDialogCancel onClick={() => setSetupSaveWarnings([])}>
               Go back
             </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                setSetupSaveWarnings([]);
-                persistSetup();
-              }}
-            >
-              Save anyway
-            </AlertDialogAction>
+            {!setupSaveWarnings.some(isBlockingSetupWarning) && (
+              <AlertDialogAction
+                onClick={() => {
+                  setSetupSaveWarnings([]);
+                  persistSetup();
+                }}
+              >
+                Save anyway
+              </AlertDialogAction>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -1610,7 +1635,7 @@ export default function App({ onLogout = null }) {
                     <Badge
                       variant="destructive"
                       title={masterDataError}
-                      className="rounded-full border-destructive/30 bg-destructive/15 px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-destructive"
+                      className="rounded-full border-destructive/30 bg-destructive/15 px-2.5 py-1 text-xs text-destructive"
                     >
                       Carmen API unavailable
                     </Badge>
@@ -1619,7 +1644,7 @@ export default function App({ onLogout = null }) {
                     <Badge
                       variant="destructive"
                       title={reportCatalogError}
-                      className="rounded-full border-destructive/30 bg-destructive/15 px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-destructive"
+                      className="rounded-full border-destructive/30 bg-destructive/15 px-2.5 py-1 text-xs text-destructive"
                     >
                       Report catalog error
                     </Badge>
@@ -1665,7 +1690,7 @@ export default function App({ onLogout = null }) {
                       >
                         <ZoomIn className="size-3.5" />
                       </Button>
-                      <span className="w-9 text-right text-[11px] font-medium tabular-nums text-foreground/70">
+                      <span className="w-10 text-right text-xs font-medium tabular-nums text-foreground/70">
                         {tableZoom}%
                       </span>
                     </div>
@@ -1709,7 +1734,7 @@ export default function App({ onLogout = null }) {
               <Card className="border border-border bg-card/95 shadow-none ring-0">
                 <CardContent className="p-3">
                   <div className="flex flex-col gap-2 xl:flex-row xl:items-end xl:justify-between">
-                    <div className="grid gap-2 sm:grid-cols-2 sm:items-end xl:flex-none xl:grid-cols-[180px_110px_180px_120px_88px]">
+                    <div className="grid gap-2 sm:grid-cols-2 sm:items-end md:grid-cols-[minmax(0,1.3fr)_96px_minmax(0,1.3fr)_104px_80px] xl:flex-none xl:grid-cols-[180px_110px_180px_120px_88px]">
                       <div className="min-w-0">
                         <MultiSelectDropdown
                           testIdPrefix="dept"
@@ -1721,7 +1746,7 @@ export default function App({ onLogout = null }) {
                       </div>
 
                       <div className="space-y-1">
-                        <span className="block text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                        <span className="block text-xs font-medium text-muted-foreground">
                           Year
                         </span>
                         <Input
@@ -1730,12 +1755,12 @@ export default function App({ onLogout = null }) {
                           onChange={(event) =>
                             setGlobalYear(event.target.value)
                           }
-                          className="h-8 rounded-lg px-2.5 text-sm"
+                          className="h-9 text-sm"
                         />
                       </div>
 
                       <div className="space-y-1">
-                        <span className="block text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                        <span className="block text-xs font-medium text-muted-foreground">
                           Period
                         </span>
                         <Select
@@ -1744,7 +1769,7 @@ export default function App({ onLogout = null }) {
                         >
                           <SelectTrigger
                             size="sm"
-                            className={`h-8 min-w-0 rounded-lg px-2.5 text-sm ${NEUTRAL_FILTER_TRIGGER_CLASS}`}
+                            className={`h-9 min-w-0 text-sm ${NEUTRAL_FILTER_TRIGGER_CLASS}`}
                           >
                             <SelectValue placeholder="Period" />
                           </SelectTrigger>
@@ -1762,7 +1787,7 @@ export default function App({ onLogout = null }) {
                       </div>
 
                       <div className="space-y-1">
-                        <span className="block text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                        <span className="block text-xs font-medium text-muted-foreground">
                           Rev
                         </span>
                         <Select
@@ -1781,7 +1806,7 @@ export default function App({ onLogout = null }) {
                         >
                           <SelectTrigger
                             size="sm"
-                            className={`h-8 w-full min-w-0 rounded-lg px-2.5 text-sm ${NEUTRAL_FILTER_TRIGGER_CLASS}`}
+                            className={`h-9 w-full min-w-0 text-sm ${NEUTRAL_FILTER_TRIGGER_CLASS}`}
                           >
                             <SelectValue placeholder="Revision" />
                           </SelectTrigger>
@@ -1800,7 +1825,7 @@ export default function App({ onLogout = null }) {
 
                       <Button
                         size="sm"
-                        className={`h-8 w-full self-end border px-3 text-xs xl:w-auto ${NEUTRAL_BUTTON_CLASS}`}
+                        className={`h-9 w-full self-end border px-3 text-sm xl:w-auto ${NEUTRAL_BUTTON_CLASS}`}
                         onClick={handleApplyFilters}
                         disabled={isLoading}
                       >
@@ -1813,7 +1838,7 @@ export default function App({ onLogout = null }) {
                       <Button
                         variant="outline"
                         size="sm"
-                        className={`h-8 w-full px-3 text-xs sm:w-auto ${NEUTRAL_BUTTON_CLASS}`}
+                        className={`h-9 w-full px-3 text-sm sm:w-auto ${NEUTRAL_BUTTON_CLASS}`}
                         onClick={exportToExcel}
                         title="Export to Excel"
                       >
@@ -1821,7 +1846,7 @@ export default function App({ onLogout = null }) {
                         Excel
                       </Button>
                       <Button
-                        className={`h-8 w-full px-3 text-xs sm:w-auto ${NEUTRAL_BUTTON_CLASS}`}
+                        className={`h-9 w-full px-3 text-sm sm:w-auto ${NEUTRAL_BUTTON_CLASS}`}
                         size="sm"
                         variant="outline"
                         onClick={() => window.print()}
@@ -2032,7 +2057,6 @@ export default function App({ onLogout = null }) {
               setEditingRow({
                 ...editingRow,
                 [detailSelecting.field]: newSelection.join(", "),
-                ...(detailSelecting.field === "dept" ? { deptGroup: "" } : {}),
               });
               setDetailSelecting(null);
             }}

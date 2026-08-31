@@ -108,7 +108,7 @@ export default function LoginForm({ onAuthenticated }) {
   };
 
   return (
-    <Card className="login-enter-from-right order-1 w-full max-w-[420px] self-center border border-border bg-card/95 shadow-sm ring-0 lg:order-2">
+    <Card className="login-enter-from-right order-1 w-full max-w-md self-center border border-border bg-card shadow-lg ring-0 lg:order-2">
       <CardHeader className="space-y-2">
         <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">Secure sign-in</Badge>
         <CardTitle className="text-xl tracking-tight sm:text-2xl">Carmen BI Login</CardTitle>
@@ -117,7 +117,7 @@ export default function LoginForm({ onAuthenticated }) {
       <form onSubmit={handleLogin}>
         <CardContent className="space-y-5 pb-6 sm:pb-8">
           <div className="space-y-2.5">
-            <Label htmlFor="username" className="block text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Username</Label>
+            <Label htmlFor="username">Username</Label>
             <Input
               id="username"
               type="text"
@@ -142,7 +142,7 @@ export default function LoginForm({ onAuthenticated }) {
           </div>
 
           <div className="space-y-2.5">
-            <Label htmlFor="password" className="block text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Password</Label>
+            <Label htmlFor="password">Password</Label>
             <Input
               id="password"
               type="password"
@@ -159,7 +159,7 @@ export default function LoginForm({ onAuthenticated }) {
             {submitAttempted && fieldErrors.password && <p id="password-error" className="text-xs text-destructive">{fieldErrors.password}</p>}
           </div>
 
-          <Suspense fallback={<Skeleton className="h-44 w-full rounded-2xl" aria-hidden="true" />}>
+          <Suspense fallback={<Skeleton className="h-44 w-full rounded-xl" aria-hidden="true" />}>
             <LoginSelectFields
               businessUnits={businessUnits}
               fieldErrors={fieldErrors}
@@ -186,7 +186,8 @@ export default function LoginForm({ onAuthenticated }) {
         <div className="flex flex-col items-stretch gap-3 px-4 pb-5 pt-3 sm:pb-6">
           <Button
             type="submit"
-            className="h-11 w-full border border-primary/90 bg-primary text-primary-foreground shadow-sm transition-transform hover:-translate-y-px hover:bg-primary/90 hover:shadow-md active:translate-y-0"
+            size="lg"
+            className="w-full"
             disabled={!canSubmit}
           >
             {isLoggingIn ? 'Signing in...' : 'Sign in'}

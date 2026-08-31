@@ -214,8 +214,7 @@ export default function ExcelTemplateImportWizard({
               Excel template import
             </h1>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-              Create one report template per worksheet without changing the
-              existing GL, budget, or OCR import flows.
+              Create one report template per worksheet and review its mappings before saving.
             </p>
           </section>
         </section>

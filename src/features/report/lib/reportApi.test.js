@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildReportDefinitionPayload, cloneCarmenReport, deleteCarmenReport, fetchCarmenDimensions, fetchCarmenReport, fetchCarmenReportOptions, fetchCarmenUsers, loginWithCarmenCredentials, saveCarmenReport, saveCarmenReports } from './reportApi.js';
+import { buildReportDefinitionPayload, cloneCarmenReport, deleteCarmenReport, fetchCarmenAccountGroups, fetchCarmenDepartmentGroups, fetchCarmenDimensions, fetchCarmenReport, fetchCarmenReportOptions, fetchCarmenUsers, loginWithCarmenCredentials, saveCarmenReport, saveCarmenReports } from './reportApi.js';
 
 const createSessionStorageMock = (session = {}) => {
   const storage = new Map();
@@ -73,6 +73,40 @@ describe('reportApi helpers', () => {
     ]);
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('loads account and department groups from the Carmen grouping APIs', async () => {
+    createSessionStorageMock({
+      accessToken: 'token',
+      businessUnit: { tenant: 'tenant-1' },
+    });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ Data: [{ AccGroupCode: 'REV', AccGroupName: 'Revenue', Level: 'L2', Account: [{ AccCode: '4001' }] }] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ Data: [{ DeptCateCode: 'OPS', Description: 'Operations', Active: true, Departments: [{ DeptCode: '101' }] }] }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchCarmenAccountGroups()).resolves.toEqual([
+      expect.objectContaining({ id: 'REV', level: 'L2', accountIds: ['4001'] }),
+    ]);
+    await expect(fetchCarmenDepartmentGroups()).resolves.toEqual([
+      expect.objectContaining({ id: 'OPS', deptIds: ['101'] }),
+    ]);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('/api/accountGroup/search?useTenant=tenant-1'),
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('/api/DepartmentCategory/search?useTenant=tenant-1'),
+      expect.objectContaining({ method: 'POST' }),
+    );
   });
 
   it('keeps report definition payloads aligned with the frontend shape', () => {

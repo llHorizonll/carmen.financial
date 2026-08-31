@@ -2,12 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   THEMES,
   INITIAL_MASTER_DATA,
-  splitCSVRow,
   parseAmount,
-  detectDelimiter,
-  parseGlCsvText,
-  parseBudgetCsvText,
-  mergeAndSort,
   formatAutoPeriod,
   resolveTime,
   getIndentClass,
@@ -26,61 +21,9 @@ import {
 } from './reportLogic.js';
 
 describe('reportLogic helpers', () => {
-  it('parses CSV rows with quoted delimiters', () => {
-    expect(splitCSVRow('A,"B,C",D')).toEqual(['A', 'B,C', 'D']);
-  });
-
-  it('detects delimiters and parses amounts', () => {
-    expect(detectDelimiter('a;b;c')).toBe(';');
+  it('parses financial amounts', () => {
     expect(parseAmount('(1,234.50)')).toBe(-1234.5);
     expect(parseAmount('NULL')).toBe(0);
-  });
-
-  it('parses GL CSV text and captures master data updates', () => {
-    const csv = [
-      'year,deptcode,acccode,accname,accnature,group1,group2,group3,group4,amt1,bfamt1',
-      '2025,101,4001,Rooms,I,FOOD,BEV,MAIN,DETAIL,100,25',
-      '2025,102,4002,"Food, Beverage",B,FOOD,BEV,MAIN,DETAIL,(50),10',
-    ].join('\n');
-
-    const parsed = parseGlCsvText(csv);
-
-    expect(parsed.error).toBeUndefined();
-    expect(parsed.detectedYear).toBe('2025');
-    expect(parsed.parsedData).toHaveLength(2);
-    expect(parsed.parsedData[1].accname).toBe('Food, Beverage');
-    expect(parsed.newDeptsMap.get('101')).toMatchObject({ id: '101', name: 'Dept 101' });
-    expect(parsed.newAccCodesMap.get('4001')).toMatchObject({ id: '4001', name: 'Rooms', type: 'I' });
-    expect(parsed.newAccCodesMap.get('4002')).toMatchObject({ id: '4002', name: 'Food, Beverage', type: 'B' });
-    expect(parsed.newGroups.L4.get('DETAIL')).toMatchObject({ id: 'DETAIL', name: 'DETAIL' });
-  });
-
-  it('parses Budget CSV text and captures master data updates', () => {
-    const csv = [
-      'deptcode,acccode,caption,amt1,amt2',
-      '101,5001,Budget Rooms,10,20',
-      '102,5002,"Budget, F&B",30,40',
-    ].join('\n');
-
-    const parsed = parseBudgetCsvText(csv);
-
-    expect(parsed.error).toBeUndefined();
-    expect(parsed.parsedData).toHaveLength(2);
-    expect(parsed.parsedData[1].caption).toBe('Budget, F&B');
-    expect(parsed.newDeptsMap.get('102')).toMatchObject({ id: '102', name: 'Dept 102' });
-    expect(parsed.newAccCodesMap.get('5002')).toMatchObject({ id: '5002', name: 'Budget, F&B', type: 'I' });
-  });
-
-  it('merges and sorts master data', () => {
-    const merged = mergeAndSort(
-      [{ id: 'B', name: 'B' }],
-      new Map([
-        ['A', { id: 'A', name: 'A' }],
-        ['B', { id: 'B', name: 'Override' }],
-      ])
-    );
-    expect(merged.map(item => item.id)).toEqual(['A', 'B']);
-    expect(merged.find(item => item.id === 'B').name).toBe('Override');
   });
 
   it('formats auto periods and indent classes', () => {
@@ -209,10 +152,7 @@ describe('reportLogic helpers', () => {
     expect(getRowMappingWarnings(rows[2], rows, {
       depts: [{ id: '101' }, { id: '102' }],
       accCodes: [{ id: '5001' }],
-    })).toEqual(expect.arrayContaining([
-      'Grouped rows should not mix with explicit account codes.',
-      'unknown account code(s): 4001.',
-    ]));
+    })).toEqual(['unknown account code(s): 4001.']);
     expect(getRowMappingWarnings({
       id: 'r4',
       dept: '101',
@@ -223,15 +163,28 @@ describe('reportLogic helpers', () => {
       depts: [{ id: '101' }],
       accCodes: [{ id: '4001' }],
     })).toEqual([]);
+    expect(getRowMappingWarnings({
+      id: 'r5',
+      dept: '101',
+      deptGroup: 'OPS',
+      groups: 'REVENUE',
+      accCodes: '4001',
+    }, [], {
+      depts: [{ id: '101' }],
+      deptGroups: [{ id: 'OPS' }],
+      accCodes: [{ id: '4001' }],
+      accountGroups: [{ id: 'REVENUE' }],
+    })).toEqual([
+      'department group and department codes cannot be mapped together.',
+      'account group and account codes cannot be mapped together.',
+    ]);
 
     expect(findRowMappingConflicts({ rows }, {
       depts: [{ id: '101' }, { id: '102' }],
       accCodes: [{ id: '5001' }],
-    })).toEqual(expect.arrayContaining([
-      expect.objectContaining({ scope: 'row', id: 'r1', field: 'mapping' }),
-      expect.objectContaining({ scope: 'row', id: 'r2', field: 'mapping' }),
+    })).toEqual([
       expect.objectContaining({ scope: 'row', id: 'r3', field: 'mapping' }),
-    ]));
+    ]);
   });
 
   it('keeps theme and master data constants stable', () => {
@@ -655,6 +608,39 @@ describe('buildReportData', () => {
       appliedPeriod: '2',
       appliedRevision: '0',
       masterData,
+    });
+
+    expect(result[0].results.C1).toBe(10);
+  });
+
+  it('expands API-backed account groups into account-code filters', () => {
+    const result = buildReportData({
+      activeReport: {
+        category: ['ALL'],
+        rows: [{
+          id: 'r1',
+          dept: '',
+          deptGroup: 'ROOMS',
+          accCodes: '',
+          groupLevel: 'L2',
+          groups: 'REVENUE',
+        }],
+        columns: [{ id: 'C1', type: 'AC', yearMode: 'current', periodMode: 'current' }],
+      },
+      engineData: [
+        { year: '2025', deptcode: '101', acccode: '4001', amt2: '10' },
+        { year: '2025', deptcode: '101', acccode: '5001', amt2: '25' },
+        { year: '2025', deptcode: '201', acccode: '4001', amt2: '90' },
+      ],
+      budgetData: [],
+      appliedDepts: [],
+      appliedYear: '2025',
+      appliedPeriod: '2',
+      appliedRevision: '0',
+      masterData: {
+        ...INITIAL_MASTER_DATA,
+        accountGroups: [{ id: 'REVENUE', level: 'L2', accountIds: ['4001'] }],
+      },
     });
 
     expect(result[0].results.C1).toBe(10);

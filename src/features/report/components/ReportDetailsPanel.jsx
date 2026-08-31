@@ -124,8 +124,8 @@ function ReportStatusCard({ activeReport, updateActiveReport }) {
       <Button
         variant="outline"
         className={`w-full justify-center border ${activeReport.isActive !== false
-          ? 'border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150'
-          : 'border-border bg-background text-muted-foreground hover:bg-muted transition-all duration-150'
+          ? 'border-border bg-muted text-foreground hover:bg-muted/80'
+          : 'border-border bg-background text-muted-foreground hover:bg-muted'
         }`}
         onClick={() => updateActiveReport({ isActive: activeReport.isActive === false ? true : false })}
       >
@@ -182,7 +182,7 @@ export default function ReportDetailsPanel({
   const accountCategoryLabelMap = new Map(accountCategoryOptions.map((option) => [option.id, option.label]));
   const dateDisplayValue = activeReport.overrideDateDisplay ?? activeReport.customDateLabel ?? '';
   const periodDisplayValue = activeReport.overridePeriodDisplay ?? activeReport.customPeriodLabel ?? '';
-  const friendlyButtonClassName = 'border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150';
+  const friendlyButtonClassName = 'border-border bg-background text-foreground hover:bg-muted';
 
   return (
     <Card className="border border-border shadow-none ring-0">
@@ -220,7 +220,7 @@ export default function ReportDetailsPanel({
                 updateActiveReport({ theme: value });
               }}
             >
-              <SelectTrigger className="h-10 w-full rounded-xl">
+              <SelectTrigger className="h-9 w-full">
                 <SelectValue placeholder="Select theme" />
               </SelectTrigger>
               <SelectContent position="popper">
@@ -241,7 +241,7 @@ export default function ReportDetailsPanel({
                 updateActiveReport({ periodFormat: value });
               }}
             >
-              <SelectTrigger className="h-10 w-full rounded-xl">
+              <SelectTrigger className="h-9 w-full">
                 <SelectValue placeholder="Select format" />
               </SelectTrigger>
               <SelectContent position="popper">
@@ -265,7 +265,7 @@ export default function ReportDetailsPanel({
                 });
               }}
             >
-              <SelectTrigger className="h-10 w-full rounded-xl">
+              <SelectTrigger className="h-9 w-full">
                 <SelectValue placeholder="Select type" />
               </SelectTrigger>
               <SelectContent position="popper">
@@ -331,7 +331,7 @@ export default function ReportDetailsPanel({
                 }
               }}
             >
-              <SelectTrigger className="h-10 w-full rounded-xl lg:w-[260px]">
+              <SelectTrigger className="h-9 w-full lg:w-64">
                 <SelectValue placeholder="+ Add Category" />
               </SelectTrigger>
               <SelectContent position="popper">

@@ -80,8 +80,8 @@ describe('EditMappingModal', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('uses API-backed group master data for the group selector', () => {
-    const onOpenDetailSelector = vi.fn();
+  it('selects an API-backed account group and clears individual account codes', async () => {
+    const setEditingRow = vi.fn();
 
     render(
       <EditMappingModal
@@ -93,9 +93,14 @@ describe('EditMappingModal', () => {
           groups: '',
           accCodes: '',
         }}
-        setEditingRow={() => {}}
+        setEditingRow={setEditingRow}
         masterData={{
           depts: [],
+          deptGroups: [],
+          accountGroups: [
+            { id: 'ROOMS', name: 'Rooms', level: 'L2', accountIds: ['4001', '4002'] },
+            { id: 'FOOD', name: 'Food', level: 'L3', accountIds: ['4101'] },
+          ],
           groups: {
             L1: [],
             L2: [
@@ -109,21 +114,91 @@ describe('EditMappingModal', () => {
         }}
         modalAccCategory="ALL"
         setModalAccCategory={() => {}}
-        onOpenDetailSelector={onOpenDetailSelector}
+        onOpenDetailSelector={() => {}}
         onApply={() => {}}
         onClose={() => {}}
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Select groups/i }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'Account group' }));
+    fireEvent.click(await screen.findByText(/L2 · ROOMS/));
 
-    expect(onOpenDetailSelector).toHaveBeenCalledWith(expect.objectContaining({
-      field: 'groups',
-      items: [
-        { id: 'ROOMS', name: 'Rooms' },
-        { id: 'FOOD', name: 'Food' },
-      ],
+    expect(setEditingRow).toHaveBeenCalledWith(expect.objectContaining({
+      groups: 'ROOMS',
+      groupLevel: 'L2',
+      accCodes: '',
     }));
+  });
+
+  it('selects a department group and clears individual departments', async () => {
+    const setEditingRow = vi.fn();
+
+    render(
+      <EditMappingModal
+        isOpen={true}
+        editingRow={{
+          desc: 'Revenue',
+          dept: '',
+          deptGroup: '',
+          groupLevel: 'L4',
+          groups: '',
+          accCodes: '',
+        }}
+        setEditingRow={setEditingRow}
+        masterData={{
+          depts: [{ id: '101', name: 'Rooms' }, { id: '201', name: 'Restaurant' }],
+          deptGroups: [{ id: 'OPS', name: 'Operations', deptIds: ['101', '201'] }],
+          accountGroups: [],
+          groups: { L4: [] },
+          accCodes: [],
+        }}
+        modalAccCategory="ALL"
+        setModalAccCategory={() => {}}
+        onOpenDetailSelector={() => {}}
+        onApply={() => {}}
+        onClose={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Department group' }));
+    fireEvent.click(await screen.findByText(/OPS — Operations/));
+
+    expect(setEditingRow).toHaveBeenCalledWith(expect.objectContaining({
+      deptGroup: 'OPS',
+      dept: '',
+    }));
+  });
+
+  it('disables individual selectors while their group mapping is selected', () => {
+    render(
+      <EditMappingModal
+        isOpen={true}
+        editingRow={{
+          desc: 'Revenue',
+          dept: '',
+          deptGroup: 'OPS',
+          groupLevel: 'L2',
+          groups: 'ROOMS',
+          accCodes: '',
+        }}
+        setEditingRow={() => {}}
+        masterData={{
+          depts: [{ id: '101', name: 'Rooms' }],
+          deptGroups: [{ id: 'OPS', name: 'Operations', deptIds: ['101'] }],
+          accountGroups: [{ id: 'ROOMS', name: 'Rooms', level: 'L2', accountIds: ['4001'] }],
+          accCodes: [{ id: '4001', type: 'I' }],
+        }}
+        modalAccCategory="ALL"
+        setModalAccCategory={() => {}}
+        onOpenDetailSelector={() => {}}
+        onApply={() => {}}
+        onClose={() => {}}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /Select departments/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Select account details/i })).toBeDisabled();
+    expect(screen.getByRole('textbox', { name: 'Account codes' })).toBeDisabled();
   });
 
   it('keeps more than 100 account codes fully editable without duplicate chips', () => {

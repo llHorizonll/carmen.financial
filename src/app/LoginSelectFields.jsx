@@ -18,7 +18,7 @@ export default function LoginSelectFields({
   return (
     <>
       <div className="space-y-2.5">
-        <Label htmlFor="business-unit" className="block text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+        <Label htmlFor="business-unit">
           Business Unit
         </Label>
         <Select
@@ -28,7 +28,7 @@ export default function LoginSelectFields({
         >
           <SelectTrigger
             id="business-unit"
-            className="h-12 w-full rounded-2xl border-border bg-card px-4 shadow-sm transition-colors hover:bg-muted/40"
+            className="h-10 w-full"
             aria-invalid={Boolean(submitAttempted && fieldErrors.selectedTenant)}
             aria-describedby={fieldErrors.selectedTenant ? 'business-unit-error' : undefined}
           >
@@ -53,9 +53,9 @@ export default function LoginSelectFields({
       </div>
 
       <div className="space-y-2.5">
-        <Label className="block text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Language</Label>
+        <Label>Language</Label>
         <Select value={language} onValueChange={setLanguage}>
-          <SelectTrigger className="h-12 w-full rounded-2xl border-border bg-card px-4 shadow-sm transition-colors hover:bg-muted/40">
+          <SelectTrigger className="h-10 w-full">
             <SelectValue placeholder="Select language" />
           </SelectTrigger>
           <SelectContent position="popper" align="start">

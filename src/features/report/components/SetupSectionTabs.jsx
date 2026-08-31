@@ -10,7 +10,7 @@ export default function SetupSectionTabs({
   return (
     <div
       className={cn(
-        'inline-flex w-full flex-wrap items-center gap-1 rounded-2xl border border-border bg-muted/60 p-1 backdrop-blur-xs',
+        'inline-flex w-full flex-wrap items-center gap-1 rounded-xl border border-border bg-muted/60 p-1',
         className,
       )}
       role="tablist"
@@ -28,10 +28,10 @@ export default function SetupSectionTabs({
             id={item.tabId}
             onClick={() => onChange(item.key)}
             className={cn(
-              'inline-flex min-h-9 flex-1 items-center justify-center rounded-xl px-3 py-2 text-sm font-medium transition-colors',
+              'inline-flex min-h-9 flex-1 items-center justify-center rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150 ease-out',
               isActive
                 ? 'bg-primary text-primary-foreground shadow-sm ring-1 ring-primary/20'
-                : 'text-muted-foreground hover:bg-background hover:text-foreground transition-all duration-150',
+                : 'text-muted-foreground hover:bg-background hover:text-foreground',
             )}
           >
             {item.label}

@@ -11,9 +11,9 @@ import SetupSectionTabs from './SetupSectionTabs.jsx';
 import { THEMES } from '../lib/reportLogic.js';
 
 const themeBadgeClassMap = {
-  blue: 'border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150',
-  green: 'border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150',
-  gray: 'border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150',
+  blue: 'border-border bg-muted/60 text-muted-foreground',
+  green: 'border-border bg-muted/60 text-muted-foreground',
+  gray: 'border-border bg-muted/60 text-muted-foreground',
 };
 
 export default function ReportSetup(props) {
@@ -48,10 +48,10 @@ export default function ReportSetup(props) {
   ];
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto">
+    <div className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto">
       <section
         aria-label="Report setting actions"
-        className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/85"
+        className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 border-b border-border bg-background px-4 py-3"
       >
         <p className="flex items-center gap-2 text-sm" aria-live="polite">
           <span className={cn('size-2 rounded-full', props.isDirty ? 'bg-amber-500' : 'bg-emerald-500')} />
@@ -70,25 +70,25 @@ export default function ReportSetup(props) {
           </Button>
         </nav>
       </section>
-      <Card className="overflow-hidden border border-border bg-gradient-to-br from-background via-background to-muted/25 shadow-none ring-0">
+      <Card className="overflow-hidden border border-border bg-card shadow-none ring-0">
         <CardContent className="grid gap-5 p-5 xl:grid-cols-[1.15fr_0.85fr] xl:items-center xl:p-6">
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary" className="rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.18em]">
+              <Badge variant="secondary" className="rounded-full px-3 py-1 text-xs">
                 Configuration Mode
               </Badge>
-              <Badge variant="outline" className="rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.18em]">
+              <Badge variant="outline" className="rounded-full px-3 py-1 text-xs">
                 {props.activeReport?.reportType || 'Monthly'}
               </Badge>
-              <Badge variant="outline" className={cn('rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.18em]', themeBadgeClass)}>
+              <Badge variant="outline" className={cn('rounded-full px-3 py-1 text-xs', themeBadgeClass)}>
                 {themeBadgeLabel} theme
               </Badge>
             </div>
             <div className="space-y-2">
-              <h2 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+              <h2 className="text-xl font-semibold tracking-tight text-balance text-foreground">
                 Shape the report before it reaches the dashboard
               </h2>
-              <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+              <p className="max-w-2xl text-sm leading-6 text-pretty text-muted-foreground">
                 Configure report metadata, column logic, access rules, and row mappings in one place.
                 The canvas below mirrors the live dashboard surfaces so you can move between setup and viewing with less visual friction.
               </p>
@@ -96,20 +96,20 @@ export default function ReportSetup(props) {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3 xl:justify-items-stretch">
-            <div className="rounded-2xl border border-border bg-background/80 p-3 shadow-sm">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Columns</div>
-              <div className="mt-2 text-2xl font-semibold tracking-tight text-foreground">{activeColumns}</div>
-              <div className="mt-1 text-xs text-muted-foreground">Active column definitions</div>
+            <div className="rounded-xl border border-border bg-background p-4">
+              <div className="text-xs font-medium text-muted-foreground">Columns</div>
+              <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{activeColumns}</div>
+              <div className="mt-1 text-sm text-muted-foreground">Active definitions</div>
             </div>
-            <div className="rounded-2xl border border-border bg-background/80 p-3 shadow-sm">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Rows</div>
-              <div className="mt-2 text-2xl font-semibold tracking-tight text-foreground">{activeRows}</div>
-              <div className="mt-1 text-xs text-muted-foreground">Rows in this template</div>
+            <div className="rounded-xl border border-border bg-background p-4">
+              <div className="text-xs font-medium text-muted-foreground">Rows</div>
+              <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{activeRows}</div>
+              <div className="mt-1 text-sm text-muted-foreground">Template rows</div>
             </div>
-            <div className="rounded-2xl border border-border bg-background/80 p-3 shadow-sm">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Categories</div>
-              <div className="mt-2 text-2xl font-semibold tracking-tight text-foreground">{activeCategoryCount}</div>
-              <div className="mt-1 text-xs text-muted-foreground">Selected account groups</div>
+            <div className="rounded-xl border border-border bg-background p-4">
+              <div className="text-xs font-medium text-muted-foreground">Categories</div>
+              <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{activeCategoryCount}</div>
+              <div className="mt-1 text-sm text-muted-foreground">Account groups</div>
             </div>
           </div>
         </CardContent>

@@ -24,7 +24,7 @@ const getUserRoleLabel = (user) => (isSetupAdmin(user) ? 'Admin' : 'User');
 
 export default function AccessModal({ isOpen, masterData, activeReport, onClose, onUpdateUsers }) {
   if (!activeReport) return null;
-  const friendlyButtonClassName = 'border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150';
+  const friendlyButtonClassName = 'border-border bg-background text-foreground hover:bg-muted';
   const assignedUsers = new Set(activeReport.assignedUsers);
 
   return (
@@ -38,7 +38,7 @@ export default function AccessModal({ isOpen, masterData, activeReport, onClose,
           <DialogDescription>Choose which users can view this report.</DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[min(60vh,360px)] pr-3">
+        <ScrollArea className="max-h-96 pr-3">
           <div className="space-y-2">
             {masterData.users.map((user) => {
               const isSelected = assignedUsers.has(user.id);
@@ -52,7 +52,7 @@ export default function AccessModal({ isOpen, masterData, activeReport, onClose,
                   onClick={() => {
                     onUpdateUsers(nextUsers);
                   }}
-                  className={`flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors ${
+                  className={`flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
                     isSelected ? 'border-foreground/20 bg-muted/40' : 'hover:bg-muted/20'
                   }`}
                   aria-pressed={isSelected}

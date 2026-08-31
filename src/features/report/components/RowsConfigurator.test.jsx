@@ -65,15 +65,15 @@ describe('RowsConfigurator', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '+ Add Data Row' }));
     expect(handleAddRow).toHaveBeenCalledWith('data');
-    expect(screen.getByRole('button', { name: '+ Add Data Row' }).className).toMatch(/blue/);
+    expect(screen.getByRole('button', { name: '+ Add Data Row' })).toHaveClass('border', 'shadow-none');
 
     fireEvent.click(screen.getByRole('button', { name: '+ Add Header Row' }));
     expect(handleAddRow).toHaveBeenCalledWith('header');
-    expect(screen.getByRole('button', { name: '+ Add Header Row' }).className).toMatch(/emerald/);
+    expect(screen.getByRole('button', { name: '+ Add Header Row' })).toHaveClass('border', 'shadow-none');
 
     fireEvent.click(screen.getByRole('button', { name: '+ Add Formula Row' }));
     expect(handleAddRow).toHaveBeenCalledWith('formula');
-    expect(screen.getByRole('button', { name: '+ Add Formula Row' }).className).toMatch(/purple/);
+    expect(screen.getByRole('button', { name: '+ Add Formula Row' })).toHaveClass('border', 'shadow-none');
 
     const revenueInput = screen.getByDisplayValue('Revenue');
     fireEvent.change(revenueInput, { target: { value: 'Room Revenue' } });

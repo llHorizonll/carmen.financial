@@ -22,7 +22,7 @@ describe('DetailSelectorModal', () => {
       />
     );
 
-    expect(screen.getByText('1 Items selected')).toBeInTheDocument();
+    expect(screen.getByText('1 item selected')).toBeInTheDocument();
     expect(screen.getByText('Dept 0101')).toBeInTheDocument();
     expect(screen.getByText('Save selection')).toHaveAttribute('data-variant', 'default');
     expect(screen.getByText('Cancel')).toHaveAttribute('data-variant', 'outline');
