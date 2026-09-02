@@ -15,6 +15,10 @@ export default function LoginSelectFields({
   submitAttempted,
   username,
 }) {
+  const selectedBusinessUnit = businessUnits.find(
+    (item) => getBusinessUnitTenant(item) === selectedTenant,
+  );
+
   return (
     <>
       <div className="space-y-2.5">
@@ -32,7 +36,9 @@ export default function LoginSelectFields({
             aria-invalid={Boolean(submitAttempted && fieldErrors.selectedTenant)}
             aria-describedby={fieldErrors.selectedTenant ? 'business-unit-error' : undefined}
           >
-            <SelectValue placeholder={isLoadingBusinessUnits ? 'Loading business units...' : 'Select business unit'} />
+            <SelectValue placeholder={isLoadingBusinessUnits ? 'Loading business units...' : 'Select business unit'}>
+              {selectedBusinessUnit ? getBusinessUnitDisplayName(selectedBusinessUnit) : undefined}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent position="popper" align="start">
             {businessUnits.map((item) => {

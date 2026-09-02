@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge.jsx';
 import { Button } from '@/components/ui/button.jsx';
@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label.jsx';
 import { Skeleton } from '@/components/ui/skeleton.jsx';
 import {
   clearCarmenSession,
+  getDefaultBusinessUnit,
   getBusinessUnitDisplayName,
   getBusinessUnitTenant,
   saveCarmenSession,
@@ -45,6 +46,17 @@ export default function LoginForm({ onAuthenticated }) {
   );
   const canSubmit = Boolean(username.trim() && password && selectedTenant && !isLoggingIn);
 
+  useEffect(() => {
+    if (businessUnits.length === 0) return;
+    setSelectedTenant((currentTenant) => {
+      const currentTenantStillExists = businessUnits.some(
+        (item) => getBusinessUnitTenant(item) === currentTenant,
+      );
+      if (currentTenantStillExists) return currentTenant;
+      return getBusinessUnitTenant(getDefaultBusinessUnit(businessUnits));
+    });
+  }, [businessUnits]);
+
   const loadBusinessUnits = async () => {
     const trimmedUserName = username.trim();
     if (!trimmedUserName || trimmedUserName === usernameUsedForBusinessUnitsRef.current) return;
@@ -56,8 +68,7 @@ export default function LoginForm({ onAuthenticated }) {
       const items = await fetchBusinessUnitsByUsername(trimmedUserName);
       setBusinessUnits(items);
       usernameUsedForBusinessUnitsRef.current = trimmedUserName;
-      const defaultItem = items.find((item) => item?.IsDefault === true) || items[0] || null;
-      setSelectedTenant(defaultItem ? getBusinessUnitTenant(defaultItem) : '');
+      const defaultItem = getDefaultBusinessUnit(items);
       if (!defaultItem) setError('No business unit found for this username.');
     } catch (fetchError) {
       setBusinessUnits([]);

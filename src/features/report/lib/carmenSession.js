@@ -10,6 +10,18 @@ export const getBusinessUnitTenant = (item) => String(item?.Tenant || item?.tena
 export const getBusinessUnitDisplayName = (item) =>
   String(item?.Description || item?.description || getBusinessUnitTenant(item)).trim();
 
+const isTrueFlag = (value) => {
+  if (value === true || value === 1) return true;
+  if (typeof value !== 'string') return false;
+  const normalizedValue = value.trim().toLowerCase();
+  return normalizedValue === 'true' || normalizedValue === '1';
+};
+
+export const getDefaultBusinessUnit = (items) => {
+  if (!Array.isArray(items) || items.length === 0) return null;
+  return items.find((item) => isTrueFlag(item?.IsDefault ?? item?.isDefault)) || items[0];
+};
+
 export const getStoredCarmenSession = () => {
   if (typeof window === 'undefined' || !window.localStorage) return null;
   const accessToken = window.localStorage.getItem(SESSION_KEYS.token) || '';
