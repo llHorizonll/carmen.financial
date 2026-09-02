@@ -190,6 +190,7 @@ describe('reportLogic helpers', () => {
   it('keeps theme and master data constants stable', () => {
     expect(THEMES.blue.name).toBe('Classic Blue');
     expect(INITIAL_MASTER_DATA.users).toHaveLength(1);
+    expect(INITIAL_MASTER_DATA.deptGroups).toEqual([]);
   });
 });
 
@@ -591,7 +592,7 @@ describe('buildReportData', () => {
     });
   });
 
-  it('expands mock department groups into department filters', () => {
+  it('expands API-backed department groups into department filters', () => {
     const result = buildReportData({
       activeReport: {
         category: ['ALL'],
@@ -607,7 +608,10 @@ describe('buildReportData', () => {
       appliedYear: '2025',
       appliedPeriod: '2',
       appliedRevision: '0',
-      masterData,
+      masterData: {
+        ...masterData,
+        deptGroups: [{ id: 'ROOMS', name: 'Rooms Division', deptIds: ['101'] }],
+      },
     });
 
     expect(result[0].results.C1).toBe(10);
@@ -639,6 +643,7 @@ describe('buildReportData', () => {
       appliedRevision: '0',
       masterData: {
         ...INITIAL_MASTER_DATA,
+        deptGroups: [{ id: 'ROOMS', name: 'Rooms Division', deptIds: ['101'] }],
         accountGroups: [{ id: 'REVENUE', level: 'L2', accountIds: ['4001'] }],
       },
     });

@@ -108,6 +108,7 @@ import {
   findBrokenReferences,
   findRowMappingConflicts,
 } from "../features/report/lib/reportLogic.js";
+import { mergeCarmenMasterData } from "../features/report/lib/reportAdapters.js";
 import {
   canSetupFinancialReports,
   canViewFinancialReports,
@@ -347,7 +348,7 @@ export default function App({ onLogout = null }) {
   const [setupSaveWarnings, setSetupSaveWarnings] = useState([]);
 
   const [masterData, setMasterData] = usePersistentState(
-    "carmen_bi_master_v5_23",
+    "carmen_bi_master_api_v1",
     INITIAL_MASTER_DATA,
   );
   const [periodOptions, setPeriodOptions] = useState([]);
@@ -550,45 +551,7 @@ export default function App({ onLogout = null }) {
         if (isCancelled) return;
 
         setApiDimensions(dimensions);
-        setMasterData((prev) => ({
-          ...prev,
-          companyProfile: apiData.companyProfile || prev.companyProfile,
-          users:
-            Array.isArray(apiData.users) && apiData.users.length > 0
-              ? apiData.users
-              : apiData.currentUser
-                ? [apiData.currentUser]
-                : prev.users,
-          depts: apiData.depts.length > 0 ? apiData.depts : prev.depts,
-          accCodes:
-            apiData.accCodes.length > 0 ? apiData.accCodes : prev.accCodes,
-          accountGroups:
-            apiData.accountGroups?.length > 0
-              ? apiData.accountGroups
-              : prev.accountGroups,
-          deptGroups:
-            apiData.deptGroups?.length > 0
-              ? apiData.deptGroups
-              : prev.deptGroups,
-          groups: {
-            L1:
-              apiData.groups?.L1?.length > 0
-                ? apiData.groups.L1
-                : prev.groups.L1,
-            L2:
-              apiData.groups?.L2?.length > 0
-                ? apiData.groups.L2
-                : prev.groups.L2,
-            L3:
-              apiData.groups?.L3?.length > 0
-                ? apiData.groups.L3
-                : prev.groups.L3,
-            L4:
-              apiData.groups?.L4?.length > 0
-                ? apiData.groups.L4
-                : prev.groups.L4,
-          },
-        }));
+        setMasterData((prev) => mergeCarmenMasterData(prev, apiData));
         if (apiData.currentUser) setCurrentUser(apiData.currentUser);
         else if (Array.isArray(apiData.users) && apiData.users.length > 0)
           setCurrentUser(apiData.users[0]);

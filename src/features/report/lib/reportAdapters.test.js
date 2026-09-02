@@ -10,6 +10,7 @@ import {
   adaptCarmenReportDefinition,
   adaptCarmenLoginUser,
   deriveCarmenFinancialReportAccess,
+  mergeCarmenMasterData,
 } from './reportAdapters.js';
 
 describe('reportAdapters', () => {
@@ -93,6 +94,43 @@ describe('reportAdapters', () => {
       name: 'Operations',
       deptIds: ['101', '201'],
     })]);
+  });
+
+  it('treats API master-data arrays as authoritative even when they are empty', () => {
+    const cached = {
+      companyProfile: { name: 'Cached Hotel' },
+      users: [{ id: 'cached-user' }],
+      depts: [{ id: '101' }],
+      accCodes: [{ id: '4001' }],
+      accountGroups: [{ id: 'REVENUE' }],
+      deptGroups: [{ id: 'ROOMS' }],
+      groups: {
+        L1: [{ id: 'L1-CACHED' }],
+        L2: [{ id: 'L2-CACHED' }],
+        L3: [{ id: 'L3-CACHED' }],
+        L4: [{ id: 'L4-CACHED' }],
+      },
+    };
+
+    expect(mergeCarmenMasterData(cached, {
+      companyProfile: { name: 'API Hotel' },
+      users: [],
+      depts: [],
+      accCodes: [],
+      accountGroups: [],
+      deptGroups: [],
+      groups: { L1: [], L2: [], L3: [], L4: [] },
+    })).toEqual({
+      companyProfile: { name: 'API Hotel' },
+      users: [],
+      depts: [],
+      accCodes: [],
+      accountGroups: [],
+      deptGroups: [],
+      groups: { L1: [], L2: [], L3: [], L4: [] },
+    });
+
+    expect(mergeCarmenMasterData(cached, {})).toEqual(cached);
   });
 
   it('derives setup access from Carmen financial report permissions', () => {

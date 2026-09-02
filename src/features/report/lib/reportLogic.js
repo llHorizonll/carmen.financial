@@ -41,11 +41,7 @@ export const INITIAL_MASTER_DATA = {
   ],
   depts: [],
   accountGroups: [],
-  deptGroups: [
-    { id: 'ROOMS', name: 'Rooms Division', deptIds: ['101'] },
-    { id: 'FOOD_BEVERAGE', name: 'Food & Beverage', deptIds: ['201', '202'] },
-    { id: 'ADMIN', name: 'Administration', deptIds: ['301', '302'] },
-  ],
+  deptGroups: [],
   groups: { L1: [], L2: [], L3: [], L4: [] },
   accCodes: []
 };

@@ -1,5 +1,34 @@
 import { normalizeAccLookupCode, normalizeDeptLookupCode } from './normalizeCode.js';
 
+const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value || {}, key);
+const takeApiArray = (previous, loaded, key) => (
+  hasOwn(loaded, key) && Array.isArray(loaded[key])
+    ? loaded[key]
+    : previous?.[key] || []
+);
+
+export const mergeCarmenMasterData = (previous = {}, loaded = {}) => ({
+  ...previous,
+  companyProfile: hasOwn(loaded, 'companyProfile') && loaded.companyProfile
+    ? loaded.companyProfile
+    : previous.companyProfile,
+  users: Array.isArray(loaded.users)
+    ? loaded.users
+    : loaded.currentUser
+      ? [loaded.currentUser]
+      : previous.users || [],
+  depts: takeApiArray(previous, loaded, 'depts'),
+  accCodes: takeApiArray(previous, loaded, 'accCodes'),
+  accountGroups: takeApiArray(previous, loaded, 'accountGroups'),
+  deptGroups: takeApiArray(previous, loaded, 'deptGroups'),
+  groups: {
+    L1: takeApiArray(previous.groups, loaded.groups, 'L1'),
+    L2: takeApiArray(previous.groups, loaded.groups, 'L2'),
+    L3: takeApiArray(previous.groups, loaded.groups, 'L3'),
+    L4: takeApiArray(previous.groups, loaded.groups, 'L4'),
+  },
+});
+
 const toArray = (value) => {
   if (Array.isArray(value)) return value;
   if (Array.isArray(value?.Data)) return value.Data;
