@@ -233,7 +233,7 @@ const isSessionExpiredError = (error) =>
 const isBlockingSetupWarning = (warning) =>
   String(warning || "").includes("cannot be mapped together");
 
-const getSetupWarnings = (report, masterData) => {
+export const getSetupWarnings = (report, masterData) => {
   if (!report) return [];
   const warnings = [];
   const describeItem = (scope, id) => {
@@ -254,6 +254,7 @@ const getSetupWarnings = (report, masterData) => {
 
   const allowedTypes = report.reportType === "Daily" ? DAILY_COLUMN_TYPES : MONTHLY_COLUMN_TYPES;
   (report.columns || []).forEach((column) => {
+    if (column?.isFormula || column?.isPercent) return;
     const type = String(column?.type || "").trim().toUpperCase();
     if (type && !allowedTypes.has(type)) {
       warnings.push(`${describeItem("column", column.id)}: type ${type} is not compatible with ${report.reportType || "Monthly"} reports.`);
@@ -384,14 +385,17 @@ export default function App({ onLogout = null }) {
   const [engineData, setEngineData] = useState([]);
   const [budgetData, setBudgetData] = useState([]);
   const [apiDimensions, setApiDimensions] = useState({});
-  const dimensionOptions = useMemo(() => Object.fromEntries(
-    ["dim1", "dim2"].map((field) => [
-      field,
-      apiDimensions[field]?.length > 0 ? apiDimensions[field] : [...new Set([...engineData, ...budgetData]
-        .map((row) => String(row?.[field] ?? row?.[field.toUpperCase()] ?? "").trim())
-        .filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })),
-    ]),
-  ), [apiDimensions, budgetData, engineData]);
+  const dimensionDefinitions = useMemo(() => ["dim1", "dim2"].map((field, index) => {
+    const apiDefinition = apiDimensions.definitions?.find((definition) => definition.key === field);
+    const fallbackValues = [...new Set([...engineData, ...budgetData]
+      .map((row) => String(row?.[field] ?? row?.[field.toUpperCase()] ?? "").trim())
+      .filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+    return {
+      key: field,
+      caption: apiDefinition?.caption || `DIM ${index + 1}`,
+      values: apiDefinition?.values?.length > 0 ? apiDefinition.values : fallbackValues,
+    };
+  }), [apiDimensions, budgetData, engineData]);
   const pageTransitionTimerRef = useRef(null);
   const reportDataFetchSkipRef = useRef(false);
   const reportDataRequestCountRef = useRef(0);
@@ -1902,6 +1906,7 @@ export default function App({ onLogout = null }) {
                       owner={currentUser?.id || ""}
                       departments={masterData.depts}
                       accountCodes={masterData.accCodes}
+                      dimensions={dimensionDefinitions}
                       onImportTemplates={handleImportExcelTemplates}
                       onOpenImportedReport={(reportId) => {
                         if (reportId) setCurrentReportId(reportId);
@@ -1935,7 +1940,7 @@ export default function App({ onLogout = null }) {
           setEditingRow={setEditingRow}
           masterData={masterData}
           reportOptions={reportOptions}
-          dimensionOptions={dimensionOptions}
+          dimensionDefinitions={dimensionDefinitions}
           modalAccCategory={modalAccCategory}
           setModalAccCategory={setModalAccCategory}
           onOpenDetailSelector={({ field, title, subTitle, items }) =>

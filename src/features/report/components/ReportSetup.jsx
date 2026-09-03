@@ -19,7 +19,7 @@ const themeBadgeClassMap = {
 export default function ReportSetup(props) {
   const [activeSetupSection, setActiveSetupSection] = useState('columns');
   const activeColumns = props.activeReport?.columns?.filter((column) => column?.isActive !== false).length || 0;
-  const activeRows = props.activeReport?.rows?.length || 0;
+  const activeRows = props.activeReport?.rows?.filter((row) => row?.isActive !== false).length || 0;
   const activeCategoryCount = props.activeCategories?.length || 0;
   const themeOptions = props.reportOptions?.themes?.length > 0
     ? props.reportOptions.themes

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calculator, Edit3, Filter, GripVertical, Layers3, Layout, RotateCcw, Trash2, X } from 'lucide-react';
+import { Calculator, Edit3, Eye, EyeOff, Filter, GripVertical, Layers3, Layout, RotateCcw, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import { Button } from '@/components/ui/button.jsx';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card.jsx';
@@ -254,6 +254,7 @@ export default function RowsConfigurator({
                   </TableHead>
                 )}
                 <TableHead className="w-16 text-center align-middle">Del</TableHead>
+                <TableHead className="w-20 text-center align-middle">Visible</TableHead>
                 <TableHead className="w-32 text-center align-middle">Type</TableHead>
                 <TableHead className="w-48">Description</TableHead>
                 <TableHead className="w-24 text-center align-middle">Indent</TableHead>
@@ -310,6 +311,21 @@ export default function RowsConfigurator({
                         onClick={() => setConfirmAction({ msg: 'Delete Row?', onConfirm: () => handleDeleteRow(row.id) })}
                       >
                         <Trash2 className="text-destructive" />
+                      </Button>
+                    </TableCell>
+                    <TableCell className="px-2 py-2 text-center align-middle">
+                      <Button
+                        variant="outline"
+                        size="icon-sm"
+                        className={cn(
+                          'mx-auto border-border text-muted-foreground hover:bg-muted hover:text-foreground',
+                          row.isActive !== false ? 'bg-muted/60' : 'bg-background',
+                        )}
+                        aria-label={`${row.isActive !== false ? 'Hide' : 'Show'} row ${row.id}`}
+                        title={`${row.isActive !== false ? 'Hide' : 'Show'} row ${row.id}`}
+                        onClick={() => handleUpdateRow(row.id, 'isActive', row.isActive === false)}
+                      >
+                        {row.isActive !== false ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
                       </Button>
                     </TableCell>
                   <TableCell className="px-2 py-2 align-middle">

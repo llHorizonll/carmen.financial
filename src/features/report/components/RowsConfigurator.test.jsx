@@ -80,9 +80,8 @@ describe('RowsConfigurator', () => {
     expect(handleUpdateRow).toHaveBeenCalledWith('r1', 'desc', 'Room Revenue');
 
     const revenueRow = revenueInput.closest('tr');
-    const rowButtons = within(revenueRow).getAllByRole('button');
 
-    fireEvent.click(rowButtons[0]);
+    fireEvent.click(within(revenueRow).getByRole('button', { name: 'Delete row r1' }));
     expect(setConfirmAction).toHaveBeenCalledWith(
       expect.objectContaining({ msg: 'Delete Row?' })
     );
@@ -113,7 +112,10 @@ describe('RowsConfigurator', () => {
     fireEvent.change(screen.getByDisplayValue('R2'), { target: { value: 'R3' } });
     expect(handleUpdateRow).toHaveBeenCalledWith('r1', 'percentBase', 'R3');
 
-    fireEvent.click(rowButtons[2]);
+    fireEvent.click(within(revenueRow).getByRole('button', { name: 'Hide row r1' }));
+    expect(handleUpdateRow).toHaveBeenCalledWith('r1', 'isActive', false);
+
+    fireEvent.click(within(revenueRow).getByRole('button', { name: 'Edit mapping for row r1' }));
     expect(setEditingRow).toHaveBeenCalledWith(expect.objectContaining({ id: 'r1' }));
 
     const formulaRow = screen.getByDisplayValue('Total Revenue').closest('tr');
@@ -183,6 +185,7 @@ describe('RowsConfigurator', () => {
             {
               id: 'r1',
               desc: 'Revenue',
+              isActive: true,
               indent: 0,
               isHeader: false,
               isTotal: false,

@@ -14,6 +14,11 @@ const LINKED_MAPPING_HEADERS = {
   dept: /^dept\s+code\s*\(linked\)$/i,
   accCodes: /^account\s+code\s*\(linked\)$/i,
 };
+const DIMENSION_MAPPING_HEADERS = {
+  fieldName: /^field\s*name$/i,
+  operator: /^operator$/i,
+  value: /^value$/i,
+};
 const NON_REPORT_SHEET = /^(?:intro|cover|glac|sheet1|sheet2|aspenmacro)$/i;
 
 const cleanText = (value) =>
@@ -58,12 +63,13 @@ const isUsableText = (value) => {
   );
 };
 
-const detectDescriptionColumn = (matrix, override = "") => {
+const detectDescriptionColumn = (matrix, override = "", excludedColumns = new Set()) => {
   const overrideIndex = excelColumnToIndex(override);
   if (overrideIndex >= 0) return overrideIndex;
   const scores = [];
   matrix.forEach((row) =>
     row.forEach((value, columnIndex) => {
+      if (excludedColumns.has(columnIndex)) return;
       if (!isUsableText(value)) return;
       const text = cleanText(value);
       const score =
@@ -119,6 +125,23 @@ const detectLinkedMappingColumns = (matrix, options = {}) => {
   });
 
   return result;
+};
+
+const detectDimensionMappingColumns = (matrix) => {
+  const emptyResult = { fieldName: -1, operator: -1, value: -1, headerRow: null };
+
+  for (let rowIndex = 0; rowIndex < matrix.length; rowIndex += 1) {
+    const result = { ...emptyResult, headerRow: rowIndex + 1 };
+    (matrix[rowIndex] || []).forEach((value, columnIndex) => {
+      const header = cleanText(value);
+      Object.entries(DIMENSION_MAPPING_HEADERS).forEach(([field, pattern]) => {
+        if (result[field] < 0 && pattern.test(header)) result[field] = columnIndex;
+      });
+    });
+    if (result.fieldName >= 0 && result.operator >= 0 && result.value >= 0) return result;
+  }
+
+  return emptyResult;
 };
 
 const cleanMappingValue = (value) => {
@@ -195,6 +218,58 @@ export const resolveLinkedMappingValue = (
     value: resolvedCodes.join(", "),
     invalidTokens,
     rangeMatches,
+  };
+};
+
+const normalizeDimensionLookupValue = (value) => cleanText(value).toUpperCase();
+const SUPPORTED_DIMENSION_OPERATORS = new Set(["IN", "=", "==", "EQ", "EQUALS"]);
+
+export const resolveDimensionMapping = (
+  { fieldName, operator, value },
+  dimensionDefinitions = [],
+) => {
+  const caption = cleanText(fieldName);
+  const rawValue = cleanMappingValue(value);
+  if (!caption && !rawValue) return { fieldKey: "", value: "", warning: "" };
+
+  const normalizedOperator = cleanText(operator).toUpperCase();
+  if (!SUPPORTED_DIMENSION_OPERATORS.has(normalizedOperator)) {
+    return {
+      fieldKey: "",
+      value: "",
+      warning: `unsupported dimension operator "${cleanText(operator) || "(blank)"}" for ${caption || "dimension"}.`,
+    };
+  }
+
+  const definition = dimensionDefinitions.find((item) => (
+    normalizeDimensionLookupValue(item?.caption) === normalizeDimensionLookupValue(caption)
+  ));
+  if (!definition) {
+    return {
+      fieldKey: "",
+      value: "",
+      warning: `dimension Field Name "${caption}" was not found in API Captions.`,
+    };
+  }
+
+  const allowedValues = new Map((definition.values || []).map((item) => [
+    normalizeDimensionLookupValue(item),
+    cleanText(item),
+  ]));
+  const requestedValues = rawValue.split(/[,;|\r\n]+/).map(cleanText).filter(Boolean);
+  const resolvedValues = requestedValues.map((item) => (
+    allowedValues.size > 0 ? allowedValues.get(normalizeDimensionLookupValue(item)) : item
+  )).filter(Boolean);
+  const invalidValues = requestedValues.filter((item) => (
+    allowedValues.size > 0 && !allowedValues.has(normalizeDimensionLookupValue(item))
+  ));
+
+  return {
+    fieldKey: definition.key,
+    value: [...new Set(resolvedValues)].join(", "),
+    warning: invalidValues.length > 0
+      ? `dimension value(s) not found for ${definition.caption}: ${invalidValues.join(", ")}.`
+      : "",
   };
 };
 
@@ -502,6 +577,7 @@ const detectRows = (
   cellMatrix = [],
   cellStyles = new Map(),
   linkedMappingColumns = { dept: -1, accCodes: -1 },
+  dimensionMappingColumns = { fieldName: -1, operator: -1, value: -1 },
   options = {},
   mappingCatalogs = {},
 ) => {
@@ -514,7 +590,7 @@ const detectRows = (
   const sourceRowNumbers = [];
   const mappingChecks = [];
   const mappingWarnings = [];
-  const mappingRequirements = { dept: false, accCodes: false };
+  const mappingRequirements = { dept: false, accCodes: false, dimensions: false };
 
   const rows = matrix.flatMap((sourceRow, sourceIndex) => {
     const sourceRowNumber = sourceIndex + 1;
@@ -557,9 +633,26 @@ const detectRows = (
     );
     const dept = deptResolution.value;
     const accCodes = accountResolution.value;
-    const hasLinkedMapping = Boolean(rawDept || rawAccCodes);
+    const dimensionFieldName = cleanMappingValue(sourceRow[dimensionMappingColumns.fieldName]);
+    const dimensionOperator = cleanMappingValue(sourceRow[dimensionMappingColumns.operator]);
+    const dimensionValue = cleanMappingValue(sourceRow[dimensionMappingColumns.value]);
+    const dimensionResolution = resolveDimensionMapping(
+      { fieldName: dimensionFieldName, operator: dimensionOperator, value: dimensionValue },
+      mappingCatalogs.dimensions,
+    );
+    const hasDimensionMapping = Boolean(dimensionResolution.fieldKey && dimensionResolution.value);
+    const hasLinkedMapping = Boolean(rawDept || rawAccCodes || hasDimensionMapping);
     mappingRequirements.dept ||= Boolean(rawDept);
     mappingRequirements.accCodes ||= Boolean(rawAccCodes);
+    mappingRequirements.dimensions ||= Boolean(dimensionFieldName || dimensionValue);
+
+    if (dimensionResolution.warning) {
+      mappingWarnings.push(`Row ${sourceRowNumber} (${desc}): ${dimensionResolution.warning}`);
+    } else if (dimensionResolution.fieldKey && dimensionResolution.value) {
+      mappingChecks.push(
+        `Row ${sourceRowNumber} (${desc}): ${dimensionFieldName} ${dimensionOperator} ${dimensionResolution.value} mapped to ${dimensionResolution.fieldKey.toUpperCase()}.`,
+      );
+    }
 
     [
       ["Department", deptResolution],
@@ -605,6 +698,9 @@ const detectRows = (
         percentBase: "",
         formula: "",
         indent,
+        ...(dimensionResolution.fieldKey && dimensionResolution.value
+          ? { [dimensionResolution.fieldKey]: dimensionResolution.value }
+          : {}),
       },
     ];
   });
@@ -738,6 +834,15 @@ const getImportConfigIssues = ({
       "Account master data is unavailable. Linked account mappings cannot be verified.",
     );
   }
+  if (
+    mappingRequirements.dimensions &&
+    Array.isArray(mappingCatalogs.dimensions) &&
+    mappingCatalogs.dimensions.length === 0
+  ) {
+    errors.push(
+      "Dimension master data is unavailable. Template dimension mappings cannot be matched by Caption.",
+    );
+  }
   warnings.push(...mappingWarnings);
   return { errors, warnings };
 };
@@ -750,11 +855,20 @@ export const analyzeExcelSheet = (
   options = {},
   mappingCatalogs = {},
 ) => {
+  const linkedMappingColumns = detectLinkedMappingColumns(matrix, options);
+  const dimensionMappingColumns = detectDimensionMappingColumns(matrix);
+  const excludedMappingColumns = new Set([
+    linkedMappingColumns.dept,
+    linkedMappingColumns.accCodes,
+    dimensionMappingColumns.fieldName,
+    dimensionMappingColumns.operator,
+    dimensionMappingColumns.value,
+  ].filter((columnIndex) => columnIndex >= 0));
   const descriptionColumn = detectDescriptionColumn(
     matrix,
     options.descriptionColumn,
+    excludedMappingColumns,
   );
-  const linkedMappingColumns = detectLinkedMappingColumns(matrix, options);
   const {
     rows,
     sourceRowNumbers,
@@ -767,6 +881,7 @@ export const analyzeExcelSheet = (
     cellMatrix,
     cellStyles,
     linkedMappingColumns,
+    dimensionMappingColumns,
     options,
     mappingCatalogs,
   );
@@ -774,11 +889,7 @@ export const analyzeExcelSheet = (
     matrix,
     descriptionColumn,
     cellMatrix,
-    new Set(
-      [linkedMappingColumns.dept, linkedMappingColumns.accCodes].filter(
-        (columnIndex) => columnIndex >= 0,
-      ),
-    ),
+    excludedMappingColumns,
     options,
   );
   const populatedRows = new Set();

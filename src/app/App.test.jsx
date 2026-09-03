@@ -1,7 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import App from './App.jsx';
+import App, { getSetupWarnings } from './App.jsx';
 import { getAccessibleReports } from './reportAccess.js';
 import { INITIAL_MASTER_DATA } from '../features/report/lib/reportLogic.js';
 
@@ -38,6 +38,22 @@ describe('report access filtering', () => {
   it('keeps every report visible to report administrators', () => {
     const admin = { id: 'admin', permissions: { financialReport: { view: true, update: true } } };
     expect(getAccessibleReports(reports, admin)).toEqual(reports);
+  });
+});
+
+describe('setup validation', () => {
+  it('checks data column types without rejecting stale types on formula and mix columns', () => {
+    const warnings = getSetupWarnings({
+      reportType: 'Monthly',
+      columns: [
+        { id: 'C1', type: 'AC', isFormula: false, isPercent: false },
+        { id: 'C2', type: 'MIX', isFormula: false, isPercent: true, targetCol: 'C1' },
+        { id: 'C3', type: 'FORMULA', isFormula: true, isPercent: false, formula: 'C1' },
+      ],
+      rows: [],
+    }, INITIAL_MASTER_DATA);
+
+    expect(warnings).toEqual([]);
   });
 });
 

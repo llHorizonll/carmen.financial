@@ -68,4 +68,26 @@ describe('ReportView', () => {
     expect(detailDescription).toHaveClass('block', 'pl-8');
     expect(detailDescription.closest('td')).toHaveClass('px-3', 'sm:px-4');
   });
+
+  it('hides inactive rows without removing them from report calculations', () => {
+    render(
+      <ReportView
+        activeReport={{ name: 'P&L' }}
+        displayCompanyLabel="Carmen Hotel"
+        displayDateLabel="As of 2025-02-28"
+        displayPeriodLabel="P2"
+        reportData={[
+          { id: 'r1', desc: 'Visible revenue', isActive: true, results: { C1: 100 } },
+          { id: 'r2', desc: 'Hidden revenue', isActive: false, results: { C1: 50 } },
+        ]}
+        activeCols={[{ id: 'C1', label: 'Actual', width: '' }]}
+        currentTheme={THEMES.blue}
+        tableZoom={100}
+        getIndentClass={getIndentClass}
+      />
+    );
+
+    expect(screen.getByText('Visible revenue')).toBeInTheDocument();
+    expect(screen.queryByText('Hidden revenue')).not.toBeInTheDocument();
+  });
 });

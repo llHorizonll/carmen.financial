@@ -24,6 +24,7 @@ import GroupSelectDropdown from './GroupSelectDropdown.jsx';
 
 const EMPTY_REPORT_OPTIONS = {};
 const EMPTY_DIMENSION_OPTIONS = {};
+const EMPTY_DIMENSION_DEFINITIONS = [];
 const DIMENSION_FIELDS = [
   { key: 'dim1', label: 'DIM 1' },
   { key: 'dim2', label: 'DIM 2' },
@@ -38,6 +39,7 @@ export default function EditMappingModal({
   masterData,
   reportOptions = EMPTY_REPORT_OPTIONS,
   dimensionOptions = EMPTY_DIMENSION_OPTIONS,
+  dimensionDefinitions = EMPTY_DIMENSION_DEFINITIONS,
   modalAccCategory,
   setModalAccCategory,
   onOpenDetailSelector,
@@ -200,18 +202,20 @@ export default function EditMappingModal({
             <Label>Dimensions</Label>
             <section className="grid gap-3 md:grid-cols-2">
               {DIMENSION_FIELDS.map(({ key, label }) => {
+                const definition = dimensionDefinitions.find((item) => item.key === key);
+                const dimensionLabel = definition?.caption || label;
                 const selected = parseDimensionValues(editingRow[key]);
-                const options = [...new Set([...(dimensionOptions[key] || []), ...selected])];
+                const options = [...new Set([...(definition?.values || dimensionOptions[key] || []), ...selected])];
                 return (
                   <MultiSelectDropdown
                     key={key}
                     options={options}
                     selected={selected}
                     onChange={(values) => setEditingRow({ ...editingRow, [key]: values.join(', ') })}
-                    label={label}
+                    label={dimensionLabel}
                     testIdPrefix={`mapping-${key}`}
                     normalizeValue={normalizeDimensionValue}
-                    searchPlaceholder={`Search ${label.toLowerCase()}...`}
+                    searchPlaceholder={`Search ${dimensionLabel.toLowerCase()}...`}
                   />
                 );
               })}

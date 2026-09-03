@@ -195,6 +195,8 @@ describe('reportAdapters', () => {
         { id: 'C1', label: 'Actual', type: 'AC' },
         { id: 'C2', label: 'Budget', type: 'BUD' },
         { id: 'C3', label: 'Year Budget', Type: 'BUDACC' },
+        { id: 'C4', label: 'Mix', type: 'MIX', isPercent: true },
+        { id: 'C5', label: 'Variance', Type: 'FORMULA', isFormula: true },
       ],
       rows: [{
         id: 'r1',
@@ -217,6 +219,8 @@ describe('reportAdapters', () => {
         expect.objectContaining({ id: 'C1', type: 'AC' }),
         expect.objectContaining({ id: 'C2', type: 'BC' }),
         expect.objectContaining({ id: 'C3', type: 'BCC' }),
+        expect.objectContaining({ id: 'C4', isPercent: true, type: undefined }),
+        expect.objectContaining({ id: 'C5', isFormula: true, type: undefined }),
       ],
       rows: expect.arrayContaining([
         expect.objectContaining({
@@ -254,6 +258,7 @@ describe('reportAdapters', () => {
       rows: [{
         id: 'r1',
         Description: 'Room Revenue',
+        IsActive: false,
         DeptCode: '101',
         AccCode: '4001',
         GroupLevel: 'L2',
@@ -268,6 +273,7 @@ describe('reportAdapters', () => {
       rows: [expect.objectContaining({
         id: 'r1',
         desc: 'Room Revenue',
+        isActive: false,
         dept: '101',
         accCodes: '4001',
         groupLevel: 'L2',

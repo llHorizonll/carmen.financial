@@ -187,6 +187,24 @@ describe('reportApi helpers', () => {
     });
   });
 
+  it('does not persist stale data types on formula and mix columns', () => {
+    const payload = buildReportDefinitionPayload({
+      id: 'rep-column-logic',
+      columns: [
+        { id: 'C1', type: 'AC', isFormula: false, isPercent: false },
+        { id: 'C2', type: 'MIX', isFormula: false, isPercent: true, targetCol: 'C1' },
+        { id: 'C3', Type: 'FORMULA', isFormula: true, isPercent: false, formula: 'C1' },
+      ],
+      rows: [],
+    });
+
+    expect(payload.columns[0]).toEqual(expect.objectContaining({ id: 'C1', type: 'AC' }));
+    expect(payload.columns[1]).not.toHaveProperty('type');
+    expect(payload.columns[1]).not.toHaveProperty('Type');
+    expect(payload.columns[2]).not.toHaveProperty('type');
+    expect(payload.columns[2]).not.toHaveProperty('Type');
+  });
+
   it('serializes row dimensions for API persistence', () => {
     expect(buildReportDefinitionPayload({
       id: 'rep-3',
@@ -312,6 +330,10 @@ describe('reportApi helpers', () => {
     await expect(fetchCarmenDimensions()).resolves.toEqual({
       dim1: ['Retail', 'Corporate'],
       dim2: ['Breakfast', 'Lunch', 'Dinner'],
+      definitions: [
+        { key: 'dim1', caption: 'Market Segment', values: ['Retail', 'Corporate'] },
+        { key: 'dim2', caption: 'Meal Period', values: ['Breakfast', 'Lunch', 'Dinner'] },
+      ],
     });
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/api/dimension/search?useTenant=tenant-1'),

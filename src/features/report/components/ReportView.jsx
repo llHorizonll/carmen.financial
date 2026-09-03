@@ -75,7 +75,7 @@ export default function ReportView({
                 </TableRow>
               </TableHeader>
               <TableBody className="bg-background text-sm font-medium">
-                {reportData.map((row) => {
+                {reportData.filter((row) => row.isActive !== false).map((row) => {
                   const isHeader = row.isHeader || false;
                   const isTotal = row.isTotal || false;
                   const indentClass = getIndentClass(row.indent || 0);

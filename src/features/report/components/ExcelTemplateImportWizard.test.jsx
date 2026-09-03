@@ -95,6 +95,7 @@ describe("ExcelTemplateImportWizard", () => {
     expect(parseExcelWorkbook).toHaveBeenCalledWith(expect.any(File), {
       depts: [{ id: "110" }],
       accCodes: [{ id: "6000102" }],
+      dimensions: [],
     });
   });
 });

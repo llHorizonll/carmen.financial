@@ -29,7 +29,10 @@ describe('EditMappingModal', () => {
           groups: { L4: [{ id: 'FOO', name: 'Food' }] },
           accCodes: [{ id: '4001', type: 'I' }],
         }}
-        dimensionOptions={{ dim1: ['OTA', 'Corporate'], dim2: ['LUNCH', 'DINNER'] }}
+        dimensionDefinitions={[
+          { key: 'dim1', caption: 'Market Segment', values: ['OTA', 'Corporate'] },
+          { key: 'dim2', caption: 'Meal Period', values: ['LUNCH', 'DINNER'] },
+        ]}
         modalAccCategory="ALL"
         setModalAccCategory={setModalAccCategory}
         onOpenDetailSelector={onOpenDetailSelector}
@@ -49,7 +52,7 @@ describe('EditMappingModal', () => {
     fireEvent.click(await screen.findByText('Balance Sheet'));
     expect(setModalAccCategory).toHaveBeenCalledWith('B');
 
-    fireEvent.click(screen.getByRole('button', { name: /DIM 1/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Market Segment/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Corporate' }));
     expect(setEditingRow).toHaveBeenCalledWith(expect.objectContaining({ dim1: 'OTA, Corporate' }));
 

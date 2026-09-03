@@ -347,6 +347,7 @@ const normalizeReportRow = (row) => {
     percentBase: String(row.percentBase || row.PercentBase || '').trim().toUpperCase(),
     formula: String(row.formula || row.Formula || '').trim().toUpperCase(),
     indent: Number.isFinite(Number(row.indent ?? row.Indent)) ? Number(row.indent ?? row.Indent) : 0,
+    isActive: row.isActive !== false && row.IsActive !== false,
     type: String(row.type || row.Type || '').trim().toUpperCase(),
     ...rowTypeFlags,
     dimensions,
@@ -363,9 +364,16 @@ const normalizeReportRow = (row) => {
 
 const normalizeReportColumn = (column) => {
   if (!column || typeof column !== 'object') return column;
+  const isFormula = Boolean(column.isFormula ?? column.IsFormula);
+  const isPercent = Boolean(column.isPercent ?? column.IsPercent);
   const rawType = String(column.type || column.Type || '').trim().toUpperCase();
   const type = rawType === 'BUD' ? 'BC' : rawType === 'BUDACC' ? 'BCC' : rawType;
-  return { ...column, type };
+  return {
+    ...column,
+    isFormula,
+    isPercent,
+    type: isFormula || isPercent ? undefined : type,
+  };
 };
 
 export const adaptCarmenReportDefinition = (report) => {

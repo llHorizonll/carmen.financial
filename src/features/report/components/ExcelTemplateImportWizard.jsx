@@ -49,6 +49,7 @@ export default function ExcelTemplateImportWizard({
   owner,
   departments = EMPTY_MAPPING_CATALOG,
   accountCodes = EMPTY_MAPPING_CATALOG,
+  dimensions = EMPTY_MAPPING_CATALOG,
   onImportTemplates,
   onOpenImportedReport,
 }) {
@@ -63,8 +64,8 @@ export default function ExcelTemplateImportWizard({
   const [error, setError] = useState("");
   const [importedReports, setImportedReports] = useState([]);
   const mappingCatalogs = useMemo(
-    () => ({ depts: departments, accCodes: accountCodes }),
-    [accountCodes, departments],
+    () => ({ depts: departments, accCodes: accountCodes, dimensions }),
+    [accountCodes, departments, dimensions],
   );
 
   const recommendedSheets = useMemo(

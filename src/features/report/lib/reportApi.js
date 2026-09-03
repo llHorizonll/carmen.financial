@@ -401,10 +401,19 @@ export const fetchCarmenDimensions = async () => {
     }
   };
 
-  return Object.fromEntries((Array.isArray(response?.Data) ? response.Data : [])
+  const definitions = (Array.isArray(response?.Data) ? response.Data : [])
     .sort((left, right) => String(left?.Id || '').localeCompare(String(right?.Id || ''), undefined, { numeric: true }))
     .slice(0, 4)
-    .map((item, index) => [`dim${index + 1}`, [...new Set(parseValues(item?.ListOfValues))]]));
+    .map((item, index) => ({
+      key: `dim${index + 1}`,
+      caption: String(item?.Caption || '').trim() || `DIM ${index + 1}`,
+      values: [...new Set(parseValues(item?.ListOfValues))],
+    }));
+
+  return {
+    ...Object.fromEntries(definitions.map(({ key, values }) => [key, values])),
+    definitions,
+  };
 };
 
 export const fetchCarmenUsers = async () => {
@@ -523,10 +532,15 @@ export const buildReportDefinitionPayload = (report) => ({
     : 0,
   columns: Array.isArray(report?.columns)
     ? report.columns.map((column) => {
+        const { Type: _legacyType, ...normalizedColumn } = column || {};
+        if (column?.isFormula || column?.isPercent) {
+          const { type: _staleDataType, ...logicColumn } = normalizedColumn;
+          return logicColumn;
+        }
         const rawType = column?.type ?? column?.Type;
         return rawType == null
-          ? column
-          : { ...column, type: normalizeColumnType(rawType) };
+          ? normalizedColumn
+          : { ...normalizedColumn, type: normalizeColumnType(rawType) };
       })
     : [],
   rows: Array.isArray(report?.rows) ? report.rows.map(normalizeReportRowForPayload) : [],

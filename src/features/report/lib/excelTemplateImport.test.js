@@ -5,6 +5,7 @@ import {
   createReportsFromExcelSheets,
   excelColumnToIndex,
   excelIndexToColumn,
+  resolveDimensionMapping,
   resolveLinkedMappingValue,
 } from "./excelTemplateImport.js";
 
@@ -32,6 +33,47 @@ describe("Excel template import", () => {
       { token: "6000102-6000106", count: 3 },
     ]);
     expect(resolved.invalidTokens).toEqual(["6000500"]);
+  });
+
+  it("maps a template dimension by API Caption and compatible Operator", () => {
+    expect(resolveDimensionMapping(
+      { fieldName: "Market Segment", operator: "in", value: "FIT, OTA" },
+      [{ key: "dim1", caption: "Market Segment", values: ["FIT", "WHO", "OTA"] }],
+    )).toEqual({ fieldKey: "dim1", value: "FIT, OTA", warning: "" });
+
+    expect(resolveDimensionMapping(
+      { fieldName: "Market Segment", operator: "not in", value: "WHO" },
+      [{ key: "dim1", caption: "Market Segment", values: ["FIT", "WHO", "OTA"] }],
+    )).toEqual(expect.objectContaining({
+      fieldKey: "",
+      value: "",
+      warning: expect.stringMatching(/unsupported dimension operator/i),
+    }));
+  });
+
+  it("imports Dimension Value into the slot whose API Caption matches Field Name", () => {
+    const sheet = analyzeExcelSheet(
+      "ROOM",
+      [
+        ["Actual", "Budget", "Description", "Field Name", "Operator", "Value"],
+        [100, 90, "Rooms FIT", "Market Segment", "in", "FIT"],
+        [50, 45, "Rooms OTA", "Market Segment", "=", "OTA"],
+      ],
+      [],
+      new Map(),
+      {},
+      {
+        dimensions: [
+          { key: "dim1", caption: "Market Segment", values: ["FIT", "WHO", "OTA"] },
+          { key: "dim2", caption: "Meal Period", values: ["Breakfast", "Dinner"] },
+        ],
+      },
+    );
+
+    expect(sheet.detectedRows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ desc: "Rooms FIT", dim1: "FIT" }),
+      expect.objectContaining({ desc: "Rooms OTA", dim1: "OTA" }),
+    ]));
   });
 
   it("detects a description column and creates a safe report template", () => {

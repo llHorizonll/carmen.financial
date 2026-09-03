@@ -32,6 +32,50 @@ const COLUMN_CLASY_MAP = {
   },
 };
 
+const getColumnLogicType = (column) => (
+  column.isFormula ? 'FORMULA' : column.isPercent ? 'MIX' : 'DATA'
+);
+
+export const buildColumnLogicTypeUpdates = (column, logicType, columns, defaultDataType) => {
+  if (logicType === 'FORMULA') {
+    return {
+      isFormula: true,
+      isPercent: false,
+      formatAsPercent: false,
+      formula: column.formula || 'C1-C2',
+      targetCol: undefined,
+      yearMode: undefined,
+      periodMode: undefined,
+      type: undefined,
+    };
+  }
+
+  if (logicType === 'MIX') {
+    const targetColumn = columns.find((candidate) => candidate.id !== column.id && !candidate.isPercent);
+    return {
+      isFormula: false,
+      isPercent: true,
+      formatAsPercent: false,
+      formula: '',
+      targetCol: targetColumn?.id || '',
+      yearMode: undefined,
+      periodMode: undefined,
+      type: undefined,
+    };
+  }
+
+  return {
+    isFormula: false,
+    isPercent: false,
+    formatAsPercent: false,
+    formula: '',
+    targetCol: '',
+    yearMode: 'current',
+    periodMode: 'current',
+    type: defaultDataType,
+  };
+};
+
 export default function ColumnsConfigurator({
   activeReport,
   reportOptions = EMPTY_REPORT_OPTIONS,
@@ -85,6 +129,7 @@ export default function ColumnsConfigurator({
         { id: 'FORMULA', label: 'Formula' },
         { id: 'MIX', label: 'Mix %' },
       ]).map((option) => [String(option.id).toUpperCase(), option.label]));
+  const logicTypeOptions = Array.from(logicTypeLabels, ([id, label]) => ({ id, label }));
   const yearModeOptions = reportOptions.yearModes?.length > 0
     ? reportOptions.yearModes
     : [
@@ -103,7 +148,12 @@ export default function ColumnsConfigurator({
         { id: 'Q3', label: 'Q3' },
         { id: 'Q4', label: 'Q4' },
       ];
-  const hasIncompatibleColumns = activeReport.columns.some((col) => col.type && !allowedColumnTypes.has(String(col.type).trim().toUpperCase()));
+  const hasIncompatibleColumns = activeReport.columns.some((col) => (
+    !col.isFormula &&
+    !col.isPercent &&
+    col.type &&
+    !allowedColumnTypes.has(String(col.type).trim().toUpperCase())
+  ));
   const brokenColumnReferences = React.useMemo(
     () => findBrokenReferences(activeReport).filter((issue) => issue.scope === 'column'),
     [activeReport],
@@ -117,6 +167,15 @@ export default function ColumnsConfigurator({
   const reorderColumns = React.useCallback((fromIndex, toIndex) => {
     updateActiveReport(moveDisplayColumnsAndRewriteReferences(activeReport, fromIndex, toIndex));
   }, [activeReport, updateActiveReport]);
+  const changeColumnLogicType = React.useCallback((column, logicType) => {
+    const defaultDataType = reportType === 'Daily' ? 'DAC' : 'AC';
+    const updates = buildColumnLogicTypeUpdates(column, logicType, activeReport.columns, defaultDataType);
+    updateActiveReport({
+      columns: activeReport.columns.map((candidate) => (
+        candidate.id === column.id ? { ...candidate, ...updates } : candidate
+      )),
+    });
+  }, [activeReport.columns, reportType, updateActiveReport]);
   const {
     announcement,
     containerRef,
@@ -270,6 +329,25 @@ export default function ColumnsConfigurator({
 
                 {/* Card Content: Inputs and configurations */}
                 <div className="p-4 space-y-4">
+                  <div className="space-y-1.5">
+                    <label htmlFor={fieldId('logic-type')} className="text-sm font-medium text-foreground">Logic type</label>
+                    <Select
+                      value={getColumnLogicType(col)}
+                      onValueChange={(value) => changeColumnLogicType(col, value)}
+                    >
+                      <SelectTrigger id={fieldId('logic-type')} className="h-9 w-full text-sm">
+                        <SelectValue placeholder="Logic type" />
+                      </SelectTrigger>
+                      <SelectContent position="popper">
+                        {logicTypeOptions.map((option) => (
+                          <SelectItem key={option.id} value={option.id}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   {/* Label */}
                   <div className="space-y-1.5">
                     <label htmlFor={fieldId('label')} className="text-sm font-medium text-foreground">Column label</label>
