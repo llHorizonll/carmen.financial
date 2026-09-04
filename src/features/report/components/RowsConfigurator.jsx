@@ -18,8 +18,10 @@ import { createRowMappingWarningContext, findBrokenReferences, getRowMappingWarn
 import usePersistentState from '../../../hooks/usePersistentState.js';
 import useDragReorder from '../hooks/useDragReorder.js';
 import BulkMappingDialog from './BulkMappingDialog.jsx';
+import MoveToPositionDialog from './MoveToPositionDialog.jsx';
 
 const MAPPING_PRESETS_STORAGE_KEY = 'carmen.mapping-presets.v1';
+const EMPTY_DIMENSION_DEFINITIONS = [];
 
 const isDataRow = (row) => !row.isHeader && !row.isTotal;
 const isRowUnmapped = (row) => ![
@@ -40,6 +42,7 @@ export default function RowsConfigurator({
   handleDeleteRow,
   setEditingRow,
   setConfirmAction,
+  dimensionDefinitions = EMPTY_DIMENSION_DEFINITIONS,
 }) {
   const [bulkMode, setBulkMode] = React.useState(false);
   const [selectedRowIds, setSelectedRowIds] = React.useState([]);
@@ -153,14 +156,14 @@ export default function RowsConfigurator({
 
   return (
     <Card className="min-h-0 overflow-hidden border border-border bg-card/95 shadow-none ring-0">
-      <CardHeader className="border-b bg-muted/20 pb-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <CardHeader className="border-b bg-muted/20 px-4 py-4 sm:px-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-1.5">
             <CardTitle className="flex items-center gap-2 text-base font-semibold tracking-tight text-foreground">
               <Layout className="size-4 text-muted-foreground" />
               Rows Configurator
             </CardTitle>
-            <CardDescription className="text-sm text-muted-foreground">Control row details, then drag the grip to reorder.</CardDescription>
+            <CardDescription className="text-sm text-muted-foreground">Drag for nearby changes, or choose an exact position for long moves.</CardDescription>
           </div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <Button
@@ -242,7 +245,7 @@ export default function RowsConfigurator({
 
         <div className="overflow-auto">
           <Table className="min-w-[1000px] table-fixed [&_td]:px-1 [&_th]:px-1">
-            <TableHeader className="sticky top-0 z-10 bg-muted/50">
+            <TableHeader className="sticky top-0 z-10 bg-muted/30">
               <TableRow>
                 {bulkMode && (
                   <TableHead className="w-12 text-center">
@@ -253,15 +256,13 @@ export default function RowsConfigurator({
                     />
                   </TableHead>
                 )}
-                <TableHead className="w-16 text-center align-middle">Del</TableHead>
-                <TableHead className="w-20 text-center align-middle">Visible</TableHead>
                 <TableHead className="w-32 text-center align-middle">Type</TableHead>
                 <TableHead className="w-48">Description</TableHead>
                 <TableHead className="w-24 text-center align-middle">Indent</TableHead>
                 <TableHead className="w-24 text-center align-middle">Row</TableHead>
                 <TableHead className="w-24 text-center align-middle">% Base</TableHead>
                 <TableHead className="w-96 min-w-96 max-w-96 whitespace-normal">Mapping Rules Setup</TableHead>
-                <TableHead className="sticky right-0 z-20 w-24 border-l bg-muted/95 text-center align-middle">
+                <TableHead className="sticky right-0 z-20 w-32 min-w-32 max-w-32 border-l bg-muted/95 text-center align-middle">
                   Action
                 </TableHead>
               </TableRow>
@@ -301,33 +302,6 @@ export default function RowsConfigurator({
                       )}
                     </TableCell>
                   )}
-                  <TableCell className="px-2 py-2 align-middle">
-                    <Button
-                      variant="destructive"
-                      size="icon-sm"
-                      className="border-destructive/30 bg-destructive/10 text-destructive hover:border-destructive/40 hover:bg-destructive/20"
-                        aria-label={`Delete row ${row.id}`}
-                        title={`Delete row ${row.id}`}
-                        onClick={() => setConfirmAction({ msg: 'Delete Row?', onConfirm: () => handleDeleteRow(row.id) })}
-                      >
-                        <Trash2 className="text-destructive" />
-                      </Button>
-                    </TableCell>
-                    <TableCell className="px-2 py-2 text-center align-middle">
-                      <Button
-                        variant="outline"
-                        size="icon-sm"
-                        className={cn(
-                          'mx-auto border-border text-muted-foreground hover:bg-muted hover:text-foreground',
-                          row.isActive !== false ? 'bg-muted/60' : 'bg-background',
-                        )}
-                        aria-label={`${row.isActive !== false ? 'Hide' : 'Show'} row ${row.id}`}
-                        title={`${row.isActive !== false ? 'Hide' : 'Show'} row ${row.id}`}
-                        onClick={() => handleUpdateRow(row.id, 'isActive', row.isActive === false)}
-                      >
-                        {row.isActive !== false ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
-                      </Button>
-                    </TableCell>
                   <TableCell className="px-2 py-2 align-middle">
                     <Select
                       value={rowType}
@@ -371,14 +345,22 @@ export default function RowsConfigurator({
                       <section className="flex flex-col items-center gap-1.5 whitespace-nowrap">
                         <Badge variant="secondary">R{idx + 1}</Badge>
                         {!bulkMode && rowFilter === 'all' && (
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            {...getHandleProps(row.id, idx)}
-                            className="cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
-                          >
-                            <GripVertical />
-                          </Button>
+                          <section className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              {...getHandleProps(row.id, idx)}
+                              className="cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
+                            >
+                              <GripVertical />
+                            </Button>
+                            <MoveToPositionDialog
+                              currentPosition={idx + 1}
+                              itemCount={activeReport.rows.length}
+                              itemLabel={`row R${idx + 1}`}
+                              onMove={reorderRows}
+                            />
+                          </section>
                         )}
                       </section>
                     </TableCell>
@@ -388,7 +370,7 @@ export default function RowsConfigurator({
                           value={row.percentBase}
                           onChange={(e) => handleUpdateRow(row.id, 'percentBase', e.target.value.toUpperCase())}
                           className={isPctBroken ? 'border-destructive' : ''}
-                          placeholder="R3"
+                          placeholder="R#"
                         />
                       ) : null}
                     </TableCell>
@@ -411,7 +393,7 @@ export default function RowsConfigurator({
                           <p className="truncate"><span className="font-medium text-foreground">DEPT GRP:</span> {row.deptGroup || '-'}</p>
                           <p className="truncate"><span className="font-medium text-foreground">GRP ({row.groupLevel || 'L4'}):</span> {row.groups || '-'}</p>
                           <p className="truncate"><span className="font-medium text-foreground">CODE:</span> {row.accCodes || '-'}</p>
-                          <p className="truncate"><span className="font-medium text-foreground">DIM:</span> {[row.dim1, row.dim2].filter(Boolean).join(', ') || '-'}</p>
+                          <p className="truncate"><span className="font-medium text-foreground">DIM:</span> {Array.from({ length: 10 }, (_, index) => row[`dim${index + 1}`]).filter(Boolean).join(', ') || '-'}</p>
                           {rowWarnings.length > 0 && (
                             <section className="min-w-0 space-y-1 pt-1">
                               {rowWarnings.map((warning) => {
@@ -435,20 +417,43 @@ export default function RowsConfigurator({
                         </section>
                       )}
                     </TableCell>
-                    <TableCell className="sticky right-0 z-10 w-24 border-l bg-card px-2 py-2 text-center align-middle">
-                      {!isHeader && !isTotal ? (
+                    <TableCell className="sticky right-0 z-10 w-32 min-w-32 max-w-32 border-l bg-card px-2 py-2 text-center align-middle">
+                      <section className="flex items-center justify-center gap-1.5 whitespace-nowrap" aria-label={`Actions for row ${row.id}`} data-testid="row-actions">
+                        <Button
+                          variant="destructive"
+                          size="icon-sm"
+                          className="border-destructive/30 bg-destructive/10 text-destructive hover:border-destructive/40 hover:bg-destructive/20"
+                          aria-label={`Delete row ${row.id}`}
+                          title={`Delete row ${row.id}`}
+                          onClick={() => setConfirmAction({ msg: 'Delete Row?', onConfirm: () => handleDeleteRow(row.id) })}
+                        >
+                          <Trash2 className="size-3.5 text-destructive" />
+                        </Button>
                         <Button
                           variant="outline"
-                          size="sm"
-                          aria-label={`Edit mapping for row ${row.id}`}
-                          title={`Edit mapping for row ${row.id}`}
-                          onClick={() => setEditingRow({ ...row })}
-                          className="mx-auto"
+                          size="icon-sm"
+                          className={cn(
+                            'border-border text-muted-foreground hover:bg-muted hover:text-foreground',
+                            row.isActive !== false ? 'bg-muted/60' : 'bg-background',
+                          )}
+                          aria-label={`${row.isActive !== false ? 'Hide' : 'Show'} row ${row.id}`}
+                          title={`${row.isActive !== false ? 'Hide' : 'Show'} row ${row.id}`}
+                          onClick={() => handleUpdateRow(row.id, 'isActive', row.isActive === false)}
                         >
-                          <Edit3 />
-                          Edit
+                          {row.isActive !== false ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
                         </Button>
-                      ) : null}
+                        {!isHeader && !isTotal ? (
+                          <Button
+                            variant="outline"
+                            size="icon-sm"
+                            aria-label={`Edit mapping for row ${row.id}`}
+                            title={`Edit mapping for row ${row.id}`}
+                            onClick={() => setEditingRow({ ...row })}
+                          >
+                            <Edit3 className="size-3.5" />
+                          </Button>
+                        ) : null}
+                      </section>
                     </TableCell>
                   </TableRow>
                 );
@@ -467,6 +472,7 @@ export default function RowsConfigurator({
           setConfirmAction={setConfirmAction}
           onApply={applyBulkMapping}
           onClose={() => setIsBulkDialogOpen(false)}
+          dimensionDefinitions={dimensionDefinitions}
         />
       )}
     </Card>

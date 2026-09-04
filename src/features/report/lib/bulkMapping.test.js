@@ -56,4 +56,25 @@ describe('bulk mapping helpers', () => {
       updates: { dept: '001', accCodes: '4001' },
     });
   });
+
+  it('applies department/account groups and dimensions together', () => {
+    const [preview] = buildBulkMappingPreview([
+      { id: 'r1', desc: 'Rooms', dept: '001', deptGroup: '', accCodes: '4001', groups: '', groupLevel: 'L4', dim1: 'FIT', isHeader: false, isTotal: false },
+    ], ['r1'], {
+      operation: 'set',
+      applyDept: false,
+      applyAccounts: false,
+      applyDeptGroup: true,
+      deptGroupValues: ['ROOMS'],
+      applyAccountGroup: true,
+      accountGroupValues: ['REV'],
+      accountGroupLevel: 'L2',
+      dimensionValues: { dim1: { enabled: true, values: ['WHO'] } },
+    });
+
+    expect(createApplyUpdates([preview])).toEqual([{
+      id: 'r1',
+      updates: { deptGroup: 'ROOMS', dept: '', groups: 'REV', accCodes: '', groupLevel: 'L2', dim1: 'WHO' },
+    }]);
+  });
 });

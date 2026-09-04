@@ -23,6 +23,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { normalizeAccLookupCode } from '../lib/normalizeCode.js';
 import { buildBulkMappingPreview, createApplyUpdates, createUndoUpdates } from '../lib/bulkMapping.js';
 import MultiSelectDropdown from './MultiSelectDropdown.jsx';
+import GroupSelectDropdown from './GroupSelectDropdown.jsx';
 
 const OPERATION_OPTIONS = [
   { id: 'set', label: 'Replace existing values' },
@@ -47,12 +48,24 @@ export default function BulkMappingDialog({
   setConfirmAction,
   onApply,
   onClose,
+  dimensionDefinitions = [],
 }) {
   const [operation, setOperation] = useState('set');
   const [applyDept, setApplyDept] = useState(true);
   const [applyAccounts, setApplyAccounts] = useState(true);
   const [deptValues, setDeptValues] = useState([]);
   const [accountValues, setAccountValues] = useState([]);
+  const [applyDeptGroup, setApplyDeptGroup] = useState(false);
+  const [deptGroupValues, setDeptGroupValues] = useState([]);
+  const [applyAccountGroup, setApplyAccountGroup] = useState(false);
+  const [accountGroupValues, setAccountGroupValues] = useState([]);
+  const [accountGroupLevel, setAccountGroupLevel] = useState('');
+  const dimensionFields = Array.from({ length: 10 }, (_, index) => {
+    const key = `dim${index + 1}`;
+    const definition = dimensionDefinitions.find((item) => item.key === key);
+    return { key, label: definition?.caption || `Dimension ${index + 1}`, options: definition?.values || [] };
+  });
+  const [dimensionValues, setDimensionValues] = useState(() => Object.fromEntries(dimensionFields.map(({ key }) => [key, { enabled: false, values: [] }])));
   const [selectedPresetId, setSelectedPresetId] = useState('');
   const [presetName, setPresetName] = useState('');
   const [presetError, setPresetError] = useState('');
@@ -63,11 +76,23 @@ export default function BulkMappingDialog({
     applyAccounts,
     deptValues,
     accountValues,
+    applyDeptGroup,
+    deptGroupValues,
+    applyAccountGroup,
+    accountGroupValues,
+    accountGroupLevel,
+    dimensionValues,
   }), [accountValues, applyAccounts, applyDept, deptValues, operation, rows, selectedIds]);
   const changedPreview = preview.filter((item) => item.changedFields.length > 0);
-  const hasRequiredValues = operation === 'clear'
-    || ((!applyDept || deptValues.length > 0) && (!applyAccounts || accountValues.length > 0));
-  const canApply = (applyDept || applyAccounts) && hasRequiredValues && changedPreview.length > 0;
+  const enabledFields = applyDept || applyAccounts || applyDeptGroup || applyAccountGroup || Object.values(dimensionValues).some((config) => config.enabled);
+  const hasRequiredValues = operation === 'clear' || [
+    applyDept ? deptValues : null,
+    applyAccounts ? accountValues : null,
+    applyDeptGroup ? deptGroupValues : null,
+    applyAccountGroup ? accountGroupValues : null,
+    ...Object.values(dimensionValues).filter((config) => config.enabled).map((config) => config.values),
+  ].filter(Boolean).every((values) => values.length > 0);
+  const canApply = enabledFields && hasRequiredValues && changedPreview.length > 0;
 
   const loadPreset = (presetId) => {
     setSelectedPresetId(presetId);
@@ -80,6 +105,12 @@ export default function BulkMappingDialog({
     setApplyAccounts(presetAccounts.length > 0);
     setDeptValues(presetDepartments);
     setAccountValues(presetAccounts);
+    setApplyDeptGroup((preset.deptGroupValues || []).length > 0);
+    setDeptGroupValues(preset.deptGroupValues || []);
+    setApplyAccountGroup((preset.accountGroupValues || []).length > 0);
+    setAccountGroupValues(preset.accountGroupValues || []);
+    setAccountGroupLevel(preset.accountGroupLevel || '');
+    setDimensionValues(preset.dimensionValues || Object.fromEntries(dimensionFields.map(({ key }) => [key, { enabled: false, values: [] }])));
   };
 
   const savePreset = () => {
@@ -90,8 +121,8 @@ export default function BulkMappingDialog({
     }
     const savedDepartments = applyDept ? deptValues : [];
     const savedAccounts = applyAccounts ? accountValues : [];
-    if (savedDepartments.length === 0 && savedAccounts.length === 0) {
-      setPresetError('Select at least one department or account code.');
+    if (!enabledFields || !hasRequiredValues) {
+      setPresetError('Enable a mapping field and select its values first.');
       return;
     }
     const preset = {
@@ -99,6 +130,10 @@ export default function BulkMappingDialog({
       name,
       deptValues: savedDepartments,
       accountValues: savedAccounts,
+      deptGroupValues: applyDeptGroup ? deptGroupValues : [],
+      accountGroupValues: applyAccountGroup ? accountGroupValues : [],
+      accountGroupLevel: applyAccountGroup ? accountGroupLevel : '',
+      dimensionValues,
     };
     setPresets((current) => [...(Array.isArray(current) ? current : []), preset]);
     setSelectedPresetId(preset.id);
@@ -127,8 +162,8 @@ export default function BulkMappingDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-dvh overflow-y-auto sm:max-w-5xl">
-        <DialogHeader>
+      <DialogContent className="max-h-[min(92dvh,60rem)] overflow-y-auto p-0 sm:max-w-6xl">
+        <DialogHeader className="border-b bg-muted/20 px-6 py-5">
           <DialogTitle className="flex items-center gap-2 text-balance">
             <Layers3 className="size-4" />
             Bulk mapping
@@ -138,8 +173,8 @@ export default function BulkMappingDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <section className="grid gap-4 lg:grid-cols-2">
-          <section className="grid gap-4 rounded-xl border border-border p-4">
+        <section className="grid gap-4 px-6 py-5 lg:grid-cols-[1.15fr_0.85fr]">
+          <section className="grid content-start gap-4 rounded-xl border border-border bg-card p-4 shadow-none">
             <fieldset className="grid gap-3">
               <Label htmlFor="bulk-operation">Change mode</Label>
               <Select value={operation} onValueChange={setOperation}>
@@ -178,6 +213,23 @@ export default function BulkMappingDialog({
 
             <fieldset className="grid gap-3 rounded-lg border border-border bg-muted/20 p-3">
               <Label className="flex items-center gap-2">
+                <Checkbox aria-label="Update department category" checked={applyDeptGroup} onCheckedChange={(checked) => setApplyDeptGroup(checked === true)} />
+                Department category
+              </Label>
+              {applyDeptGroup && operation !== 'clear' && (
+                <GroupSelectDropdown
+                  ariaLabel="Department category"
+                  emptyLabel="Choose department category"
+                  groups={masterData?.deptGroups || []}
+                  memberKey="deptIds"
+                  value={deptGroupValues[0] || '__none__'}
+                  onChange={(value) => setDeptGroupValues(value === '__none__' ? [] : [value])}
+                />
+              )}
+            </fieldset>
+
+            <fieldset className="grid gap-3 rounded-lg border border-border bg-muted/20 p-3">
+              <Label className="flex items-center gap-2">
                 <Checkbox
                   aria-label="Update account codes"
                   checked={applyAccounts}
@@ -199,6 +251,59 @@ export default function BulkMappingDialog({
               )}
             </fieldset>
 
+            <fieldset className="grid gap-3 rounded-lg border border-border bg-muted/20 p-3">
+              <Label className="flex items-center gap-2">
+                <Checkbox aria-label="Update account group" checked={applyAccountGroup} onCheckedChange={(checked) => setApplyAccountGroup(checked === true)} />
+                Account group
+              </Label>
+              {applyAccountGroup && operation !== 'clear' && (
+                <GroupSelectDropdown
+                  ariaLabel="Account group"
+                  emptyLabel="Choose account group"
+                  groups={masterData?.accountGroups || []}
+                  memberKey="accountIds"
+                  value={accountGroupValues[0] || '__none__'}
+                  onChange={(value) => {
+                    const selected = (masterData?.accountGroups || []).find((group) => String(group.id) === String(value));
+                    setAccountGroupValues(value === '__none__' ? [] : [value]);
+                    setAccountGroupLevel(selected?.level || '');
+                  }}
+                />
+              )}
+            </fieldset>
+
+            <fieldset className="grid gap-3 rounded-lg border border-border bg-muted/20 p-3">
+              <Label>Dimensions</Label>
+              <section className="grid gap-2 sm:grid-cols-2">
+                {dimensionFields.map(({ key, label, options }) => {
+                  const config = dimensionValues[key] || { enabled: false, values: [] };
+                  return (
+                    <section key={key} className="grid gap-2 rounded-lg border border-border/70 bg-background/60 p-2">
+                      <Label className="flex items-center gap-2 text-xs font-medium">
+                        <Checkbox
+                          aria-label={`Update ${label}`}
+                          checked={config.enabled}
+                          onCheckedChange={(checked) => setDimensionValues((current) => ({ ...current, [key]: { ...config, enabled: checked === true } }))}
+                        />
+                        <span className="truncate">{label}</span>
+                      </Label>
+                      {config.enabled && operation !== 'clear' && (
+                        <MultiSelectDropdown
+                          options={options}
+                          selected={config.values}
+                          onChange={(values) => setDimensionValues((current) => ({ ...current, [key]: { ...config, values } }))}
+                          label={key.toUpperCase()}
+                          testIdPrefix={`bulk-${key}`}
+                          searchPlaceholder={`Search ${label.toLowerCase()}...`}
+                          emptyLabel="None selected"
+                        />
+                      )}
+                    </section>
+                  );
+                })}
+              </section>
+            </fieldset>
+
             {!hasRequiredValues && (
               <p className="text-sm text-destructive" role="alert">
                 Select values for every enabled field, or choose Clear mapping values.
@@ -206,10 +311,10 @@ export default function BulkMappingDialog({
             )}
           </section>
 
-          <section className="grid content-start gap-4 rounded-xl border border-border p-4">
+          <section className="grid content-start gap-4 rounded-xl border border-border bg-card p-4 shadow-none">
             <header className="grid gap-1">
               <h3 className="text-sm font-semibold text-balance">Mapping presets</h3>
-              <p className="text-sm text-pretty text-muted-foreground">Reuse department and account selections across reports.</p>
+              <p className="text-sm text-pretty text-muted-foreground">Reuse complete mapping selections across reports.</p>
             </header>
 
             <section className="flex gap-2">
@@ -259,7 +364,7 @@ export default function BulkMappingDialog({
           </section>
         </section>
 
-        <section className="overflow-hidden rounded-xl border border-border">
+        <section className="mx-6 mb-5 overflow-hidden rounded-xl border border-border bg-card">
           <header className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/30 px-3 py-2">
             <h3 className="text-sm font-semibold text-balance">Preview</h3>
             <p className="text-sm tabular-nums text-muted-foreground">
@@ -271,8 +376,7 @@ export default function BulkMappingDialog({
               <TableHeader className="sticky top-0 bg-background">
                 <TableRow>
                   <TableHead>Row</TableHead>
-                  <TableHead>Department before → after</TableHead>
-                  <TableHead>Account before → after</TableHead>
+                  <TableHead>Mapping changes</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -280,10 +384,7 @@ export default function BulkMappingDialog({
                   <TableRow key={item.id} className={item.changedFields.length === 0 ? 'opacity-60' : ''}>
                     <TableCell className="max-w-48 truncate font-medium">{item.desc}</TableCell>
                     <TableCell className="font-mono text-xs tabular-nums">
-                      {compactValue(item.before.dept)} → {compactValue(item.after.dept)}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs tabular-nums">
-                      {compactValue(item.before.accCodes)} → {compactValue(item.after.accCodes)}
+                      {item.changedFields.map((field) => `${field}: ${compactValue(item.before[field])} → ${compactValue(item.after[field])}`).join(' · ') || 'No changes'}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -297,7 +398,7 @@ export default function BulkMappingDialog({
           )}
         </section>
 
-        <DialogFooter>
+        <DialogFooter className="sticky bottom-0 border-t bg-muted/20 px-6 py-4">
           <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
           <Button type="button" disabled={!canApply} onClick={applyChanges}>
             Apply to {changedPreview.length} rows

@@ -25,10 +25,10 @@ import GroupSelectDropdown from './GroupSelectDropdown.jsx';
 const EMPTY_REPORT_OPTIONS = {};
 const EMPTY_DIMENSION_OPTIONS = {};
 const EMPTY_DIMENSION_DEFINITIONS = [];
-const DIMENSION_FIELDS = [
-  { key: 'dim1', label: 'DIM 1' },
-  { key: 'dim2', label: 'DIM 2' },
-];
+const DIMENSION_FIELDS = Array.from({ length: 10 }, (_, index) => ({
+  key: `dim${index + 1}`,
+  label: `DIM ${index + 1}`,
+}));
 const parseDimensionValues = (value) => String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
 const normalizeDimensionValue = (value) => String(value || '').trim().toUpperCase();
 

@@ -4,6 +4,31 @@ import { describe, expect, it, vi } from 'vitest';
 import EditMappingModal from './EditMappingModal.jsx';
 
 describe('EditMappingModal', () => {
+  it('renders dimension selectors through DIM 10', () => {
+    const definitions = Array.from({ length: 10 }, (_, index) => ({
+      key: `dim${index + 1}`,
+      caption: `Dimension ${index + 1}`,
+      values: [`VALUE-${index + 1}`],
+    }));
+
+    render(
+      <EditMappingModal
+        isOpen={true}
+        editingRow={{ desc: 'Revenue' }}
+        setEditingRow={() => {}}
+        masterData={{ depts: [], groups: {}, accCodes: [] }}
+        dimensionDefinitions={definitions}
+        modalAccCategory="ALL"
+        setModalAccCategory={() => {}}
+        onOpenDetailSelector={() => {}}
+        onApply={() => {}}
+        onClose={() => {}}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /Dimension 10/i })).toBeInTheDocument();
+  });
+
   it('updates fields and invokes detail selector and apply handlers', async () => {
     const setEditingRow = vi.fn();
     const setModalAccCategory = vi.fn();

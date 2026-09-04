@@ -1,11 +1,12 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import ReportView from './ReportView.jsx';
 import { THEMES, getIndentClass } from '../lib/reportLogic.js';
 
 describe('ReportView', () => {
   it('renders report headers and values', () => {
+    const onViewModeChange = vi.fn();
     render(
       <ReportView
         activeReport={{ name: 'P&L' }}
@@ -19,6 +20,8 @@ describe('ReportView', () => {
         currentTheme={THEMES.blue}
         tableZoom={100}
         getIndentClass={getIndentClass}
+        viewMode="table"
+        onViewModeChange={onViewModeChange}
       />
     );
 
@@ -26,6 +29,13 @@ describe('ReportView', () => {
     expect(screen.getByText('P&L')).toBeInTheDocument();
     expect(screen.getByText('Revenue')).toBeInTheDocument();
     expect(screen.getByText('123.45')).toBeInTheDocument();
+    const tableButton = screen.getByRole('button', { name: 'Show table view' });
+    const dashboardButton = screen.getByRole('button', { name: 'Show dashboard view' });
+    expect(tableButton).toHaveAttribute('aria-pressed', 'true');
+    expect(tableButton).toHaveTextContent('');
+    expect(dashboardButton).toHaveTextContent('');
+    fireEvent.click(dashboardButton);
+    expect(onViewModeChange).toHaveBeenCalledWith('dashboard');
   });
 
   it('renders Description at the configured position', () => {

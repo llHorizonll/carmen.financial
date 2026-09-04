@@ -10,6 +10,7 @@ import {
   TableRow,
 } from '@/components/ui/table.jsx';
 import { getReportDisplayColumns } from '../lib/reportLogic.js';
+import ReportViewModeToggle from './ReportViewModeToggle.jsx';
 
 export default function ReportView({
   activeReport,
@@ -21,6 +22,8 @@ export default function ReportView({
   currentTheme,
   tableZoom,
   getIndentClass,
+  viewMode = 'table',
+  onViewModeChange,
 }) {
   if (!activeReport) return null;
   const displayColumns = getReportDisplayColumns(activeReport, activeCols);
@@ -28,8 +31,13 @@ export default function ReportView({
 
   return (
     <Card className="flex h-full min-h-0 flex-col border border-border shadow-none ring-0">
-      <CardHeader className="space-y-1 border-b px-4 pt-3 pb-3 sm:px-5 sm:pt-4 sm:pb-4">
-        <CardTitle className="text-center text-2xl font-semibold tracking-tight text-balance text-foreground lg:text-3xl">
+      <CardHeader className="relative space-y-1 border-b px-4 pt-14 pb-3 sm:px-5 sm:pt-4 sm:pb-4">
+        <ReportViewModeToggle
+          className="absolute top-3 right-3 sm:top-4 sm:right-4"
+          value={viewMode}
+          onChange={onViewModeChange}
+        />
+        <CardTitle className="text-center text-2xl font-semibold text-balance text-foreground sm:px-20 lg:text-3xl">
           {displayCompanyLabel}
         </CardTitle>
         <CardDescription className="text-center text-sm font-medium text-foreground/80 sm:text-[0.95rem]">
@@ -50,16 +58,16 @@ export default function ReportView({
         <ScrollArea className="h-full print:overflow-visible">
           <div className="w-max min-w-full">
             <Table
-              className="min-w-full whitespace-nowrap print:table-auto"
+              className="min-w-full border-collapse whitespace-nowrap print:table-auto"
               style={{ zoom: tableZoom / 100 }}
               data-testid="report-print-header"
             >
               <TableHeader className={`sticky top-0 z-20 ${currentTheme.header}`}>
-                <TableRow>
+                <TableRow className="hover:bg-transparent">
                   {displayColumns.map((col) => col.isDescription ? (
                     <TableHead
                       key={col.id}
-                      className={`${descriptionIsFirst ? 'sticky left-0 z-30' : ''} min-w-[240px] border-r text-center text-xs font-semibold sm:min-w-[300px] ${currentTheme.header}`}
+                      className={`${descriptionIsFirst ? 'sticky left-0 z-30' : ''} min-w-[240px] border-r text-center text-xs font-semibold text-white hover:text-white sm:min-w-[300px] ${currentTheme.header}`}
                     >
                       Description
                     </TableHead>
@@ -67,7 +75,7 @@ export default function ReportView({
                     <TableHead
                       key={col.id}
                       style={{ width: col.width ? `${col.width}px` : 'auto', minWidth: col.width ? `${col.width}px` : '96px' }}
-                      className={`border-r text-center ${currentTheme.header}`}
+                      className={`border-r text-center text-white hover:text-white ${currentTheme.header}`}
                     >
                       <div className="text-xs font-semibold">{col.label}</div>
                     </TableHead>

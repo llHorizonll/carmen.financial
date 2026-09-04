@@ -91,6 +91,7 @@ describe('ColumnsConfigurator', () => {
 
     fireEvent.click(within(row).getByRole('button', { name: /Hide column C1/i }));
     expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'isActive', false);
+    expect(within(row).queryByTestId('column-actions')).not.toBeInTheDocument();
 
     fireEvent.click(within(row).getByRole('button', { name: /Delete column C1/i }));
     expect(handleDeleteCol).toHaveBeenCalledWith('C1');
@@ -202,6 +203,35 @@ describe('ColumnsConfigurator', () => {
     expect(updateActiveReport).toHaveBeenCalledWith(expect.objectContaining({
       descriptionPosition: 0,
       columns: [expect.objectContaining({ id: 'C1' })],
+    }));
+  });
+
+  it('moves a column directly to an exact position', () => {
+    const updateActiveReport = vi.fn();
+
+    render(
+      <ColumnsConfigurator
+        activeReport={{
+          descriptionPosition: 2,
+          columns: [
+            { id: 'C1', label: 'Actual', type: 'AC', formula: '' },
+            { id: 'C2', label: 'Budget', type: 'BC', formula: '' },
+          ],
+        }}
+        handleAddCol={vi.fn()}
+        handleUpdateCol={vi.fn()}
+        updateActiveReport={updateActiveReport}
+        handleDeleteCol={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move column C1 to position' }));
+    fireEvent.change(screen.getByLabelText('New position'), { target: { value: '3' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Move to position' }));
+
+    expect(updateActiveReport).toHaveBeenCalledWith(expect.objectContaining({
+      descriptionPosition: 1,
+      columns: [expect.objectContaining({ id: 'C2' }), expect.objectContaining({ id: 'C1' })],
     }));
   });
 });

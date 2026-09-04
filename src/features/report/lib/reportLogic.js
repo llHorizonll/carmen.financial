@@ -4,32 +4,32 @@ export { normalizeLookupCode, normalizeDeptLookupCode, normalizeAccLookupCode } 
 export const THEMES = {
   blue: {
     name: 'Classic Blue',
-    header: 'bg-[#2D4A8C] text-white border-[#1e3263]',
-    subHeader: 'bg-blue-100/60 text-blue-950 font-bold dark:bg-blue-950/60 dark:text-blue-100',
-    total: 'bg-blue-50 text-slate-950 font-bold dark:bg-blue-950/40 dark:text-blue-50',
+    header: 'bg-[#2D4A8C] text-white border-blue-200 dark:border-blue-800 hover:bg-[#2D4A8C] hover:text-white',
+    subHeader: 'bg-blue-100/60 text-blue-950 font-bold hover:bg-blue-100/60 hover:text-blue-950 dark:bg-blue-950/60 dark:text-blue-100 dark:hover:bg-blue-950/60 dark:hover:text-blue-100',
+    total: 'bg-blue-50 text-slate-950 font-bold hover:bg-blue-50 hover:text-slate-950 dark:bg-blue-950/40 dark:text-blue-50 dark:hover:bg-blue-950/40 dark:hover:text-blue-50',
     rowHover: 'hover:bg-blue-50/60 dark:hover:bg-blue-950/30',
     borderColor: 'border-blue-100 dark:border-blue-900/60',
-    cellBorder: 'border-blue-100/80 dark:border-blue-900/50',
+    cellBorder: 'border-blue-200 dark:border-blue-800',
     hexHeader: '#2D4A8C', hexSubHeader: '#dbeafe', hexTotal: '#eff6ff', hexCellBorder: '#eff6ff'
   },
   green: {
     name: 'Emerald Green',
-    header: 'bg-emerald-700 text-white border-emerald-800',
-    subHeader: 'bg-emerald-100/60 text-emerald-950 font-bold dark:bg-emerald-950/60 dark:text-emerald-100',
-    total: 'bg-emerald-50 text-slate-950 font-bold dark:bg-emerald-950/40 dark:text-emerald-50',
+    header: 'bg-emerald-700 text-white border-emerald-200 dark:border-emerald-800 hover:bg-emerald-700 hover:text-white',
+    subHeader: 'bg-emerald-100/60 text-emerald-950 font-bold hover:bg-emerald-100/60 hover:text-emerald-950 dark:bg-emerald-950/60 dark:text-emerald-100 dark:hover:bg-emerald-950/60 dark:hover:text-emerald-100',
+    total: 'bg-emerald-50 text-slate-950 font-bold hover:bg-emerald-50 hover:text-slate-950 dark:bg-emerald-950/40 dark:text-emerald-50 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-50',
     rowHover: 'hover:bg-emerald-50/60 dark:hover:bg-emerald-950/30',
     borderColor: 'border-emerald-200 dark:border-emerald-900/60',
-    cellBorder: 'border-emerald-100/80 dark:border-emerald-900/50',
+    cellBorder: 'border-emerald-200 dark:border-emerald-800',
     hexHeader: '#047857', hexSubHeader: '#d1fae5', hexTotal: '#ecfdf5', hexCellBorder: '#ecfdf5'
   },
   gray: {
     name: 'Slate Gray',
-    header: 'bg-slate-700 text-white border-slate-800',
-    subHeader: 'bg-slate-200/70 text-slate-950 font-bold dark:bg-slate-700/70 dark:text-slate-50',
-    total: 'bg-slate-100 text-slate-950 font-bold dark:bg-slate-800 dark:text-slate-50',
+    header: 'bg-slate-700 text-white border-slate-300 dark:border-slate-700 hover:bg-slate-700 hover:text-white',
+    subHeader: 'bg-slate-200/70 text-slate-950 font-bold hover:bg-slate-200/70 hover:text-slate-950 dark:bg-slate-700/70 dark:text-slate-50 dark:hover:bg-slate-700/70 dark:hover:text-slate-50',
+    total: 'bg-slate-100 text-slate-950 font-bold hover:bg-slate-100 hover:text-slate-950 dark:bg-slate-800 dark:text-slate-50 dark:hover:bg-slate-800 dark:hover:text-slate-50',
     rowHover: 'hover:bg-slate-100/60 dark:hover:bg-slate-800/70',
     borderColor: 'border-slate-300 dark:border-slate-700',
-    cellBorder: 'border-slate-200/80 dark:border-slate-800',
+    cellBorder: 'border-slate-300 dark:border-slate-700',
     hexHeader: '#334155', hexSubHeader: '#e2e8f0', hexTotal: '#f1f5f9', hexCellBorder: '#f1f5f9'
   }
 };
@@ -419,6 +419,14 @@ export const findRowMappingConflicts = (report, masterData = null) => {
   return issues;
 };
 
+const normalizeDimensionMatchValue = (value) => {
+  const trimmed = String(value || '').trim();
+  const unwrapped = trimmed.length >= 2 && trimmed.startsWith('[') && trimmed.endsWith(']')
+    ? trimmed.slice(1, -1).trim()
+    : trimmed;
+  return unwrapped.toUpperCase();
+};
+
 const filterEngineRows = (row, masterData) => {
   const deptGroupId = String(row.deptGroup || row.DeptGroup || '').trim().toUpperCase();
   const deptGroup = (masterData?.deptGroups || []).find((group) => String(group?.id || '').trim().toUpperCase() === deptGroupId);
@@ -446,7 +454,7 @@ const filterEngineRows = (row, masterData) => {
           value: String(item?.value || item?.id || item?.code || '').trim(),
         }))
         .filter((item) => item.key && item.value)
-    : ['dim1', 'dim2', 'dim3', 'dim4']
+    : Array.from({ length: 10 }, (_, index) => `dim${index + 1}`)
         .map((field) => (row[field] ? { key: field, value: String(row[field]).trim() } : null))
         .filter(Boolean);
   const groupLevelKey = (row.groupLevel === 'L1' ? 'group1' : row.groupLevel === 'L2' ? 'group2' : row.groupLevel === 'L3' ? 'group3' : 'group4');
@@ -455,7 +463,7 @@ const filterEngineRows = (row, masterData) => {
     const normalizedKey = String(key || '').trim().toLowerCase();
     if (!normalizedKey) return;
     if (!dimensionSets.has(normalizedKey)) dimensionSets.set(normalizedKey, new Set());
-    String(value || '').split(',').map((item) => item.trim().toUpperCase()).filter(Boolean)
+    String(value || '').split(',').map(normalizeDimensionMatchValue).filter(Boolean)
       .forEach((item) => dimensionSets.get(normalizedKey).add(item));
   });
   return {
@@ -513,7 +521,7 @@ const prepareSourceRows = (sourceRows, masterData) => {
 const matchesPreparedDimensions = (dimensionSets, source) => {
   if (dimensionSets.size === 0) return true;
   for (const [key, values] of dimensionSets) {
-    const sourceValue = String(source?.[key] || source?.[key.toLowerCase()] || source?.[key.toUpperCase()] || '').trim().toUpperCase();
+    const sourceValue = normalizeDimensionMatchValue(source?.[key] || source?.[key.toLowerCase()] || source?.[key.toUpperCase()] || '');
     if (!values.has(sourceValue)) return false;
   }
   return true;

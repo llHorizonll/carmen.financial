@@ -219,7 +219,7 @@ const normalizeReportRowDimensions = (row) => {
     });
   }
 
-  ['dim1', 'dim2', 'dim3', 'dim4'].forEach((field) => {
+  Array.from({ length: 10 }, (_, index) => `dim${index + 1}`).forEach((field) => {
     pushDimension(field, row?.[field]);
   });
 
@@ -403,7 +403,7 @@ export const fetchCarmenDimensions = async () => {
 
   const definitions = (Array.isArray(response?.Data) ? response.Data : [])
     .sort((left, right) => String(left?.Id || '').localeCompare(String(right?.Id || ''), undefined, { numeric: true }))
-    .slice(0, 4)
+    .slice(0, 10)
     .map((item, index) => ({
       key: `dim${index + 1}`,
       caption: String(item?.Caption || '').trim() || `DIM ${index + 1}`,

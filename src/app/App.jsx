@@ -119,6 +119,9 @@ import {
 const ReportView = React.lazy(
   () => import("../features/report/components/ReportView.jsx"),
 );
+const ReportDashboard = React.lazy(
+  () => import("../features/report/components/ReportDashboard.jsx"),
+);
 const ReportSetup = React.lazy(
   () => import("../features/report/components/ReportSetup.jsx"),
 );
@@ -370,6 +373,10 @@ export default function App({ onLogout = null }) {
     return INITIAL_MASTER_DATA.users[0];
   });
   const [tableZoom, setTableZoom] = useState(100);
+  const [reportViewMode, setReportViewMode] = usePersistentState(
+    "carmen_report_view_mode_v1",
+    "table",
+  );
   const [isLoading, setIsLoading] = useState(false);
 
   const [globalDepts, setGlobalDepts] = useState([]);
@@ -385,7 +392,7 @@ export default function App({ onLogout = null }) {
   const [engineData, setEngineData] = useState([]);
   const [budgetData, setBudgetData] = useState([]);
   const [apiDimensions, setApiDimensions] = useState({});
-  const dimensionDefinitions = useMemo(() => ["dim1", "dim2"].map((field, index) => {
+  const dimensionDefinitions = useMemo(() => Array.from({ length: 10 }, (_, index) => `dim${index + 1}`).map((field, index) => {
     const apiDefinition = apiDimensions.definitions?.find((definition) => definition.key === field);
     const fallbackValues = [...new Set([...engineData, ...budgetData]
       .map((row) => String(row?.[field] ?? row?.[field.toUpperCase()] ?? "").trim())
@@ -1574,7 +1581,7 @@ export default function App({ onLogout = null }) {
 
               <div className="flex w-full flex-col gap-2 xl:max-w-168 xl:items-end">
                 <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-                  {visibleActiveTab === "report" && (
+                  {visibleActiveTab === "report" && reportViewMode !== "dashboard" && (
                     <div className="flex items-center gap-1 rounded-lg border border-border bg-card/80 px-2 py-1 shadow-sm">
                       <Button
                         type="button"
@@ -1820,17 +1827,32 @@ export default function App({ onLogout = null }) {
                       </Card>
                     }
                   >
-                    <ReportView
-                      activeReport={activeReport}
-                      displayCompanyLabel={displayCompanyLabel}
-                      displayDateLabel={displayDateLabel}
-                      displayPeriodLabel={displayPeriodLabel}
-                      reportData={reportData}
-                      activeCols={activeCols}
-                      currentTheme={currentTheme}
-                      tableZoom={tableZoom}
-                      getIndentClass={getIndentClass}
-                    />
+                    {reportViewMode === "dashboard" ? (
+                      <ReportDashboard
+                        activeReport={activeReport}
+                        displayCompanyLabel={displayCompanyLabel}
+                        displayDateLabel={displayDateLabel}
+                        displayPeriodLabel={displayPeriodLabel}
+                        reportData={reportData}
+                        activeCols={activeCols}
+                        viewMode="dashboard"
+                        onViewModeChange={setReportViewMode}
+                      />
+                    ) : (
+                      <ReportView
+                        activeReport={activeReport}
+                        displayCompanyLabel={displayCompanyLabel}
+                        displayDateLabel={displayDateLabel}
+                        displayPeriodLabel={displayPeriodLabel}
+                        reportData={reportData}
+                        activeCols={activeCols}
+                        currentTheme={currentTheme}
+                        tableZoom={tableZoom}
+                        getIndentClass={getIndentClass}
+                        viewMode="table"
+                        onViewModeChange={setReportViewMode}
+                      />
+                    )}
                   </React.Suspense>
                 )}
 
@@ -1954,8 +1976,7 @@ export default function App({ onLogout = null }) {
               accCodes: editingRow.accCodes,
               groupLevel: editingRow.groupLevel,
               groups: editingRow.groups,
-              dim1: editingRow.dim1,
-              dim2: editingRow.dim2,
+              ...Object.fromEntries(dimensionDefinitions.map(({ key }) => [key, editingRow[key]])),
             });
             setEditingRow(null);
           }}

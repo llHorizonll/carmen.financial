@@ -450,6 +450,31 @@ describe('buildReportData', () => {
     expect(dimensionResult[0].results.C1).toBe(150);
   });
 
+  it('matches bracketed dimension options to plain ledger dimension values', () => {
+    const dimensionResult = buildReportData({
+      activeReport: {
+        category: ['ALL'],
+        rows: [
+          { id: 'r1', desc: 'F.I.T.', isHeader: false, isTotal: false, dept: '110', accCodes: '4100001', dimensions: [{ key: 'dim1', value: '[FIT]' }], percentBase: '', formula: '', indent: 0 },
+        ],
+        columns: [
+          { id: 'C1', label: 'Actual', isActive: true, isFormula: false, isPercent: false, yearMode: 'current', periodMode: 'current', type: 'AC', width: '' },
+        ],
+      },
+      engineData: [
+        { year: '2026', deptcode: '110', acccode: '4100001', dim1: 'FIT', amt1: '1554395.64' },
+      ],
+      budgetData: [],
+      appliedDepts: [],
+      appliedYear: '2026',
+      appliedPeriod: '1',
+      appliedRevision: '0',
+      masterData: INITIAL_MASTER_DATA,
+    });
+
+    expect(dimensionResult[0].results.C1).toBe(1554395.64);
+  });
+
   it('rewrites row and column references when deleting or moving', () => {
     const rowDelete = deleteRowAndRewriteReferences({
       rows: [

@@ -81,6 +81,11 @@ describe('RowsConfigurator', () => {
 
     const revenueRow = revenueInput.closest('tr');
 
+    fireEvent.click(within(revenueRow).getByRole('button', { name: 'Move row R1 to position' }));
+    fireEvent.change(screen.getByLabelText('New position'), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Move to position' }));
+    expect(moveRow).toHaveBeenCalledWith(0, 1);
+
     fireEvent.click(within(revenueRow).getByRole('button', { name: 'Delete row r1' }));
     expect(setConfirmAction).toHaveBeenCalledWith(
       expect.objectContaining({ msg: 'Delete Row?' })
@@ -111,6 +116,7 @@ describe('RowsConfigurator', () => {
 
     fireEvent.change(screen.getByDisplayValue('R2'), { target: { value: 'R3' } });
     expect(handleUpdateRow).toHaveBeenCalledWith('r1', 'percentBase', 'R3');
+    expect(screen.getAllByPlaceholderText('R#')).toHaveLength(2);
 
     fireEvent.click(within(revenueRow).getByRole('button', { name: 'Hide row r1' }));
     expect(handleUpdateRow).toHaveBeenCalledWith('r1', 'isActive', false);
@@ -169,10 +175,16 @@ describe('RowsConfigurator', () => {
     const editButton = screen.getByRole('button', {
       name: 'Edit mapping for row r-long-warning',
     });
+    const actions = screen.getByTestId('row-actions');
 
     expect(warning.className).toMatch(/break-words/);
-    expect(editButton.closest('td')?.className).toMatch(/sticky right-0/);
-    expect(screen.getByRole('columnheader', { name: 'Action' }).className).toMatch(/sticky right-0/);
+    expect(actions).toHaveClass('whitespace-nowrap');
+    expect(actions).toContainElement(editButton);
+    expect(actions.querySelectorAll('button')).toHaveLength(3);
+    expect(editButton).toHaveClass('size-8');
+    expect(editButton).not.toHaveTextContent('Edit');
+    expect(editButton.closest('td')).toHaveClass('sticky', 'right-0', 'w-32', 'min-w-32', 'max-w-32');
+    expect(screen.getByRole('columnheader', { name: 'Action' })).toHaveClass('sticky', 'right-0', 'w-32', 'min-w-32', 'max-w-32');
   });
 
   it('bulk maps selected data rows, saves a preset, and supports undo', async () => {

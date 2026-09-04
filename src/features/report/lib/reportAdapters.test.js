@@ -204,6 +204,7 @@ describe('reportAdapters', () => {
         Dimensions: [
           { Key: 'dim1', Value: 'A' },
           { Key: 'dim2', Value: 'X' },
+          { Key: 'dim10', Value: 'Z' },
         ],
       }],
       access: [{ userId: 'admin', canView: true, canEdit: false }],
@@ -229,13 +230,16 @@ describe('reportAdapters', () => {
           Dimensions: [
             { Key: 'dim1', Value: 'A' },
             { Key: 'dim2', Value: 'X' },
+            { Key: 'dim10', Value: 'Z' },
           ],
           dimensions: [
-            { key: 'dim1', value: 'A' },
-            { key: 'dim2', value: 'X' },
+          { key: 'dim1', value: 'A' },
+          { key: 'dim2', value: 'X' },
+          { key: 'dim10', value: 'Z' },
           ],
           dim1: 'A',
           dim2: 'X',
+          dim10: 'Z',
         }),
       ]),
       access: [{ userId: 'admin', canView: true, canEdit: false }],

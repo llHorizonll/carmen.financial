@@ -289,7 +289,7 @@ const normalizeReportRowDimensions = (row) => {
     pushDimension(dimension.key || dimension.name || dimension.field || dimension.Key || dimension.Field, dimension.value || dimension.id || dimension.code || dimension.Value || dimension.Code);
   });
 
-  ['dim1', 'dim2', 'dim3', 'dim4'].forEach((field) => {
+  Array.from({ length: 10 }, (_, index) => `dim${index + 1}`).forEach((field) => {
     pushDimension(field, row?.[field] ?? row?.[field.toUpperCase()]);
   });
 
@@ -354,7 +354,7 @@ const normalizeReportRow = (row) => {
   };
 
   dimensions.forEach(({ key, value }) => {
-    if (['dim1', 'dim2', 'dim3', 'dim4'].includes(key)) {
+    if (/^dim(?:[1-9]|10)$/.test(key)) {
       normalizedRow[key] = value;
     }
   });

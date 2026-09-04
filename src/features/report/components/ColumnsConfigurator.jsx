@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select.jsx';
 import { findBrokenReferences, getReportDisplayColumns, moveDisplayColumnsAndRewriteReferences } from '../lib/reportLogic.js';
 import useDragReorder from '../hooks/useDragReorder.js';
+import MoveToPositionDialog from './MoveToPositionDialog.jsx';
 
 const EMPTY_REPORT_OPTIONS = {};
 
@@ -191,11 +192,11 @@ export default function ColumnsConfigurator({
 
   return (
     <Card className="w-full max-w-full min-h-0 overflow-hidden border border-border bg-card/95 shadow-none ring-0">
-      <CardHeader className="border-b bg-muted/20 pb-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <CardHeader className="border-b bg-muted/20 px-4 py-4 sm:px-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-1.5">
             <CardTitle className="text-base font-semibold tracking-tight text-foreground">Columns Configurator</CardTitle>
-            <CardDescription className="text-sm text-muted-foreground">Set column details, then drag the grip to reorder.</CardDescription>
+            <CardDescription className="text-sm text-muted-foreground">Drag for nearby changes, or choose an exact position for long moves.</CardDescription>
           </div>
           <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[24rem]">
             <Button variant="outline" size="sm" className={headerActionClassName} onClick={() => handleAddCol('data')}>+ {logicTypeLabels.get('DATA') || 'Data'}</Button>
@@ -249,6 +250,13 @@ export default function ColumnsConfigurator({
                       >
                         <GripVertical className="size-4" />
                       </Button>
+                      <MoveToPositionDialog
+                        currentPosition={visualIndex + 1}
+                        itemCount={displayColumns.length}
+                        itemLabel="Description column"
+                        onMove={reorderColumns}
+                        triggerSize="icon-xs"
+                      />
                     </header>
                     <section className="space-y-2 p-4">
                       <p className="text-sm font-semibold text-foreground">Row description</p>
@@ -275,7 +283,7 @@ export default function ColumnsConfigurator({
                   data-testid="column-card"
                   className="column-card flex min-h-0 w-[310px] shrink-0 flex-col rounded-xl border border-border bg-card transition-[opacity,box-shadow,transform] duration-200 ease-out data-[dragging=true]:opacity-40 data-[drag-over=true]:ring-2 data-[drag-over=true]:ring-primary/40 motion-reduce:transition-none"
                 >
-                  {/* Card Header: Reordering, visibility, deletion */}
+                  {/* Card Header: identify, reorder, and control the column */}
                   <div className="flex flex-row items-center justify-between border-b border-border bg-muted/30 px-3 py-2.5 rounded-t-xl gap-2 w-full overflow-hidden">
                     <div className="flex items-center gap-1.5 min-w-0 flex-1">
                       <Badge variant="secondary" className="font-mono text-xs font-semibold px-2 py-0.5 shrink-0">
@@ -288,16 +296,6 @@ export default function ColumnsConfigurator({
                     </div>
                   
                   <div className="flex items-center gap-1 shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      {...getHandleProps(col.id, visualIndex)}
-                      className="h-7 w-7 cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
-                    >
-                      <GripVertical className="size-4" />
-                    </Button>
-                    
-                    {/* Visibility toggle (Eye) */}
                     <Button
                       variant="outline"
                       size="icon-sm"
@@ -312,8 +310,6 @@ export default function ColumnsConfigurator({
                     >
                       {col.isActive !== false ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
                     </Button>
-                    
-                    {/* Delete column */}
                     <Button
                       variant="destructive"
                       size="icon-sm"
@@ -324,6 +320,21 @@ export default function ColumnsConfigurator({
                     >
                       <Trash2 className="size-3.5 text-destructive" />
                     </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      {...getHandleProps(col.id, visualIndex)}
+                      className="h-7 w-7 cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
+                    >
+                      <GripVertical className="size-4" />
+                    </Button>
+                    <MoveToPositionDialog
+                      currentPosition={visualIndex + 1}
+                      itemCount={displayColumns.length}
+                      itemLabel={`column C${idx + 1}`}
+                      onMove={reorderColumns}
+                      triggerSize="icon-xs"
+                    />
                   </div>
                 </div>
 
