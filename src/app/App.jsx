@@ -1489,7 +1489,9 @@ export default function App({ onLogout = null }) {
         </aside>
       )}
 
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <main
+        className={`flex min-w-0 flex-1 flex-col ${visibleActiveTab === "setup" ? "overflow-visible" : "overflow-hidden"}`}
+      >
         <header className="border-b bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/80 print:hidden">
           <div className={`flex flex-col gap-3 px-3 py-3`}>
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -1790,7 +1792,7 @@ export default function App({ onLogout = null }) {
         </header>
 
         <div
-          className={`min-h-0 flex-1 overflow-hidden ${mainContentPaddingClass}`}
+          className={`min-h-0 flex-1 ${visibleActiveTab === "setup" ? "overflow-visible" : "overflow-hidden"} ${mainContentPaddingClass}`}
         >
           <div className={`${mainContentWidthClass} ${activeTabMotionClass}`}>
             {(masterDataError || reportCatalogError) && reports.length === 0 ? (
@@ -1881,6 +1883,7 @@ export default function App({ onLogout = null }) {
                         masterData={masterData}
                         reportOptions={reportOptions}
                         activeReport={setupReport}
+                        savedReport={activeReport}
                         activeCategories={activeCategories}
                         updateActiveReport={updateActiveReport}
                         isDirty={isSetupDirty}
