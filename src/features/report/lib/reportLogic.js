@@ -276,6 +276,35 @@ export const cloneReport = (report, newId = createReportId(), owner = report.own
   return cloned;
 };
 
+const getReportIdTimestamp = (report) => {
+  const matches = String(report?.id || '').match(/\d{13}/g) || [];
+  return matches.reduce((latest, value) => Math.max(latest, Number(value)), -1);
+};
+
+export const getLatestCreatedReport = (reports) => {
+  if (!Array.isArray(reports) || reports.length === 0) return null;
+
+  const timestampedReports = reports
+    .map((report) => ({ report, timestamp: getReportIdTimestamp(report) }))
+    .filter(({ timestamp }) => timestamp >= 0);
+  if (timestampedReports.length > 0) {
+    return timestampedReports.reduce((latest, candidate) => (
+      candidate.timestamp > latest.timestamp ? candidate : latest
+    )).report;
+  }
+
+  const persistedReports = reports
+    .map((report) => ({ report, sourceReportId: Number(report?.sourceReportId) }))
+    .filter(({ sourceReportId }) => Number.isInteger(sourceReportId));
+  if (persistedReports.length > 0) {
+    return persistedReports.reduce((latest, candidate) => (
+      candidate.sourceReportId > latest.sourceReportId ? candidate : latest
+    )).report;
+  }
+
+  return reports.find((report) => report?.id === 'rep-carmen-pnl') || reports[0] || null;
+};
+
 export const findBrokenReferences = (report) => {
   const issues = [];
   if (!report) return issues;

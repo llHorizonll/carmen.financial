@@ -51,6 +51,12 @@ const toBooleanFlag = (value) => {
   return false;
 };
 
+const toOptionalInteger = (value) => (
+  value !== null && value !== undefined && String(value).trim() !== '' && Number.isInteger(Number(value))
+    ? Number(value)
+    : null
+);
+
 const getFlag = (source, names) =>
   names.some((name) => toBooleanFlag(source?.[name]));
 
@@ -405,6 +411,7 @@ export const adaptCarmenReportDefinition = (report) => {
     descriptionPosition: Number.isInteger(Number(report.descriptionPosition ?? report.DescriptionPosition))
       ? Number(report.descriptionPosition ?? report.DescriptionPosition)
       : 0,
+    sourceReportId: toOptionalInteger(report.sourceReportId ?? report.SourceReportId),
     columns: toArray(report.columns || report.Columns).map(normalizeReportColumn),
     rows: toArray(report.rows || report.Rows).map(normalizeReportRow),
     access,

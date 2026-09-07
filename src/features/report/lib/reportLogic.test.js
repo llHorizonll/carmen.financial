@@ -8,6 +8,7 @@ import {
   getIndentClass,
   createBlankReport,
   cloneReport,
+  getLatestCreatedReport,
   buildReportData,
   findBrokenReferences,
   findRowMappingConflicts,
@@ -126,6 +127,27 @@ describe('reportLogic helpers', () => {
     expect(blank.name).toBe('New Custom Report');
     expect(cloned.name).toBe('New Custom Report (Copy)');
     expect(blank.assignedUsers).toEqual(['admin']);
+  });
+
+  it('selects the latest created report for the initial view', () => {
+    const reports = [
+      { id: 'rep-carmen-pnl', sourceReportId: 1 },
+      { id: 'rep-excel-1788346691993-1', sourceReportId: 10 },
+      { id: 'rep-excel-1788346691993-2', sourceReportId: 11 },
+      { id: 'rep-1788346692993', sourceReportId: 12 },
+    ];
+
+    expect(getLatestCreatedReport(reports)?.id).toBe('rep-1788346692993');
+    expect(getLatestCreatedReport(reports.slice(0, 3))?.id).toBe('rep-excel-1788346691993-1');
+    expect(getLatestCreatedReport([
+      { id: 'legacy-a', sourceReportId: 8 },
+      { id: 'legacy-b', sourceReportId: 12 },
+    ])?.id).toBe('legacy-b');
+    expect(getLatestCreatedReport([
+      { id: 'rep-carmen-pnl' },
+      { id: 'legacy-without-creation-metadata' },
+    ])?.id).toBe('rep-carmen-pnl');
+    expect(getLatestCreatedReport([])).toBeNull();
   });
 
   it('detects unresolved references before save', () => {

@@ -107,6 +107,7 @@ import {
   buildExcelHtml,
   findBrokenReferences,
   findRowMappingConflicts,
+  getLatestCreatedReport,
 } from "../features/report/lib/reportLogic.js";
 import { mergeCarmenMasterData } from "../features/report/lib/reportAdapters.js";
 import {
@@ -413,7 +414,7 @@ export default function App({ onLogout = null }) {
     return readStoredReports() || getDefaultReports();
   });
   const [reportsLoaded, setReportsLoaded] = useState(!apiConfigured);
-  const [currentReportId, setCurrentReportId] = useState("rep-carmen-pnl");
+  const [currentReportId, setCurrentReportId] = useState(null);
   const [setupDraft, setSetupDraft] = useState(null);
   const [isSetupDirty, setIsSetupDirty] = useState(false);
   const [editingRow, setEditingRow] = useState(null);
@@ -426,13 +427,17 @@ export default function App({ onLogout = null }) {
     () => getAccessibleReports(reports, currentUser),
     [reports, currentUser],
   );
+  const latestAccessibleReport = useMemo(
+    () => getLatestCreatedReport(accessibleReports),
+    [accessibleReports],
+  );
   const resolvedCurrentReportId = useMemo(() => {
     if (accessibleReports.some((report) => report.id === currentReportId)) {
       return currentReportId;
     }
 
-    return accessibleReports[0]?.id || null;
-  }, [accessibleReports, currentReportId]);
+    return latestAccessibleReport?.id || null;
+  }, [accessibleReports, currentReportId, latestAccessibleReport]);
   const reportUsers = useMemo(() => {
     const users = Array.isArray(masterData.users) ? masterData.users : [];
     if (!currentUser?.id) return users;
@@ -443,7 +448,7 @@ export default function App({ onLogout = null }) {
 
   const activeReport =
     accessibleReports.find((r) => r.id === resolvedCurrentReportId) ||
-    accessibleReports[0] ||
+    latestAccessibleReport ||
     null;
   const setupReport = setupDraft?.id === activeReport?.id ? setupDraft : activeReport;
 
@@ -883,9 +888,9 @@ export default function App({ onLogout = null }) {
   const handleDeleteReport = () => {
     confirmActionRef.current = async () => {
       const deletedReport = activeReport;
-      const newReports = reports.filter((r) => r.id !== currentReportId);
+      const newReports = reports.filter((r) => r.id !== deletedReport?.id);
       setReports(newReports);
-      setCurrentReportId(newReports.length > 0 ? newReports[0].id : null);
+      setCurrentReportId(getLatestCreatedReport(newReports)?.id || null);
       if (apiConfigured && deletedReport?.id) {
         try {
           await deleteCarmenReport(deletedReport.id);
@@ -1252,7 +1257,7 @@ export default function App({ onLogout = null }) {
                 (report) => report.id === resolvedCurrentReportId,
               )
             ) {
-              setCurrentReportId(selectedReports[0]?.id || null);
+              setCurrentReportId(getLatestCreatedReport(selectedReports)?.id || null);
             }
             if (!canSetupFinancialReports(selectedUser)) {
               setActiveTab("report");

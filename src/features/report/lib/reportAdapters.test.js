@@ -191,6 +191,7 @@ describe('reportAdapters', () => {
       reportType: 'Daily',
       day: '28',
       theme: 'green',
+      sourceReportId: 42,
       columns: [
         { id: 'C1', label: 'Actual', type: 'AC' },
         { id: 'C2', label: 'Budget', type: 'BUD' },
@@ -216,6 +217,7 @@ describe('reportAdapters', () => {
       owner: 'admin',
       reportType: 'Daily',
       day: '28',
+      sourceReportId: 42,
       columns: [
         expect.objectContaining({ id: 'C1', type: 'AC' }),
         expect.objectContaining({ id: 'C2', type: 'BC' }),
