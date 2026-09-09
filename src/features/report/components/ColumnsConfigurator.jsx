@@ -179,6 +179,13 @@ export default function ColumnsConfigurator({
           { id: "Q2", label: "Q2" },
           { id: "Q3", label: "Q3" },
           { id: "Q4", label: "Q4" },
+          ...Array.from({ length: 12 }, (_, index) => {
+            const period = String(index + 1).padStart(2, "0");
+            return {
+              id: `P${period}`,
+              label: `P${period} (Period ${index + 1})`,
+            };
+          }),
         ];
   const hasIncompatibleColumns = activeReport.columns.some(
     (col) =>

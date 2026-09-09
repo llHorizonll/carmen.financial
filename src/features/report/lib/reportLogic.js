@@ -118,6 +118,10 @@ export const resolveTime = (col, appliedYear, appliedPeriod, periodOptions = [])
   let p = parseInt(appliedPeriod, 10);
   let months = [];
   const periodSequence = getPeriodSequence(appliedPeriod, periodOptions);
+  const explicitPeriodMatch = String(col.periodMode || '').match(/^P(0?[1-9]|1[0-2])$/i);
+  const explicitPeriod = explicitPeriodMatch
+    ? Number.parseInt(explicitPeriodMatch[1], 10)
+    : Number.parseInt(col.periodMode, 10);
 
   if (periodSequence) {
     const { currentPosition, totalPositions } = periodSequence;
@@ -135,7 +139,7 @@ export const resolveTime = (col, appliedYear, appliedPeriod, periodOptions = [])
     else if (col.periodMode === 'Q3') months = Array.from({ length: Math.min(3, Math.max(0, totalPositions - 6)) }, (_, i) => i + 7);
     else if (col.periodMode === 'Q4') months = Array.from({ length: Math.min(3, Math.max(0, totalPositions - 9)) }, (_, i) => i + 10);
     else if (col.periodMode === 'FY') months = Array.from({ length: totalPositions }, (_, i) => i + 1);
-    else months = [parseInt(col.periodMode) || currentPosition];
+    else months = [explicitPeriod || currentPosition];
 
     if (col.yearMode === '-1') y -= 1;
     else if (col.yearMode === '+1') y += 1;
@@ -167,7 +171,7 @@ export const resolveTime = (col, appliedYear, appliedPeriod, periodOptions = [])
   else if (col.periodMode === 'Q3') months = [7, 8, 9];
   else if (col.periodMode === 'Q4') months = [10, 11, 12];
   else if (col.periodMode === 'FY') months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-  else months = [parseInt(col.periodMode) || globalMonths[0]];
+  else months = [explicitPeriod || globalMonths[0]];
 
   if (col.yearMode === '-1') y -= 1;
   else if (col.yearMode === '+1') y += 1;

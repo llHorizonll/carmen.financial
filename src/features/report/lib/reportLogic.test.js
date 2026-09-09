@@ -58,6 +58,14 @@ describe('reportLogic helpers', () => {
       effYear: '2025',
       targetMonths: [new Date().getMonth() === 0 ? 12 : new Date().getMonth()],
     });
+    expect(resolveTime({ yearMode: 'current', periodMode: 'P01' }, '2025', '8')).toEqual({
+      effYear: '2025',
+      targetMonths: [1],
+    });
+    expect(resolveTime({ yearMode: 'current', periodMode: 'P12' }, '2025', '8')).toEqual({
+      effYear: '2025',
+      targetMonths: [12],
+    });
   });
 
   it('resolves periods using fiscal metadata order when provided', () => {
@@ -75,6 +83,11 @@ describe('reportLogic helpers', () => {
     expect(resolveTime({ yearMode: 'current', periodMode: '-1' }, '2026', '10', periods)).toEqual({
       effYear: '2025',
       targetMonths: [3],
+    });
+
+    expect(resolveTime({ yearMode: 'current', periodMode: 'P02' }, '2026', '20', periods)).toEqual({
+      effYear: '2026',
+      targetMonths: [2],
     });
   });
 

@@ -109,6 +109,34 @@ describe('ColumnsConfigurator', () => {
     expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'periodMode', '-1');
   });
 
+  it('offers every specific period from P01 through P12', async () => {
+    const handleUpdateCol = vi.fn();
+
+    render(
+      <ColumnsConfigurator
+        activeReport={{
+          reportType: 'Monthly',
+          columns: [
+            { id: 'C1', label: 'Actual', isActive: true, type: 'AC', yearMode: 'current', periodMode: 'current' },
+          ],
+        }}
+        handleAddCol={vi.fn()}
+        handleUpdateCol={handleUpdateCol}
+        updateActiveReport={vi.fn()}
+        handleDeleteCol={vi.fn()}
+      />,
+    );
+
+    const card = screen.getByTestId('column-card');
+    fireEvent.click(within(card).getAllByRole('combobox')[4]);
+
+    expect(await screen.findByRole('option', { name: 'P01 (Period 1)' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'P12 (Period 12)' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('option', { name: 'P07 (Period 7)' }));
+    expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'periodMode', 'P07');
+  });
+
   it('changes an existing column logic type immediately', async () => {
     const updateActiveReport = vi.fn();
 
