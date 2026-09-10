@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildReportDefinitionPayload, cloneCarmenReport, deleteCarmenReport, fetchCarmenAccountGroups, fetchCarmenDepartmentGroups, fetchCarmenDimensions, fetchCarmenReport, fetchCarmenReportOptions, fetchCarmenUsers, loginWithCarmenCredentials, saveCarmenReport, saveCarmenReports } from './reportApi.js';
+import { buildReportDefinitionPayload, cloneCarmenReport, createCarmenReport, deleteCarmenReport, fetchCarmenAccountGroups, fetchCarmenDepartmentGroups, fetchCarmenDimensions, fetchCarmenReport, fetchCarmenReportOptions, fetchCarmenUsers, loginWithCarmenCredentials, saveCarmenReport, saveCarmenReports } from './reportApi.js';
 import { clearCarmenApiFailure, getCarmenApiFailure } from '../../../lib/carmenApiFailure.js';
 
 const createSessionStorageMock = (session = {}) => {
@@ -415,6 +415,40 @@ describe('reportApi helpers', () => {
 
     expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining('/api/reports/rep-1'), expect.objectContaining({
       method: 'PUT',
+    }));
+  });
+
+  it('creates reports with POST even when the local draft has a provisional id', async () => {
+    createSessionStorageMock({
+      accessToken: 'token',
+      username: 'owner-1',
+      user: { id: 'owner-1' },
+      businessUnit: { tenant: 'tenant-1' },
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 'rep-server-created' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const createdReport = await createCarmenReport({
+      id: 'rep-client-provisional',
+      name: 'New Custom Report',
+      companyName: 'Carmen Hotel',
+      rows: [],
+      columns: [],
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/reports?useTenant=tenant-1'), expect.objectContaining({
+      method: 'POST',
+    }));
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual(expect.objectContaining({
+      id: '',
+      name: 'New Custom Report',
+    }));
+    expect(createdReport).toEqual(expect.objectContaining({
+      id: 'rep-server-created',
+      name: 'New Custom Report',
     }));
   });
 

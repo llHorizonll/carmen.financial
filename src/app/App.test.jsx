@@ -13,6 +13,7 @@ const reportApiMocks = vi.hoisted(() => ({
   fetchCarmenReportOptions: vi.fn(),
   fetchCarmenReports: vi.fn(),
   fetchCarmenReportData: vi.fn(),
+  createCarmenReport: vi.fn(),
   saveCarmenReport: vi.fn(() => Promise.resolve()),
   saveCarmenReports: vi.fn(() => Promise.resolve()),
   cloneCarmenReport: vi.fn(),
@@ -107,6 +108,7 @@ describe('App shell', () => {
     reportApiMocks.fetchCarmenReportData.mockReset();
     reportApiMocks.fetchCarmenReportData.mockResolvedValue({ actualRows: [], budgetRows: [] });
 
+    reportApiMocks.createCarmenReport.mockReset();
     reportApiMocks.saveCarmenReport.mockClear();
     reportApiMocks.saveCarmenReports.mockClear();
     reportApiMocks.cloneCarmenReport.mockClear();
@@ -168,6 +170,68 @@ describe('App shell', () => {
     ).toBeInTheDocument();
   });
 
+  it('creates a blank report from the admin sidebar and opens setup', async () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'New Report' }));
+
+    expect(
+      await screen.findByDisplayValue('New Custom Report', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'SETUP' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
+  it('creates an API-backed blank report before selecting its server id', async () => {
+    const apiUser = {
+      id: 'finance-owner',
+      name: 'Finance Owner',
+      role: 'Admin',
+      permissions: { financialReport: { view: true, setup: true, add: true } },
+    };
+    const createdReport = {
+      id: 'rep-server-created',
+      name: 'New Custom Report',
+      companyName: 'Carmen Hotel & Resorts',
+      category: ['ALL'],
+      assignedUsers: ['finance-owner'],
+      isActive: true,
+      periodFormat: 'standard',
+      reportType: 'Monthly',
+      owner: 'finance-owner',
+      theme: 'blue',
+      descriptionPosition: 0,
+      columns: [],
+      rows: [],
+    };
+    reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
+    reportApiMocks.getStoredCarmenSession.mockReturnValue({ user: apiUser });
+    reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
+      currentUser: apiUser,
+      users: [apiUser],
+      companyProfile: { name: 'Carmen Hotel & Resorts' },
+      depts: [],
+      accCodes: [],
+      periods: [],
+      budgetRevisions: [],
+      groups: {},
+    });
+    reportApiMocks.createCarmenReport.mockResolvedValue(createdReport);
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'New Report' }));
+
+    await waitFor(() => {
+      expect(reportApiMocks.createCarmenReport).toHaveBeenCalledTimes(1);
+    });
+    expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalled();
+    expect(
+      await screen.findByDisplayValue('New Custom Report', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
+  });
+
   it('updates the setup theme badge when the report theme changes', async () => {
     render(<App />);
 
@@ -198,6 +262,7 @@ describe('App shell', () => {
 
       expect(screen.getByRole('button', { name: 'VIEW' })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'SETUP' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'New Report' })).not.toBeInTheDocument();
     } finally {
       INITIAL_MASTER_DATA.users = originalUsers;
     }

@@ -563,6 +563,35 @@ export const buildReportDefinitionPayload = (report) => ({
       : [],
 });
 
+export const createCarmenReport = async (report) => {
+  if (!isCarmenApiConfigured()) {
+    throw new Error('Carmen API session is not configured.');
+  }
+
+  const payload = buildReportDefinitionPayload({ ...report, id: '' });
+  const response = await requestCarmenJson('/api/reports', {
+    method: 'POST',
+    body: payload,
+  });
+  const wrappedReport = response?.report
+    || response?.Report
+    || response?.data
+    || response?.Data
+    || response;
+  const createdReport = Array.isArray(wrappedReport) ? wrappedReport[0] : wrappedReport;
+  const createdId = String(createdReport?.id || createdReport?.Id || '').trim();
+
+  if (!createdId) {
+    throw new Error('Carmen API did not return an id for the new report.');
+  }
+
+  return adaptCarmenReportDefinition({
+    ...payload,
+    ...(createdReport && typeof createdReport === 'object' ? createdReport : {}),
+    id: createdId,
+  });
+};
+
 export const saveCarmenReport = async (report) => {
   if (!isCarmenApiConfigured()) {
     throw new Error('Carmen API session is not configured.');

@@ -9,6 +9,7 @@ import React, {
 import {
   FileText,
   FileSpreadsheet,
+  FilePlus,
   Menu,
   BarChart3,
   ShieldCheck,
@@ -81,6 +82,7 @@ import usePersistentState from "../hooks/usePersistentState.js";
 import { getDefaultReports } from "../features/report/data/defaultReports.js";
 import { createBlankReport } from "../features/report/data/reportTemplates.js";
 import {
+  createCarmenReport,
   cloneCarmenReport,
   deleteCarmenReport,
   fetchCarmenDimensions,
@@ -860,24 +862,30 @@ export default function App({ onLogout = null }) {
   };
 
   const handleCreateBlankReport = async () => {
-    const newId = "rep-" + Date.now();
+    const newId = apiConfigured ? "" : "rep-" + Date.now();
     const newReport = createBlankReport(
       masterData.companyProfile.name,
       reportUsers.map((u) => u.id),
       newId,
       currentUser?.id || "",
     );
-    setReports((prev) => [...prev, newReport]);
-    setCurrentReportId(newId);
     if (apiConfigured) {
       try {
-        await saveCarmenReport(newReport);
+        const createdReport = await createCarmenReport(newReport);
+        setReports((prev) => [...prev, createdReport]);
+        setCurrentReportId(createdReport.id);
+        return createdReport;
       } catch (error) {
         setReportCatalogError(
           error.message || "Unable to save new report to Carmen API.",
         );
+        return null;
       }
     }
+
+    setReports((prev) => [...prev, newReport]);
+    setCurrentReportId(newId);
+    return newReport;
   };
 
   const handleImportExcelTemplates = async (importedReports) => {
@@ -1186,6 +1194,26 @@ export default function App({ onLogout = null }) {
     openReport();
   };
 
+  const handleCreateReportFromSidebar = () => {
+    const createAndOpenReport = async () => {
+      const createdReport = await handleCreateBlankReport();
+      if (!createdReport) return;
+      applyTabChange("setup");
+      setIsSidebarOpen(false);
+    };
+
+    if (visibleActiveTab === "setup" && isSetupDirty) {
+      confirmActionRef.current = () => {
+        discardSetupChanges();
+        void createAndOpenReport();
+      };
+      setConfirmAction({ msg: "Discard all unsaved report settings?" });
+      return;
+    }
+
+    void createAndOpenReport();
+  };
+
   useEffect(() => {
     if (!isSetupDirty) return undefined;
     const warnBeforeUnload = (event) => {
@@ -1302,8 +1330,21 @@ export default function App({ onLogout = null }) {
               </Button>
             </>
           )}
-          <div className="mb-2 px-1 text-xs font-medium text-muted-foreground">
-            Reports
+          <div className="mb-2 flex items-center justify-between gap-2 px-1">
+            <div className="text-xs font-medium text-muted-foreground">
+              Reports
+            </div>
+            {canSetupReports && (
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                onClick={handleCreateReportFromSidebar}
+              >
+                <FilePlus />
+                New Report
+              </Button>
+            )}
           </div>
           <div className="flex flex-col gap-1">
             {accessibleReports.map((report) => (
