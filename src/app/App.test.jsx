@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import App, { getSetupWarnings } from './App.jsx';
 import { getAccessibleReports } from './reportAccess.js';
+import { getDefaultReports } from '../features/report/data/defaultReports.js';
 import { INITIAL_MASTER_DATA } from '../features/report/lib/reportLogic.js';
 
 const reportApiMocks = vi.hoisted(() => ({
@@ -184,7 +185,7 @@ describe('App shell', () => {
     );
   });
 
-  it('creates an API-backed blank report before selecting its server id', async () => {
+  it('creates an API-backed blank report with a client-generated id', async () => {
     const apiUser = {
       id: 'finance-owner',
       name: 'Finance Owner',
@@ -226,10 +227,39 @@ describe('App shell', () => {
     await waitFor(() => {
       expect(reportApiMocks.createCarmenReport).toHaveBeenCalledTimes(1);
     });
+    expect(reportApiMocks.createCarmenReport).toHaveBeenCalledWith(
+      expect.objectContaining({ id: expect.stringMatching(/^rep-\d+$/) }),
+    );
     expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalled();
     expect(
       await screen.findByDisplayValue('New Custom Report', {}, { timeout: 5000 }),
     ).toBeInTheDocument();
+  });
+
+  it('leaves the report workspace blank after deleting the selected report', async () => {
+    const [baseReport] = getDefaultReports();
+    const selectedReport = {
+      ...structuredClone(baseReport),
+      id: 'rep-9999999999999',
+      name: 'Report to delete',
+    };
+    localStorageStore.carmen_bi_reports_config_v5_23 = JSON.stringify([
+      baseReport,
+      selectedReport,
+    ]);
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
+    await screen.findByText('Report Details', {}, { timeout: 5000 });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Report Details')).not.toBeInTheDocument();
+    });
+    expect(screen.queryByRole('button', { name: 'Report to delete' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: baseReport.name })).not.toHaveAttribute('aria-current');
   });
 
   it('updates the setup theme badge when the report theme changes', async () => {

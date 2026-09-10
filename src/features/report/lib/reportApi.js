@@ -568,7 +568,10 @@ export const createCarmenReport = async (report) => {
     throw new Error('Carmen API session is not configured.');
   }
 
-  const payload = buildReportDefinitionPayload({ ...report, id: '' });
+  const payload = buildReportDefinitionPayload(report);
+  if (!payload.id) {
+    throw new Error('Report id is required before creating a report.');
+  }
   const response = await requestCarmenJson('/api/reports', {
     method: 'POST',
     body: payload,
@@ -579,7 +582,7 @@ export const createCarmenReport = async (report) => {
     || response?.Data
     || response;
   const createdReport = Array.isArray(wrappedReport) ? wrappedReport[0] : wrappedReport;
-  const createdId = String(createdReport?.id || createdReport?.Id || '').trim();
+  const createdId = String(createdReport?.id || createdReport?.Id || payload.id).trim();
 
   if (!createdId) {
     throw new Error('Carmen API did not return an id for the new report.');

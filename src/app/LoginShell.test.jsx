@@ -1,5 +1,7 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { hydrateRoot } from 'react-dom/client';
+import { renderToString } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import LoginShell from './LoginShell.jsx';
 import { clearCarmenApiFailure, reportCarmenApiFailure } from '../lib/carmenApiFailure.js';
@@ -32,6 +34,36 @@ describe('LoginShell', () => {
     expect(await screen.findByText('Carmen BI Login')).toBeInTheDocument();
     expect(await screen.findByText('Report viewing')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
+  });
+
+  it('hydrates prerendered login markup without mismatch when a session is stored', async () => {
+    const preload = render(<LoginShell />);
+    await screen.findByRole('button', { name: 'Sign in' });
+    preload.unmount();
+
+    window.localStorage.setItem('carmen_access_token', 'token');
+    const browserWindow = window;
+    vi.stubGlobal('window', undefined);
+    const serverMarkup = renderToString(<LoginShell />);
+    vi.stubGlobal('window', browserWindow);
+
+    const container = document.createElement('div');
+    container.innerHTML = serverMarkup;
+    document.body.appendChild(container);
+    const recoverableErrors = [];
+    let root;
+
+    await act(async () => {
+      root = hydrateRoot(container, <LoginShell />, {
+        onRecoverableError: (error) => recoverableErrors.push(error),
+      });
+    });
+
+    await waitFor(() => expect(screen.getByText('Report workspace')).toBeInTheDocument());
+    expect(recoverableErrors).toEqual([]);
+
+    await act(async () => root.unmount());
+    container.remove();
   });
 
   it('selects the business unit marked as default after loading tenants', async () => {

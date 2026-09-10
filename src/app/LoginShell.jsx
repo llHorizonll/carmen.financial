@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useState, useSyncExternalStore } from 'react';
+import React, { Suspense, lazy, useSyncExternalStore } from 'react';
 import { BarChart3 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge.jsx';
 import { Skeleton } from '@/components/ui/skeleton.jsx';
@@ -24,9 +24,22 @@ const App = lazy(() => import('./App.jsx'));
 const LoginForm = lazy(() => import('./LoginForm.jsx'));
 const LoginFeatures = lazy(() => import('./LoginFeatures.jsx'));
 const hasSession = () => Boolean(getStoredCarmenSession()?.accessToken);
+const subscribeToCarmenSession = (listener) => {
+  if (typeof window === 'undefined') return () => {};
+  window.addEventListener('storage', listener);
+  window.addEventListener('carmen-session-changed', listener);
+  return () => {
+    window.removeEventListener('storage', listener);
+    window.removeEventListener('carmen-session-changed', listener);
+  };
+};
 
 export default function LoginShell() {
-  const [isAuthenticated, setIsAuthenticated] = useState(hasSession);
+  const isAuthenticated = useSyncExternalStore(
+    subscribeToCarmenSession,
+    hasSession,
+    () => false,
+  );
   const apiFailure = useSyncExternalStore(
     subscribeToCarmenApiFailure,
     getCarmenApiFailure,
@@ -54,23 +67,12 @@ export default function LoginShell() {
     return () => window.removeEventListener('carmen-api-error', handleApiError);
   }, [isAuthenticated]);
 
-  React.useEffect(() => {
-    const syncSessionState = () => setIsAuthenticated(hasSession());
-    window.addEventListener('storage', syncSessionState);
-    window.addEventListener('carmen-session-changed', syncSessionState);
-    return () => {
-      window.removeEventListener('storage', syncSessionState);
-      window.removeEventListener('carmen-session-changed', syncSessionState);
-    };
-  }, []);
-
   const content = isAuthenticated && !apiFailure ? (
       <Suspense fallback={<div className="flex min-h-dvh items-center justify-center bg-background text-sm text-muted-foreground">Loading Carmen Financial BI...</div>}>
         <App
           onLogout={() => {
             clearCarmenSession();
             clearCarmenApiFailure();
-            setIsAuthenticated(false);
           }}
         />
       </Suspense>
@@ -93,7 +95,6 @@ export default function LoginShell() {
           <Suspense fallback={<Skeleton className="order-1 h-148 w-full max-w-md self-center rounded-xl lg:order-2" aria-label="Loading sign-in form" />}>
             <LoginForm onAuthenticated={() => {
               clearCarmenApiFailure();
-              setIsAuthenticated(true);
             }} />
           </Suspense>
         </div>

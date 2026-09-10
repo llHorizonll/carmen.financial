@@ -310,6 +310,7 @@ const mergeReportOptions = (defaults, loaded) => ({
 });
 
 const REPORT_STORAGE_KEY = "carmen_bi_reports_config_v5_23";
+const NO_REPORT_SELECTED = "__no_report_selected__";
 const NEUTRAL_BUTTON_CLASS =
   "border-border bg-background text-foreground hover:bg-muted transition-colors duration-150";
 const NEUTRAL_FILTER_TRIGGER_CLASS =
@@ -438,6 +439,7 @@ export default function App({ onLogout = null }) {
     [accessibleReports],
   );
   const resolvedCurrentReportId = useMemo(() => {
+    if (currentReportId === NO_REPORT_SELECTED) return null;
     if (accessibleReports.some((report) => report.id === currentReportId)) {
       return currentReportId;
     }
@@ -452,10 +454,9 @@ export default function App({ onLogout = null }) {
     return [currentUser, ...users];
   }, [masterData.users, currentUser]);
 
-  const activeReport =
-    accessibleReports.find((r) => r.id === resolvedCurrentReportId) ||
-    latestAccessibleReport ||
-    null;
+  const activeReport = resolvedCurrentReportId
+    ? accessibleReports.find((report) => report.id === resolvedCurrentReportId) || null
+    : null;
   const setupReport = setupDraft?.id === activeReport?.id ? setupDraft : activeReport;
 
   useEffect(() => {
@@ -862,7 +863,7 @@ export default function App({ onLogout = null }) {
   };
 
   const handleCreateBlankReport = async () => {
-    const newId = apiConfigured ? "" : "rep-" + Date.now();
+    const newId = "rep-" + Date.now();
     const newReport = createBlankReport(
       masterData.companyProfile.name,
       reportUsers.map((u) => u.id),
@@ -902,7 +903,7 @@ export default function App({ onLogout = null }) {
       const deletedReport = activeReport;
       const newReports = reports.filter((r) => r.id !== deletedReport?.id);
       setReports(newReports);
-      setCurrentReportId(getLatestCreatedReport(newReports)?.id || null);
+      setCurrentReportId(NO_REPORT_SELECTED);
       if (apiConfigured && deletedReport?.id) {
         try {
           await deleteCarmenReport(deletedReport.id);
@@ -1355,6 +1356,9 @@ export default function App({ onLogout = null }) {
                 }
                 className="w-full justify-start gap-2"
                 onClick={() => handleReportChange(report.id)}
+                aria-current={
+                  resolvedCurrentReportId === report.id ? "page" : undefined
+                }
               >
                 <FileText className="size-4" />
                 <span className="truncate">{report.name}</span>

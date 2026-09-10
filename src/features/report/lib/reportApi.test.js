@@ -418,7 +418,7 @@ describe('reportApi helpers', () => {
     }));
   });
 
-  it('creates reports with POST even when the local draft has a provisional id', async () => {
+  it('creates reports with the client-generated id required by the API', async () => {
     createSessionStorageMock({
       accessToken: 'token',
       username: 'owner-1',
@@ -427,7 +427,7 @@ describe('reportApi helpers', () => {
     });
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ id: 'rep-server-created' }),
+      json: async () => true,
     });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -443,11 +443,11 @@ describe('reportApi helpers', () => {
       method: 'POST',
     }));
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual(expect.objectContaining({
-      id: '',
+      id: 'rep-client-provisional',
       name: 'New Custom Report',
     }));
     expect(createdReport).toEqual(expect.objectContaining({
-      id: 'rep-server-created',
+      id: 'rep-client-provisional',
       name: 'New Custom Report',
     }));
   });
