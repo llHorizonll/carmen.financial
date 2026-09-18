@@ -8,10 +8,17 @@ import React, {
 } from "react";
 import {
   FileText,
-  FileSpreadsheet,
   FilePlus,
+  FileSpreadsheet,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
+  ChevronDown,
+  ChevronRight,
+  Check,
+  Monitor,
   BarChart3,
+  Building2,
   ShieldCheck,
   ZoomIn,
   ZoomOut,
@@ -46,6 +53,11 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet.jsx";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover.jsx";
 import {
   Select,
   SelectContent,
@@ -350,6 +362,7 @@ export default function App({ onLogout = null }) {
   const [activeTab, setActiveTab] = useState("report");
   const [tabMotionDirection, setTabMotionDirection] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [themeMode, setThemeMode] = useState(() => getStoredTheme());
   const [isPageTransitioning, setIsPageTransitioning] = useState(false);
   const [isSetupSaving, setIsSetupSaving] = useState(false);
@@ -1151,7 +1164,7 @@ export default function App({ onLogout = null }) {
       : visibleActiveTab === "report"
         ? "app-pane-enter-from-left"
         : "app-pane-enter-from-right";
-  const mainContentPaddingClass = "p-3";
+  const mainContentPaddingClass = visibleActiveTab === "setup" || visibleActiveTab === "import" ? "p-0" : "p-4";
   const mainContentWidthClass =
     visibleActiveTab === "setup" || visibleActiveTab === "import"
       ? "flex h-full w-full min-h-0 flex-col"
@@ -1245,6 +1258,17 @@ export default function App({ onLogout = null }) {
   }, [themeMode]);
 
   useEffect(() => {
+    if (themeMode !== "system") return undefined;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const syncSystemTheme = () => {
+      setStoredTheme("system");
+      applyShellTemplate(DEFAULT_SHELL_TEMPLATE, "system");
+    };
+    media.addEventListener("change", syncSystemTheme);
+    return () => media.removeEventListener("change", syncSystemTheme);
+  }, [themeMode]);
+
+  useEffect(() => {
     return () => {
       const timerId = pageTransitionTimerRef.current;
       if (timerId) {
@@ -1313,39 +1337,43 @@ export default function App({ onLogout = null }) {
 
       <ScrollArea className="flex-1">
         <div className="p-3">
-          {canSetupReports && (
-            <>
-              <div className="mb-2 px-1 text-xs font-medium text-muted-foreground">
-                Template tools
+                    {canSetupReports && (
+            <div className="mb-4 space-y-1.5">
+              <div className="px-1 text-xs font-medium text-muted-foreground">
+                Actions
               </div>
-              <Button
-                variant={visibleActiveTab === "import" ? "secondary" : "ghost"}
-                className="mb-4 w-full justify-start gap-2"
-                onClick={() => {
-                  handleTabChange("import");
-                  setIsSidebarOpen(false);
-                }}
-              >
-                <FileSpreadsheet className="size-4" />
-                <span className="truncate">Import Excel templates</span>
-              </Button>
-            </>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start gap-1.5 px-2 text-xs"
+                  onClick={handleCreateReportFromSidebar}
+                >
+                  <FilePlus className="size-3.5" />
+                  <span>New Report</span>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start gap-1.5 px-2 text-xs"
+                  onClick={() => {
+                    handleTabChange("import");
+                    setIsSidebarOpen(false);
+                  }}
+                >
+                  <FileSpreadsheet className="size-3.5" />
+                  <span>Import Excel</span>
+                </Button>
+              </div>
+            </div>
           )}
+
           <div className="mb-2 flex items-center justify-between gap-2 px-1">
             <div className="text-xs font-medium text-muted-foreground">
               Reports
             </div>
-            {canSetupReports && (
-              <Button
-                type="button"
-                variant="outline"
-                size="xs"
-                onClick={handleCreateReportFromSidebar}
-              >
-                <FilePlus />
-                New Report
-              </Button>
-            )}
           </div>
           <div className="flex flex-col gap-1">
             {accessibleReports.map((report) => (
@@ -1537,184 +1565,264 @@ export default function App({ onLogout = null }) {
             {sidebarPanel}
           </SheetContent>
         </Sheet>
-      ) : (
+      ) : !isSidebarCollapsed ? (
         <aside className="hidden w-80 flex-col border-r bg-background/95 lg:flex print:hidden">
           {sidebarPanel}
         </aside>
-      )}
+      ) : null}
 
       <main
         className={`flex min-w-0 flex-1 flex-col ${visibleActiveTab === "setup" ? "overflow-visible" : "overflow-hidden"}`}
       >
-        <header className="border-b bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/80 print:hidden">
-          <div className={`flex flex-col gap-3 px-3 py-3`}>
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                {isMobile && (
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => setIsSidebarOpen(true)}
-                  >
-                    <Menu />
-                    <span className="sr-only">Open navigation</span>
-                  </Button>
-                )}
+        <header className="w-full border-b border-border bg-card/95 backdrop-blur print:hidden">
+          <div className="flex flex-col gap-3 px-4 py-2.5 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+              {isMobile ? (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setIsSidebarOpen(true)}
+                  aria-label="Open navigation"
+                >
+                  <Menu className="size-4" />
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-sm"
+                  className="size-8 rounded-lg border-primary/30 text-primary hover:bg-primary/5"
+                  onClick={() => setIsSidebarCollapsed((collapsed) => !collapsed)}
+                  aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                  title={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                >
+                  {isSidebarCollapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+                </Button>
+              )}
 
-                <div className={MODE_SWITCH_CLASS}>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className={`h-8 px-4 ${visibleActiveTab === "report" ? ACTIVE_MODE_CLASS : INACTIVE_MODE_CLASS}`}
-                    onClick={() => handleTabChange("report")}
-                    aria-current={
-                      visibleActiveTab === "report" ? "page" : undefined
-                    }
-                  >
-                    VIEW
-                  </Button>
-                  {canSetupReports && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className={`h-8 px-4 ${visibleActiveTab === "setup" ? ACTIVE_MODE_CLASS : INACTIVE_MODE_CLASS}`}
-                      onClick={() => handleTabChange("setup")}
-                      aria-current={
-                        visibleActiveTab === "setup" ? "page" : undefined
-                      }
-                    >
-                      SETUP
-                    </Button>
-                  )}
-                  {canSetupReports && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className={`h-8 px-4 ${visibleActiveTab === "import" ? ACTIVE_MODE_CLASS : INACTIVE_MODE_CLASS}`}
-                      onClick={() => handleTabChange("import")}
-                      aria-current={
-                        visibleActiveTab === "import" ? "page" : undefined
-                      }
-                    >
-                      IMPORT
-                    </Button>
-                  )}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  {visibleActiveTab === "setup" && (
-                    <Badge variant="secondary">Configuration</Badge>
-                  )}
-                  {visibleActiveTab === "import" && (
-                    <Badge variant="secondary">Excel template wizard</Badge>
-                  )}
-                  {isMasterDataLoading && (
-                    <Badge variant="outline">Syncing master data</Badge>
-                  )}
-                  {isReportCatalogLoading && (
-                    <Badge variant="outline">Loading catalog</Badge>
-                  )}
-                  {masterDataError && (
-                    <Badge
-                      variant="destructive"
-                      title={masterDataError}
-                      className="rounded-full border-destructive/30 bg-destructive/15 px-2.5 py-1 text-xs text-destructive"
-                    >
-                      Carmen API unavailable
-                    </Badge>
-                  )}
-                  {reportCatalogError && (
-                    <Badge
-                      variant="destructive"
-                      title={reportCatalogError}
-                      className="rounded-full border-destructive/30 bg-destructive/15 px-2.5 py-1 text-xs text-destructive"
-                    >
-                      Report catalog error
-                    </Badge>
-                  )}
-                </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">Financial BI</span>
+                <span>›</span>
+                <span className="truncate max-w-48 text-foreground/80">{activeReport?.name || "Report"}</span>
               </div>
 
-              <div className="flex w-full flex-col gap-2 xl:max-w-168 xl:items-end">
-                <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-                  {visibleActiveTab === "report" && reportViewMode !== "dashboard" && (
-                    <div className="flex items-center gap-1 rounded-lg border border-border bg-card/80 px-2 py-1 shadow-sm">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-xs"
-                        className="shrink-0 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-                        onClick={() =>
-                          setTableZoom((current) => Math.max(50, current - 10))
-                        }
-                        aria-label="Zoom out"
-                        title="Zoom out"
-                      >
-                        <ZoomOut className="size-3.5" />
-                      </Button>
-                      <Slider
-                        value={[tableZoom]}
-                        min={50}
-                        max={150}
-                        step={10}
-                        onValueChange={(value) => setTableZoom(value[0] || 100)}
-                        className="w-20 min-w-20"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-xs"
-                        className="shrink-0 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-                        onClick={() =>
-                          setTableZoom((current) => Math.min(150, current + 10))
-                        }
-                        aria-label="Zoom in"
-                        title="Zoom in"
-                      >
-                        <ZoomIn className="size-3.5" />
-                      </Button>
-                      <span className="w-10 text-right text-xs font-medium tabular-nums text-foreground/70">
-                        {tableZoom}%
-                      </span>
-                    </div>
-                  )}
+              <div className={MODE_SWITCH_CLASS}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className={`h-8 px-4 ${visibleActiveTab === "report" ? ACTIVE_MODE_CLASS : INACTIVE_MODE_CLASS}`}
+                  onClick={() => handleTabChange("report")}
+                  aria-current={
+                    visibleActiveTab === "report" ? "page" : undefined
+                  }
+                >
+                  VIEW
+                </Button>
+                {canSetupReports && (
                   <Button
                     type="button"
-                    variant="outline"
-                    size="sm"
-                    className={NEUTRAL_BUTTON_CLASS}
-                    onClick={() => {
-                      setThemeMode(themeMode === "light" ? "dark" : "light");
-                    }}
-                    aria-pressed={themeMode === "dark"}
-                    aria-label={
-                      themeMode === "light"
-                        ? "Switch to dark mode"
-                        : "Switch to light mode"
+                    variant="ghost"
+                    className={`h-8 px-4 ${visibleActiveTab === "setup" ? ACTIVE_MODE_CLASS : INACTIVE_MODE_CLASS}`}
+                    onClick={() => handleTabChange("setup")}
+                    aria-current={
+                      visibleActiveTab === "setup" ? "page" : undefined
                     }
                   >
-                    {themeMode === "light" ? <MoonStar /> : <SunMedium />}
-                    <span>
-                      {themeMode === "light" ? "Dark mode" : "Light mode"}
-                    </span>
+                    SETUP
                   </Button>
-                  {typeof onLogout === "function" && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className={NEUTRAL_BUTTON_CLASS}
-                      onClick={onLogout}
-                    >
-                      <LogOut />
-                      Logout
-                    </Button>
-                  )}
-                </div>
+                )}
+              </div>
+
+              <div className="hidden flex-wrap items-center gap-2 sm:flex">
+                {visibleActiveTab === "setup" && (
+                  <Badge variant="secondary">Configuration</Badge>
+                )}
+                {visibleActiveTab === "import" && (
+                  <Badge variant="secondary">Excel template wizard</Badge>
+                )}
+                {isMasterDataLoading && (
+                  <Badge variant="outline">Syncing master data</Badge>
+                )}
+                {isReportCatalogLoading && (
+                  <Badge variant="outline">Loading catalog</Badge>
+                )}
+                {masterDataError && (
+                  <Badge
+                    variant="destructive"
+                    title={masterDataError}
+                    className="rounded-full border-destructive/30 bg-destructive/15 px-2.5 py-1 text-xs text-destructive"
+                  >
+                    Carmen API unavailable
+                  </Badge>
+                )}
+                {reportCatalogError && (
+                  <Badge
+                    variant="destructive"
+                    title={reportCatalogError}
+                    className="rounded-full border-destructive/30 bg-destructive/15 px-2.5 py-1 text-xs text-destructive"
+                  >
+                    Report catalog error
+                  </Badge>
+                )}
               </div>
             </div>
 
-            {visibleActiveTab === "report" && (
-              <Card className="border border-border bg-card/95 shadow-none ring-0">
+            <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:justify-end xl:w-auto">
+              {visibleActiveTab === "report" && reportViewMode !== "dashboard" && (
+                <div className="flex items-center gap-1 rounded-lg border border-border bg-card/80 px-2 py-1 shadow-sm">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="shrink-0 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                    onClick={() =>
+                      setTableZoom((current) => Math.max(50, current - 10))
+                    }
+                    aria-label="Zoom out"
+                    title="Zoom out"
+                  >
+                    <ZoomOut className="size-3.5" />
+                  </Button>
+                  <Slider
+                    value={[tableZoom]}
+                    min={50}
+                    max={150}
+                    step={10}
+                    onValueChange={(value) => setTableZoom(value[0] || 100)}
+                    className="w-20 min-w-20"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="shrink-0 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                    onClick={() =>
+                      setTableZoom((current) => Math.min(150, current + 10))
+                    }
+                    aria-label="Zoom in"
+                    title="Zoom in"
+                  >
+                    <ZoomIn className="size-3.5" />
+                  </Button>
+                  <span className="w-10 text-right text-xs font-medium tabular-nums text-foreground/70">
+                    {tableZoom}%
+                  </span>
+                </div>
+              )}
+
+              {/* BU badge as in image */}
+              <div className="hidden items-center gap-1.5 rounded-full border border-border bg-muted/40 py-1 pr-2.5 pl-1.5 text-xs font-medium text-foreground md:flex">
+                <span className="flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                  <Building2 className="size-3.5" />
+                </span>
+                <span className="truncate max-w-32">{storedCarmenSession?.businessUnit?.tenant || currentUser?.tenant || "CARMEN-FIFO"}</span>
+              </div>
+
+              {/* User profile dropdown button with Avatar as in image */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button type="button" variant="outline" className="h-10 gap-2.5 rounded-xl border-border bg-background px-3 hover:bg-muted">
+                    <div className="hidden flex-col text-right sm:flex">
+                      <span className="text-xs font-semibold leading-tight text-foreground max-w-36 truncate">
+                        {currentUser?.name || currentUser?.id || "User"}
+                      </span>
+                      <span className="text-[10px] leading-tight text-muted-foreground max-w-36 truncate">
+                        {currentUser?.role ? `${currentUser.role} Account` : "Rooms General Account"}
+                      </span>
+                    </div>
+                    <span className="relative flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                      {(currentUser?.avatarUrl || currentUser?.avatar || currentUser?.photoUrl) && (
+                        <img
+                          src={currentUser.avatarUrl || currentUser.avatar || currentUser.photoUrl}
+                          alt=""
+                          className="absolute inset-0 size-full object-cover"
+                          onError={(event) => { event.currentTarget.hidden = true; }}
+                        />
+                      )}
+                      {String(currentUser?.name || currentUser?.id || "TX")
+                        .split(/\s+/)
+                        .slice(0, 2)
+                        .map((part) => part[0])
+                        .join("")
+                        .toUpperCase()}
+                    </span>
+                    <ChevronDown className="size-3.5 text-muted-foreground" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-68 gap-1 p-2 shadow-lg">
+                  <div className="flex items-center gap-3 border-b px-3 py-2.5">
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
+                      {String(currentUser?.name || currentUser?.id || "TX")
+                        .split(/\s+/)
+                        .slice(0, 2)
+                        .map((part) => part[0])
+                        .join("")
+                        .toUpperCase()}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-foreground">{currentUser?.name || currentUser?.id || "User"}</p>
+                      <p className="truncate text-xs text-muted-foreground">{currentUser?.userName || currentUser?.id || "user"}@carmen.financial</p>
+                      <p className="truncate text-[11px] text-muted-foreground">{currentUser?.role ? `${currentUser.role} Account` : "Rooms General Account"}</p>
+                    </div>
+                  </div>
+
+                  <div className="px-2 pt-2 pb-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    Preferences
+                  </div>
+
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button type="button" variant="ghost" className="w-full justify-start text-xs font-normal">
+                        {themeMode === "dark" ? <MoonStar className="size-4" /> : themeMode === "system" ? <Monitor className="size-4" /> : <SunMedium className="size-4" />}
+                        Theme
+                        <ChevronRight className="ml-auto size-4" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent side="left" align="start" className="w-44 gap-1 p-2">
+                      {[
+                        ["light", "Light", SunMedium],
+                        ["dark", "Dark", MoonStar],
+                        ["system", "System", Monitor],
+                      ].map(([value, label, Icon]) => (
+                        <Button
+                          key={value}
+                          type="button"
+                          variant="ghost"
+                          className="w-full justify-start text-xs"
+                          onClick={() => setThemeMode(value)}
+                        >
+                          <Icon className="size-4" />
+                          {label}
+                          {themeMode === value && <Check className="ml-auto size-4" />}
+                        </Button>
+                      ))}
+                    </PopoverContent>
+                  </Popover>
+
+                  {typeof onLogout === "function" && (
+                    <>
+                      <div className="my-1 border-t border-border" />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="w-full justify-start text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        onClick={onLogout}
+                      >
+                        <LogOut className="size-4" />
+                        Log out
+                      </Button>
+                    </>
+                  )}
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+        </header>
+
+        {/* Filter bar: separated below topbar, shown in VIEW mode */}
+        {visibleActiveTab === "report" && (
+          <div className="px-4 pt-4 print:hidden">
+            <Card className="border border-border bg-card/95 shadow-none ring-0">
                 <CardContent className="p-3">
                   <div className="flex flex-col gap-2 xl:flex-row xl:items-end xl:justify-between">
                     <div className="grid gap-2 sm:grid-cols-2 sm:items-end md:grid-cols-[minmax(0,1.3fr)_96px_minmax(0,1.3fr)_104px_80px] xl:flex-none xl:grid-cols-[180px_110px_180px_120px_88px]">
@@ -1841,9 +1949,8 @@ export default function App({ onLogout = null }) {
                   </div>
                 </CardContent>
               </Card>
-            )}
           </div>
-        </header>
+        )}
 
         <div
           className={`min-h-0 flex-1 ${visibleActiveTab === "setup" ? "overflow-visible" : "overflow-hidden"} ${mainContentPaddingClass}`}
@@ -1945,6 +2052,7 @@ export default function App({ onLogout = null }) {
                         onSave={handleSaveSetup}
                         onCancel={handleCancelSetup}
                         onBusyTransition={triggerPageTransition}
+                        onOpenImport={() => handleTabChange("import")}
                         handleCloneReport={handleCloneReport}
                         handleCreateBlankReport={handleCreateBlankReport}
                         handleDeleteReport={handleDeleteReport}

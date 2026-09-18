@@ -1,5 +1,5 @@
 import React from "react";
-import { Eye, EyeOff, GripVertical, Percent, Trash2 } from "lucide-react";
+import { Eye, EyeOff, GripVertical, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button.jsx";
 import {
   Card,
@@ -248,8 +248,6 @@ export default function ColumnsConfigurator({
       itemLabel: (id) =>
         id === "__description__" ? "Description column" : `column ${id}`,
     });
-  const headerActionClassName = "w-full justify-center border shadow-none";
-
   return (
     <Card className="w-full max-w-full min-h-0 overflow-hidden border border-border bg-card/95 shadow-none ring-0 pt-0">
       <CardHeader className="border-b bg-card/95 px-4 py-4 sm:px-5">
@@ -263,33 +261,16 @@ export default function ColumnsConfigurator({
               moves.
             </CardDescription>
           </div>
-          <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[24rem]">
-            <Button
-              variant="outline"
-              size="sm"
-              className={headerActionClassName}
-              onClick={() => handleAddCol("data")}
-            >
-              + {logicTypeLabels.get("DATA") || "Data"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className={headerActionClassName}
-              onClick={() => handleAddCol("formula")}
-            >
-              + {logicTypeLabels.get("FORMULA") || "Formula"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className={headerActionClassName}
-              onClick={() => handleAddCol("percent")}
-            >
-              <Percent className="size-4" />
-              {logicTypeLabels.get("MIX") || "Mix %"}
-            </Button>
-          </div>
+          <Select value="" onValueChange={(value) => handleAddCol(value)}>
+            <SelectTrigger className="w-full sm:w-44" aria-label="Add column">
+              <SelectValue placeholder="Add Column" />
+            </SelectTrigger>
+            <SelectContent position="popper">
+              <SelectItem value="data">{logicTypeLabels.get("DATA") || "Data"}</SelectItem>
+              <SelectItem value="formula">{logicTypeLabels.get("FORMULA") || "Formula"}</SelectItem>
+              <SelectItem value="percent">{logicTypeLabels.get("MIX") || "Mix %"}</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </CardHeader>
 

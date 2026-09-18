@@ -453,25 +453,31 @@ const applyRootVariables = (variables) => {
 export const getStoredTheme = () => {
   if (typeof window === 'undefined' || !window.localStorage) return 'light';
   const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-  return stored === 'dark' ? 'dark' : 'light';
+  return ['light', 'dark', 'system'].includes(stored) ? stored : 'light';
 };
+
+export const resolveTheme = (theme) => (
+  theme === 'system' && typeof window !== 'undefined'
+    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    : theme === 'dark' ? 'dark' : 'light'
+);
 
 const applyTheme = (theme) => {
   if (typeof document === 'undefined') return;
-  document.documentElement.classList.toggle('dark', theme === 'dark');
+  document.documentElement.classList.toggle('dark', resolveTheme(theme) === 'dark');
 };
 
 export const applyShellTemplate = (templateId = DEFAULT_SHELL_TEMPLATE, themeMode = 'light') => {
   if (typeof document === 'undefined') return;
   const template = SHELL_TEMPLATE_PRESETS[templateId] || SHELL_TEMPLATE_PRESETS[DEFAULT_SHELL_TEMPLATE];
-  const mode = themeMode === 'dark' ? 'dark' : 'light';
+  const mode = resolveTheme(themeMode);
   document.documentElement.dataset.shellTemplate = template.id;
   applyRootVariables(template[mode]);
 };
 
 export const setStoredTheme = (theme) => {
   if (typeof window === 'undefined' || !window.localStorage) return;
-  window.localStorage.setItem(THEME_STORAGE_KEY, theme === 'dark' ? 'dark' : 'light');
+  window.localStorage.setItem(THEME_STORAGE_KEY, ['light', 'dark', 'system'].includes(theme) ? theme : 'light');
   applyTheme(theme);
 };
 

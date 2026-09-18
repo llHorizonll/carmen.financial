@@ -93,6 +93,14 @@ export const adaptCarmenLoginUser = (loginResponse) => {
   );
   const userName = loginResponse?.UserName || loginResponse?.userName || '';
   const displayName = loginResponse?.Name || loginResponse?.FullName || userName || 'Carmen User';
+  const avatarUrl = loginResponse?.AvatarUrl
+    || loginResponse?.ProfileImageUrl
+    || loginResponse?.ImageUrl
+    || loginResponse?.PhotoUrl
+    || loginResponse?.Picture
+    || loginResponse?.Avatar
+    || loginResponse?.Image
+    || '';
 
   return {
     id: String(loginResponse?.UserId || loginResponse?.userId || userName || 'carmen-user'),
@@ -100,6 +108,7 @@ export const adaptCarmenLoginUser = (loginResponse) => {
     role: financialReport.setup ? 'Admin' : 'User',
     source: 'carmen-api',
     userName,
+    avatarUrl,
     tenant: loginResponse?.Tenant || loginResponse?.tenant || '',
     permissions: {
       financialReport,

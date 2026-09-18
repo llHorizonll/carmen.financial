@@ -1,12 +1,7 @@
 import React from 'react';
 import {
   Copy,
-  Eye,
-  EyeOff,
-  FilePlus,
-  Palette,
   Settings2,
-  ShieldCheck,
   Trash2,
   UserCheck,
 } from 'lucide-react';
@@ -22,7 +17,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select.jsx';
-import { Separator } from '@/components/ui/separator.jsx';
 
 const EMPTY_REPORT_OPTIONS = {};
 const REPORT_TYPE_OPTIONS = [
@@ -45,19 +39,14 @@ const PERIOD_FORMAT_LABELS = {
 function ReportActionButtons({
   friendlyButtonClassName,
   handleCloneReport,
-  handleCreateBlankReport,
   handleDeleteReport,
   setIsAccessModalOpen,
 }) {
   return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+    <div className="flex flex-wrap gap-2">
       <Button type="button" variant="outline" className={`w-full sm:w-auto ${friendlyButtonClassName}`} onClick={handleCloneReport}>
         <Copy />
         Clone
-      </Button>
-      <Button type="button" variant="outline" className={`w-full sm:w-auto ${friendlyButtonClassName}`} onClick={handleCreateBlankReport}>
-        <FilePlus />
-        Blank
       </Button>
       <Button type="button" variant="outline" className={`w-full sm:w-auto ${friendlyButtonClassName}`} onClick={() => setIsAccessModalOpen(true)}>
         <UserCheck />
@@ -76,66 +65,6 @@ function ReportActionButtons({
   );
 }
 
-function ReportAccessSummary({
-  activeReport,
-  friendlyButtonClassName,
-  masterData,
-  setIsAccessModalOpen,
-}) {
-  const assignedUsersLabel = activeReport.assignedUsers.length > 0
-    ? activeReport.assignedUsers.map((uid) => masterData?.users?.find((user) => user.id === uid)?.name || uid).join(', ')
-    : 'None';
-
-  return (
-    <div className="space-y-3 rounded-xl border border-border bg-muted/10 p-4">
-      <div className="space-y-1">
-        <div className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
-          <ShieldCheck className="size-4 text-muted-foreground" />
-          Access Summary
-        </div>
-        <p className="text-sm text-muted-foreground">Assigned users and visibility control.</p>
-      </div>
-      <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[auto_minmax(0,1fr)]">
-        <Button type="button" variant="outline" className={`shrink-0 ${friendlyButtonClassName}`} onClick={() => setIsAccessModalOpen(true)}>
-          Manage access
-        </Button>
-        <p
-          aria-label="Assigned users"
-          className="min-h-8 min-w-0 break-words rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm leading-5 text-foreground dark:bg-input/30"
-          title={assignedUsersLabel}
-        >
-          {assignedUsersLabel}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function ReportStatusCard({ activeReport, updateActiveReport }) {
-  return (
-    <div className="space-y-3 rounded-xl border border-border bg-muted/10 p-4">
-      <div className="space-y-1">
-        <div className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
-          <Eye className="size-4 text-muted-foreground" />
-          Status
-        </div>
-        <p className="text-sm text-muted-foreground">Toggle whether this report is visible.</p>
-      </div>
-      <Button
-        variant="outline"
-        className={`w-full justify-center border ${activeReport.isActive !== false
-          ? 'border-border bg-muted text-foreground hover:bg-muted/80'
-          : 'border-border bg-background text-muted-foreground hover:bg-muted'
-        }`}
-        onClick={() => updateActiveReport({ isActive: activeReport.isActive === false ? true : false })}
-      >
-        {activeReport.isActive !== false ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
-        {activeReport.isActive !== false ? 'Active' : 'Inactive'}
-      </Button>
-    </div>
-  );
-}
-
 export default function ReportDetailsPanel({
   activeReport,
   activeCategories,
@@ -143,18 +72,10 @@ export default function ReportDetailsPanel({
   reportOptions = EMPTY_REPORT_OPTIONS,
   updateActiveReport,
   handleCloneReport,
-  handleCreateBlankReport,
   handleDeleteReport,
   setIsAccessModalOpen,
   onBusyTransition,
 }) {
-  const themeOptions = reportOptions.themes?.length > 0
-    ? reportOptions.themes
-    : [
-        { id: 'blue', label: 'Classic Blue' },
-        { id: 'green', label: 'Emerald Green' },
-        { id: 'gray', label: 'Slate Gray' },
-      ];
   const periodFormatOptions = (reportOptions.periodFormats?.length > 0
     ? reportOptions.periodFormats
     : [
@@ -186,12 +107,12 @@ export default function ReportDetailsPanel({
 
   return (
     <Card className="border border-border shadow-none ring-0">
-      <CardHeader className="border-b pb-5">
-        <CardTitle className="flex items-center gap-2 text-base font-semibold tracking-tight text-foreground">
-          <Settings2 className="size-4 text-muted-foreground" />
-          Report Details
-        </CardTitle>
-        <CardDescription className="text-sm text-muted-foreground">Configure the report, its access, and display labels.</CardDescription>
+      <CardHeader className="flex flex-col gap-3 border-b pb-5 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <CardTitle className="flex items-center gap-2 text-xl font-semibold text-balance text-foreground"><Settings2 className="size-5 text-muted-foreground" />{activeReport.name}</CardTitle>
+          <CardDescription className="mt-1 text-sm text-pretty text-muted-foreground"><span className="font-medium text-foreground">Report Details</span> and display labels.</CardDescription>
+        </div>
+        <ReportActionButtons friendlyButtonClassName={friendlyButtonClassName} handleCloneReport={handleCloneReport} handleDeleteReport={handleDeleteReport} setIsAccessModalOpen={setIsAccessModalOpen} />
       </CardHeader>
 
       <CardContent className="space-y-5 pt-4">
@@ -207,30 +128,6 @@ export default function ReportDetailsPanel({
               onChange={(e) => updateActiveReport({ companyName: e.target.value })}
               placeholder="Auto mode"
             />
-          </div>
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2 text-foreground">
-              <Palette className="size-4 text-muted-foreground" />
-              Report Theme
-            </Label>
-            <Select
-              value={activeReport.theme || 'blue'}
-              onValueChange={(value) => {
-                onBusyTransition?.();
-                updateActiveReport({ theme: value });
-              }}
-            >
-              <SelectTrigger className="h-9 w-full">
-                <SelectValue placeholder="Select theme" />
-              </SelectTrigger>
-              <SelectContent position="popper">
-                {themeOptions.map((option) => (
-                  <SelectItem key={option.id} value={option.id}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
           <div className="space-y-2">
             <Label className="text-foreground">Auto Period Format</Label>
@@ -352,28 +249,6 @@ export default function ReportDetailsPanel({
           </div>
         </div>
 
-        <Separator />
-
-        <ReportActionButtons
-          friendlyButtonClassName={friendlyButtonClassName}
-          handleCloneReport={handleCloneReport}
-          handleCreateBlankReport={handleCreateBlankReport}
-          handleDeleteReport={handleDeleteReport}
-          setIsAccessModalOpen={setIsAccessModalOpen}
-        />
-
-        <div className="grid gap-3 lg:grid-cols-2">
-          <ReportAccessSummary
-            activeReport={activeReport}
-            friendlyButtonClassName={friendlyButtonClassName}
-            masterData={masterData}
-            setIsAccessModalOpen={setIsAccessModalOpen}
-          />
-          <ReportStatusCard
-            activeReport={activeReport}
-            updateActiveReport={updateActiveReport}
-          />
-        </div>
       </CardContent>
     </Card>
   );

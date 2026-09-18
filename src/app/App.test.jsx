@@ -136,7 +136,6 @@ describe('App shell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
 
-    await waitFor(() => expect(screen.getByText(/Configuration Mode/i)).toBeInTheDocument(), { timeout: 5000 });
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument(), { timeout: 5000 });
   });
 
@@ -159,9 +158,7 @@ describe('App shell', () => {
   it('opens the Excel template wizard as a separate admin page', async () => {
     render(<App />);
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Import Excel templates' }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Import Excel' }));
 
     expect(
       await screen.findByRole('heading', { name: 'Excel template import' }),
@@ -262,19 +259,13 @@ describe('App shell', () => {
     expect(screen.getByRole('button', { name: baseReport.name })).not.toHaveAttribute('aria-current');
   });
 
-  it('updates the setup theme badge when the report theme changes', async () => {
+  it('does not show report color theme controls in setup', async () => {
     render(<App />);
 
     fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
 
-    const themeLabel = await screen.findByText('Report Theme', {}, { timeout: 5000 });
-    const themeSelect = themeLabel.closest('div')?.querySelector('[role="combobox"]');
-    expect(themeSelect).toBeTruthy();
-
-    fireEvent.click(themeSelect);
-    fireEvent.click(await screen.findByRole('option', { name: 'Emerald Green' }));
-
-    await waitFor(() => expect(screen.getByText(/Emerald Green theme/i)).toBeInTheDocument());
+    await screen.findByText('Report Details', {}, { timeout: 5000 });
+    expect(screen.queryByText('Report Theme')).not.toBeInTheDocument();
   });
 
   it('hides the setup tab when the role changes to a non-admin user', () => {
@@ -1214,7 +1205,7 @@ describe('App shell', () => {
     fireEvent.click(generalManagerLabel);
 
     await waitFor(() => expect(screen.getByText('Balance Sheet')).toBeInTheDocument());
-    expect(screen.getByText(/Admin User, General Manager/i)).toBeInTheDocument();
+    expect(generalManagerLabel).toHaveAttribute('aria-pressed', 'true');
     expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Manage Report Access' })).not.toBeInTheDocument());
@@ -1502,12 +1493,7 @@ describe('App shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument());
 
-    const themeSelect = screen.getAllByRole('combobox').find((select) =>
-      select.textContent?.includes('Classic Blue')
-    );
-    expect(themeSelect).toBeTruthy();
-    fireEvent.click(themeSelect);
-    expect(await screen.findByRole('option', { name: 'Amber Theme' })).toBeInTheDocument();
+    expect(screen.queryByText('Report Theme')).not.toBeInTheDocument();
 
     expect(screen.getByText('Columns Configurator')).toBeInTheDocument();
   });

@@ -21,7 +21,6 @@ describe('ReportDetailsPanel', () => {
           customDateLabel: '',
           customPeriodLabel: '',
           category: ['I'],
-          assignedUsers: ['admin'],
           isActive: true,
         }}
         activeCategories={['I']}
@@ -40,19 +39,12 @@ describe('ReportDetailsPanel', () => {
     expect(updateActiveReport).toHaveBeenCalledWith({ name: 'P&L Summary' });
 
     fireEvent.click(screen.getAllByRole('combobox')[0]);
-    fireEvent.click(await screen.findByRole('option', { name: /Emerald Green/i }));
-    expect(updateActiveReport).toHaveBeenCalledWith({ theme: 'green' });
-
-    fireEvent.click(screen.getAllByRole('combobox')[1]);
     fireEvent.click(await screen.findByRole('option', { name: /Short Month \+ YYYY/i }));
     expect(updateActiveReport).toHaveBeenCalledWith({ periodFormat: 'short' });
     expect(screen.getByPlaceholderText('admin')).toHaveAttribute('readonly');
 
     fireEvent.click(screen.getByRole('button', { name: /Clone/i }));
     expect(handleCloneReport).toHaveBeenCalledTimes(1);
-
-    fireEvent.click(screen.getByRole('button', { name: /Blank/i }));
-    expect(handleCreateBlankReport).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('button', { name: /Clone/i }).className).toMatch(/bg-stone|border-stone|text-stone|bg-muted|border-border|text-muted/);
 
     fireEvent.click(screen.getByRole('button', { name: 'Access' }));
@@ -61,12 +53,5 @@ describe('ReportDetailsPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /Delete/i }));
     expect(handleDeleteReport).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Manage access' }));
-    expect(setIsAccessModalOpen).toHaveBeenCalledWith(true);
-
-    const assignedUsers = screen.getByLabelText('Assigned users');
-    expect(assignedUsers).toHaveTextContent('Admin User');
-    expect(assignedUsers).toHaveClass('min-h-8', 'break-words');
-    expect(assignedUsers).not.toHaveClass('h-8');
   });
 });

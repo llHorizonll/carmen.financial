@@ -70,15 +70,16 @@ describe('ColumnsConfigurator', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '+ Data' }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'Add column' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Data' }));
     expect(handleAddCol).toHaveBeenCalledWith('data');
 
-    fireEvent.click(screen.getByRole('button', { name: '+ Formula' }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'Add column' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Formula' }));
     expect(handleAddCol).toHaveBeenCalledWith('formula');
-    expect(screen.getByRole('button', { name: '+ Data' }).className).toMatch(/bg-stone|border-stone|text-stone|bg-muted|border-border|text-muted|bg-blue|border-blue|text-blue/);
-    expect(screen.getByRole('button', { name: '+ Formula' }).className).toMatch(/bg-stone|border-stone|text-stone|bg-muted|border-border|text-muted|bg-purple|border-purple|text-purple/);
 
-    fireEvent.click(screen.getByRole('button', { name: /Mix %/i }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'Add column' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Mix %' }));
     expect(handleAddCol).toHaveBeenCalledWith('percent');
 
     const labelInput = screen.getByDisplayValue('Actual');
