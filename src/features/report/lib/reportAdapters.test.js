@@ -14,6 +14,18 @@ import {
 } from './reportAdapters.js';
 
 describe('reportAdapters', () => {
+  it('keeps the report concurrency version from the API', () => {
+    expect(adaptCarmenReportDefinition({
+      Id: 'rep-1',
+      Name: 'Report',
+      LastModified: '2026-09-21T10:00:00',
+      Rows: [],
+      Columns: [],
+    })).toEqual(expect.objectContaining({
+      lastModified: '2026-09-21T10:00:00',
+    }));
+  });
+
   it('normalizes Carmen company, department, and account fields', () => {
     expect(adaptCarmenCompany({ HotelName: 'Carmen Hotel' })).toEqual({ name: 'Carmen Hotel' });
 

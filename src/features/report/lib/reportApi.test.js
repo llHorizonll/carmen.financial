@@ -474,6 +474,24 @@ describe('reportApi helpers', () => {
     })).rejects.toThrow(/Unknown column 'DescriptionPosition'/i);
   });
 
+  it('includes the server version when saving an existing report', async () => {
+    createSessionStorageMock({ accessToken: 'token', businessUnit: { tenant: 'tenant-1' } });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, text: async () => '' });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await saveCarmenReport({
+      id: 'rep-versioned',
+      name: 'Versioned report',
+      lastModified: '2026-09-21T10:00:00',
+      rows: [],
+      columns: [],
+    });
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual(expect.objectContaining({
+      lastModified: '2026-09-21T10:00:00',
+    }));
+  });
+
   it('classifies offline fetch failures and publishes a global API error event', async () => {
     const storage = createSessionStorageMock({
       accessToken: 'token',

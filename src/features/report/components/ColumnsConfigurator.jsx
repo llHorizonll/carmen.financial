@@ -100,6 +100,7 @@ export default function ColumnsConfigurator({
   handleUpdateCol,
   updateActiveReport,
   handleDeleteCol,
+  setConfirmAction,
 }) {
   const columnsCountRef = React.useRef(activeReport.columns.length);
 
@@ -419,7 +420,14 @@ export default function ColumnsConfigurator({
                         className="h-7 w-7 border-destructive/30 bg-destructive/10 text-destructive hover:border-destructive/40 hover:bg-destructive/20"
                         aria-label={`Delete column ${col.id}`}
                         title={`Delete column ${col.id}`}
-                        onClick={() => handleDeleteCol(col.id)}
+                        onClick={() =>
+                          setConfirmAction({
+                            title: `Delete column ${col.id}?`,
+                            msg: `This permanently removes “${col.label || col.id}” and updates affected column references.`,
+                            actionLabel: "Delete column",
+                            onConfirm: () => handleDeleteCol(col.id),
+                          })
+                        }
                       >
                         <Trash2 className="size-3.5 text-destructive" />
                       </Button>

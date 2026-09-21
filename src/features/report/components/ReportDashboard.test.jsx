@@ -13,21 +13,23 @@ const defaultProps = {
 };
 
 describe('ReportDashboard', () => {
-  it('uses configured cash flow rows and exposes an icon-only view switcher', () => {
+  it('summarizes detail rows and exposes an icon-only view switcher', () => {
     const onViewModeChange = vi.fn();
     render(
       <ReportDashboard
         {...defaultProps}
         onViewModeChange={onViewModeChange}
         reportData={[
-          { id: 'r1', desc: 'Total cash inflow', isTotal: true, results: { C1: 500 } },
-          { id: 'r2', desc: 'Total cash outflow', isTotal: true, results: { C1: -200 } },
-          { id: 'r3', desc: 'Net cash flow', isTotal: true, results: { C1: 300 } },
+          { id: 'r1', desc: 'Room revenue', results: { C1: 500 } },
+          { id: 'r2', desc: 'Operating expense', results: { C1: -200 } },
+          { id: 'r3', desc: 'Reported total', isTotal: true, results: { C1: 300 } },
         ]}
       />,
     );
 
-    expect(screen.getByText('Uses configured cash flow rows from this report.')).toBeInTheDocument();
+    expect(screen.getByText('Calculated from active detail rows. Header and total rows are excluded.')).toBeInTheDocument();
+    expect(screen.getByText('Top contributors')).toBeInTheDocument();
+    expect(screen.getByText('1. Room revenue')).toBeInTheDocument();
     expect(screen.getAllByText('500.00').length).toBeGreaterThan(0);
     expect(screen.getAllByText('(200.00)').length).toBeGreaterThan(0);
     expect(screen.getAllByText('300.00').length).toBeGreaterThan(0);
@@ -41,7 +43,7 @@ describe('ReportDashboard', () => {
     expect(onViewModeChange).toHaveBeenCalledWith('table');
   });
 
-  it('derives cash flow from positive and negative detail rows when cash rows are absent', () => {
+  it('summarizes positive and negative detail rows without assigning report semantics', () => {
     render(
       <ReportDashboard
         {...defaultProps}
@@ -58,7 +60,9 @@ describe('ReportDashboard', () => {
       />,
     );
 
-    expect(screen.getByText('Derived from positive and negative detail rows.')).toBeInTheDocument();
+    expect(screen.getByText('Positive total')).toBeInTheDocument();
+    expect(screen.getByText('Negative total')).toBeInTheDocument();
+    expect(screen.getAllByText('Net result').length).toBeGreaterThan(0);
     expect(screen.getAllByText('1,250.00').length).toBeGreaterThan(0);
     expect(screen.getAllByText('(250.00)').length).toBeGreaterThan(0);
     expect(screen.getAllByText('1,000.00').length).toBeGreaterThan(0);

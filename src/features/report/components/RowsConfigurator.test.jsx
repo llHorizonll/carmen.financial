@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import RowsConfigurator from './RowsConfigurator.jsx';
 
@@ -63,17 +63,17 @@ describe('RowsConfigurator', () => {
     expect(screen.getByRole('columnheader', { name: 'Type' }).className).toMatch(/w-32/);
     expect(screen.getByRole('columnheader', { name: 'Description' }).className).toMatch(/w-48/);
 
-    fireEvent.click(screen.getByRole('button', { name: '+ Add Data Row' }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'Add row' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Data' }));
     expect(handleAddRow).toHaveBeenCalledWith('data');
-    expect(screen.getByRole('button', { name: '+ Add Data Row' })).toHaveClass('border', 'shadow-none');
 
-    fireEvent.click(screen.getByRole('button', { name: '+ Add Header Row' }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'Add row' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Header' }));
     expect(handleAddRow).toHaveBeenCalledWith('header');
-    expect(screen.getByRole('button', { name: '+ Add Header Row' })).toHaveClass('border', 'shadow-none');
 
-    fireEvent.click(screen.getByRole('button', { name: '+ Add Formula Row' }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'Add row' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Formula' }));
     expect(handleAddRow).toHaveBeenCalledWith('formula');
-    expect(screen.getByRole('button', { name: '+ Add Formula Row' })).toHaveClass('border', 'shadow-none');
 
     const revenueInput = screen.getByDisplayValue('Revenue');
     fireEvent.change(revenueInput, { target: { value: 'Room Revenue' } });
@@ -88,7 +88,10 @@ describe('RowsConfigurator', () => {
 
     fireEvent.click(within(revenueRow).getByRole('button', { name: 'Delete row r1' }));
     expect(setConfirmAction).toHaveBeenCalledWith(
-      expect.objectContaining({ msg: 'Delete Row?' })
+      expect.objectContaining({
+        title: 'Delete row r1?',
+        actionLabel: 'Delete row',
+      })
     );
 
     const dataTransfer = {
@@ -111,7 +114,7 @@ describe('RowsConfigurator', () => {
     );
 
     fireEvent.click(within(revenueRow).getAllByRole('combobox')[1]);
-    fireEvent.click(await screen.findByText('Lvl 2'));
+    fireEvent.click(await screen.findByText('Indent 2'));
     expect(handleUpdateRow).toHaveBeenCalledWith('r1', 'indent', 2);
 
     fireEvent.change(screen.getByDisplayValue('R2'), { target: { value: 'R3' } });
@@ -163,7 +166,6 @@ describe('RowsConfigurator', () => {
         handleAddRow={vi.fn()}
         handleUpdateRow={vi.fn()}
         handleUpdateRowMulti={vi.fn()}
-        handleBulkUpdateRows={vi.fn()}
         moveRow={vi.fn()}
         handleDeleteRow={vi.fn()}
         setEditingRow={vi.fn()}
@@ -187,87 +189,4 @@ describe('RowsConfigurator', () => {
     expect(screen.getByRole('columnheader', { name: 'Action' })).toHaveClass('sticky', 'right-0', 'w-32', 'min-w-32', 'max-w-32');
   });
 
-  it('bulk maps selected data rows, saves a preset, and supports undo', async () => {
-    const handleBulkUpdateRows = vi.fn();
-
-    render(
-      <RowsConfigurator
-        activeReport={{
-          rows: [
-            {
-              id: 'r1',
-              desc: 'Revenue',
-              isActive: true,
-              indent: 0,
-              isHeader: false,
-              isTotal: false,
-              percentBase: '',
-              formula: '',
-              dept: '101',
-              deptGroup: '',
-              groups: '',
-              accCodes: '4001',
-              groupLevel: 'L4',
-            },
-            {
-              id: 'r2',
-              desc: 'Expense',
-              indent: 0,
-              isHeader: false,
-              isTotal: false,
-              percentBase: '',
-              formula: '',
-              dept: '',
-              deptGroup: '',
-              groups: '',
-              accCodes: '',
-              groupLevel: 'L4',
-            },
-          ],
-        }}
-        masterData={{
-          depts: [{ id: '101', name: 'Rooms' }, { id: '202', name: 'Restaurant' }],
-          accCodes: [{ id: '4001', name: 'Room revenue' }, { id: '4101', name: 'Food revenue' }],
-          groups: { L4: [] },
-        }}
-        handleAddRow={vi.fn()}
-        handleUpdateRow={vi.fn()}
-        handleUpdateRowMulti={vi.fn()}
-        handleBulkUpdateRows={handleBulkUpdateRows}
-        moveRow={vi.fn()}
-        handleDeleteRow={vi.fn()}
-        setEditingRow={vi.fn()}
-        setConfirmAction={vi.fn()}
-      />
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: /Bulk Mapping/i }));
-    fireEvent.click(screen.getByLabelText('Select row 1: Revenue'));
-    fireEvent.click(screen.getByLabelText('Select row 2: Expense'));
-    expect(screen.getByText(/2 selected/)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /Map selected/i }));
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId('dropdown-bulk-departments'));
-    fireEvent.click(screen.getByTestId('check-bulk-departments-202'));
-    fireEvent.click(screen.getByTestId('dropdown-bulk-accounts'));
-    fireEvent.click(screen.getByTestId('check-bulk-accounts-4101'));
-
-    fireEvent.change(screen.getByLabelText('Save current selections'), { target: { value: 'F&B mapping' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(window.localStorage.getItem('carmen.mapping-presets.v1')).toContain('F&B mapping'));
-
-    fireEvent.click(screen.getByRole('button', { name: 'Apply to 2 rows' }));
-    expect(handleBulkUpdateRows).toHaveBeenCalledWith([
-      { id: 'r1', updates: { dept: '202', accCodes: '4101' } },
-      { id: 'r2', updates: { dept: '202', accCodes: '4101' } },
-    ]);
-
-    fireEvent.click(screen.getByRole('button', { name: /Undo bulk mapping/i }));
-    expect(handleBulkUpdateRows).toHaveBeenLastCalledWith([
-      { id: 'r1', updates: { dept: '101', accCodes: '4001' } },
-      { id: 'r2', updates: { dept: '', accCodes: '' } },
-    ]);
-  });
 });

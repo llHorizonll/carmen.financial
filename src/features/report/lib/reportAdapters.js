@@ -417,6 +417,7 @@ export const adaptCarmenReportDefinition = (report) => {
     reportType: report.reportType || report.ReportType || 'Monthly',
     day: report.day || report.Day || '',
     theme: report.theme || report.Theme || 'blue',
+    lastModified: report.lastModified || report.LastModified || null,
     descriptionPosition: Number.isInteger(Number(report.descriptionPosition ?? report.DescriptionPosition))
       ? Number(report.descriptionPosition ?? report.DescriptionPosition)
       : 0,

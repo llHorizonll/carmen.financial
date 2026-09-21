@@ -69,10 +69,18 @@ const createCarmenApiError = (message, details = {}) => {
   return error;
 };
 
-const fetchWithNetworkHandling = async (url, options, { path = '', affectsSession = false } = {}) => {
+const fetchWithNetworkHandling = async (url, options = {}, { path = '', affectsSession = false, timeoutMs = 30000 } = {}) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(url, options);
+    return await fetch(url, { ...options, signal: options.signal || controller.signal });
   } catch (cause) {
+    if (cause?.name === 'AbortError') {
+      throw createCarmenApiError(
+        'Carmen API request timed out. Please try again.',
+        { kind: 'timeout', path, cause, affectsSession: false },
+      );
+    }
     const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
     throw createCarmenApiError(
       isOffline
@@ -80,6 +88,8 @@ const fetchWithNetworkHandling = async (url, options, { path = '', affectsSessio
         : 'Unable to reach Carmen API. Check your network connection or contact the administrator.',
       { kind: isOffline ? 'offline' : 'network', path, cause, affectsSession },
     );
+  } finally {
+    clearTimeout(timeoutId);
   }
 };
 
@@ -327,7 +337,7 @@ const requestCarmenJson = async (path, options = {}) => {
         ...(options.headers || {}),
       },
       body: options.body ? JSON.stringify(options.body) : undefined,
-    }, { path, affectsSession: true });
+    }, { path, affectsSession: true, timeoutMs: options.timeoutMs });
 
     if (!response.ok) {
       await throwResponseError(response, {
@@ -527,6 +537,7 @@ export const buildReportDefinitionPayload = (report) => ({
   reportType: String(report?.reportType || 'Monthly').trim() || 'Monthly',
   day: String(report?.day || '').trim(),
   theme: String(report?.theme || 'blue').trim() || 'blue',
+  ...(report?.lastModified ? { lastModified: report.lastModified } : {}),
   descriptionPosition: Number.isInteger(Number(report?.descriptionPosition))
     ? Number(report.descriptionPosition)
     : 0,
@@ -734,6 +745,7 @@ export const fetchCarmenReportData = async ({ reportId = '', year, period, revis
   }
 
   const response = await requestCarmenJson('/api/report-data', {
+    timeoutMs: 120000,
     query: {
       reportId,
       year,

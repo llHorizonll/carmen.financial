@@ -4,13 +4,9 @@ import {
   Edit3,
   Eye,
   EyeOff,
-  Filter,
   GripVertical,
-  Layers3,
   Layout,
-  RotateCcw,
   Trash2,
-  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils.js";
 import { Button } from "@/components/ui/button.jsx";
@@ -21,7 +17,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card.jsx";
-import { Checkbox } from "@/components/ui/checkbox.jsx";
 import { Input } from "@/components/ui/input.jsx";
 import {
   Table,
@@ -44,19 +39,8 @@ import {
   findBrokenReferences,
   getRowMappingWarnings,
 } from "../lib/reportLogic.js";
-import usePersistentState from "../../../hooks/usePersistentState.js";
 import useDragReorder from "../hooks/useDragReorder.js";
-import BulkMappingDialog from "./BulkMappingDialog.jsx";
 import MoveToPositionDialog from "./MoveToPositionDialog.jsx";
-
-const MAPPING_PRESETS_STORAGE_KEY = "carmen.mapping-presets.v1";
-const EMPTY_DIMENSION_DEFINITIONS = [];
-
-const isDataRow = (row) => !row.isHeader && !row.isTotal;
-const isRowUnmapped = (row) =>
-  ![row.dept, row.deptGroup, row.accCodes, row.groups].some((value) =>
-    String(value || "").trim(),
-  );
 
 export default function RowsConfigurator({
   activeReport,
@@ -64,23 +48,11 @@ export default function RowsConfigurator({
   handleAddRow,
   handleUpdateRow,
   handleUpdateRowMulti,
-  handleBulkUpdateRows,
   moveRow,
   handleDeleteRow,
   setEditingRow,
   setConfirmAction,
-  dimensionDefinitions = EMPTY_DIMENSION_DEFINITIONS,
 }) {
-  const [bulkMode, setBulkMode] = React.useState(false);
-  const [selectedRowIds, setSelectedRowIds] = React.useState([]);
-  const [rowFilter, setRowFilter] = React.useState("all");
-  const [isBulkDialogOpen, setIsBulkDialogOpen] = React.useState(false);
-  const [undoBatch, setUndoBatch] = React.useState(null);
-  const [storedPresets, setStoredPresets] = usePersistentState(
-    MAPPING_PRESETS_STORAGE_KEY,
-    [],
-  );
-  const presets = Array.isArray(storedPresets) ? storedPresets : [];
   const brokenRowReferences = React.useMemo(
     () =>
       findBrokenReferences(activeReport).filter(
@@ -88,8 +60,6 @@ export default function RowsConfigurator({
       ),
     [activeReport],
   );
-  const headerActionClassName = "w-full justify-center border shadow-none";
-
   const rowsCountRef = React.useRef(activeReport.rows.length);
   const rowWarningsById = React.useMemo(() => {
     const warningContext = createRowMappingWarningContext(
@@ -117,65 +87,10 @@ export default function RowsConfigurator({
     });
     return result;
   }, [brokenRowReferences]);
-  const rowEntries = React.useMemo(
-    () =>
-      activeReport.rows
-        .map((row, originalIndex) => ({ row, originalIndex }))
-        .filter(({ row }) => {
-          if (rowFilter === "unmapped")
-            return isDataRow(row) && isRowUnmapped(row);
-          if (rowFilter === "warnings")
-            return (
-              isDataRow(row) && (rowWarningsById.get(row.id)?.length || 0) > 0
-            );
-          return true;
-        }),
-    [activeReport.rows, rowFilter, rowWarningsById],
-  );
-  const eligibleRowIds = React.useMemo(
-    () => new Set(activeReport.rows.filter(isDataRow).map((row) => row.id)),
-    [activeReport.rows],
-  );
-  const selectedIds = selectedRowIds.filter((id) => eligibleRowIds.has(id));
-  const visibleSelectableIds = rowEntries
-    .filter(({ row }) => isDataRow(row))
-    .map(({ row }) => row.id);
-  const selectedLookup = new Set(selectedIds);
-  const selectedVisibleCount = visibleSelectableIds.filter((id) =>
-    selectedLookup.has(id),
-  ).length;
-  const allVisibleSelected =
-    visibleSelectableIds.length > 0 &&
-    selectedVisibleCount === visibleSelectableIds.length;
-
-  const toggleRowSelection = (rowId, checked) => {
-    setSelectedRowIds((current) =>
-      checked
-        ? [...new Set([...current, rowId])]
-        : current.filter((id) => id !== rowId),
-    );
-  };
-
-  const toggleVisibleRows = (checked) => {
-    setSelectedRowIds((current) => {
-      if (checked) return [...new Set([...current, ...visibleSelectableIds])];
-      const visibleSet = new Set(visibleSelectableIds);
-      return current.filter((id) => !visibleSet.has(id));
-    });
-  };
-
-  const applyBulkMapping = ({ applyUpdates, undoUpdates }) => {
-    handleBulkUpdateRows(applyUpdates);
-    setUndoBatch({ updates: undoUpdates, count: applyUpdates.length });
-    setSelectedRowIds([]);
-    setIsBulkDialogOpen(false);
-  };
-
-  const undoBulkMapping = () => {
-    if (!undoBatch) return;
-    handleBulkUpdateRows(undoBatch.updates);
-    setUndoBatch(null);
-  };
+  const rowEntries = activeReport.rows.map((row, originalIndex) => ({
+    row,
+    originalIndex,
+  }));
   const reorderRows = React.useCallback(
     (fromIndex, toIndex) => {
       moveRow(fromIndex, toIndex);
@@ -224,45 +139,17 @@ export default function RowsConfigurator({
               moves.
             </CardDescription>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-            <Button
-              variant={bulkMode ? "secondary" : "outline"}
-              size="sm"
-              className={headerActionClassName}
-              aria-pressed={bulkMode}
-              onClick={() => {
-                setBulkMode((current) => !current);
-                setSelectedRowIds([]);
-                setRowFilter("all");
-              }}
-            >
-              <Layers3 />
-              Bulk Mapping
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className={headerActionClassName}
-              onClick={() => handleAddRow("data")}
-            >
-              + Add Data Row
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className={headerActionClassName}
-              onClick={() => handleAddRow("header")}
-            >
-              + Add Header Row
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className={headerActionClassName}
-              onClick={() => handleAddRow("formula")}
-            >
-              + Add Formula Row
-            </Button>
+          <div className="w-full sm:w-auto">
+            <Select value="" onValueChange={handleAddRow}>
+              <SelectTrigger className="w-full sm:w-44" aria-label="Add row">
+                <SelectValue placeholder="Add Row" />
+              </SelectTrigger>
+              <SelectContent position="popper">
+                <SelectItem value="data">Data</SelectItem>
+                <SelectItem value="header">Header</SelectItem>
+                <SelectItem value="formula">Formula</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </CardHeader>
@@ -278,94 +165,10 @@ export default function RowsConfigurator({
           </div>
         )}
 
-        {undoBatch && (
-          <section
-            className="flex flex-wrap items-center justify-between gap-2 border-b bg-emerald-500/10 px-4 py-2"
-            aria-live="polite"
-          >
-            <p className="text-sm tabular-nums text-foreground">
-              Mapping updated for {undoBatch.count} rows.
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={undoBulkMapping}
-            >
-              <RotateCcw />
-              Undo bulk mapping
-            </Button>
-          </section>
-        )}
-
-        {bulkMode && (
-          <section
-            className="flex flex-wrap items-center gap-2 border-b bg-muted/20 px-3 py-2"
-            aria-label="Bulk mapping toolbar"
-          >
-            <Filter
-              className="size-4 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <Select value={rowFilter} onValueChange={setRowFilter}>
-              <SelectTrigger className="w-44" aria-label="Filter report rows">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All rows</SelectItem>
-                <SelectItem value="unmapped">Unmapped data rows</SelectItem>
-                <SelectItem value="warnings">Rows with warnings</SelectItem>
-              </SelectContent>
-            </Select>
-            <p
-              className="mr-auto text-sm tabular-nums text-muted-foreground"
-              aria-live="polite"
-            >
-              {selectedIds.length} selected · {presets.length} presets
-            </p>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={selectedIds.length === 0}
-              onClick={() => setSelectedRowIds([])}
-            >
-              <X />
-              Clear selection
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              disabled={selectedIds.length === 0}
-              onClick={() => setIsBulkDialogOpen(true)}
-            >
-              <Layers3 />
-              Map selected
-            </Button>
-          </section>
-        )}
-
         <div className="overflow-auto">
           <Table className="min-w-[1000px] table-fixed [&_td]:px-1 [&_th]:px-1">
             <TableHeader className="sticky top-0 z-10 bg-muted/30">
               <TableRow>
-                {bulkMode && (
-                  <TableHead className="w-12 text-center">
-                    <Checkbox
-                      aria-label="Select all visible data rows"
-                      checked={
-                        allVisibleSelected
-                          ? true
-                          : selectedVisibleCount > 0
-                            ? "indeterminate"
-                            : false
-                      }
-                      onCheckedChange={(checked) =>
-                        toggleVisibleRows(checked === true)
-                      }
-                    />
-                  </TableHead>
-                )}
                 <TableHead className="w-32 text-center align-middle">
                   Type
                 </TableHead>
@@ -380,7 +183,7 @@ export default function RowsConfigurator({
                   % Base
                 </TableHead>
                 <TableHead className="w-96 min-w-96 max-w-96 whitespace-normal">
-                  Mapping Rules Setup
+                  Row mapping rules
                 </TableHead>
                 <TableHead className="sticky right-0 z-20 w-32 min-w-32 max-w-32 border-l bg-muted/95 text-center align-middle">
                   Action
@@ -417,22 +220,8 @@ export default function RowsConfigurator({
                       "row-configurator-row transition-[opacity,box-shadow,transform,background-color] duration-200 ease-out data-[dragging=true]:opacity-40 data-[drag-over=true]:bg-primary/5 data-[drag-over=true]:ring-2 data-[drag-over=true]:ring-inset data-[drag-over=true]:ring-primary/35 motion-reduce:transition-none",
                       isTotal && "bg-muted/30",
                       isHeader && "bg-muted/10",
-                      selectedLookup.has(row.id) && "bg-primary/5",
                     )}
                   >
-                    {bulkMode && (
-                      <TableCell className="px-2 py-2 text-center align-middle">
-                        {isDataRow(row) && (
-                          <Checkbox
-                            aria-label={`Select row ${idx + 1}: ${row.desc}`}
-                            checked={selectedLookup.has(row.id)}
-                            onCheckedChange={(checked) =>
-                              toggleRowSelection(row.id, checked === true)
-                            }
-                          />
-                        )}
-                      </TableCell>
-                    )}
                     <TableCell className="px-2 py-2 align-middle">
                       <Select
                         value={rowType}
@@ -491,37 +280,35 @@ export default function RowsConfigurator({
                         }
                       >
                         <SelectTrigger className="mx-auto h-8 w-full max-w-[7rem] rounded-lg text-center">
-                          <SelectValue placeholder="Lvl 0" />
+                          <SelectValue placeholder="Indent 0" />
                         </SelectTrigger>
                         <SelectContent position="popper">
-                          <SelectItem value="0">Lvl 0</SelectItem>
-                          <SelectItem value="1">Lvl 1</SelectItem>
-                          <SelectItem value="2">Lvl 2</SelectItem>
-                          <SelectItem value="3">Lvl 3</SelectItem>
+                          <SelectItem value="0">Indent 0</SelectItem>
+                          <SelectItem value="1">Indent 1</SelectItem>
+                          <SelectItem value="2">Indent 2</SelectItem>
+                          <SelectItem value="3">Indent 3</SelectItem>
                         </SelectContent>
                       </Select>
                     </TableCell>
                     <TableCell className="px-2 py-2 align-middle">
                       <section className="flex flex-col items-center gap-1.5 whitespace-nowrap">
                         <Badge variant="secondary">R{idx + 1}</Badge>
-                        {!bulkMode && rowFilter === "all" && (
-                          <section className="flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              {...getHandleProps(row.id, idx)}
-                              className="cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
-                            >
-                              <GripVertical />
-                            </Button>
-                            <MoveToPositionDialog
-                              currentPosition={idx + 1}
-                              itemCount={activeReport.rows.length}
-                              itemLabel={`row R${idx + 1}`}
-                              onMove={reorderRows}
-                            />
-                          </section>
-                        )}
+                        <section className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            {...getHandleProps(row.id, idx)}
+                            className="cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
+                          >
+                            <GripVertical />
+                          </Button>
+                          <MoveToPositionDialog
+                            currentPosition={idx + 1}
+                            itemCount={activeReport.rows.length}
+                            itemLabel={`row R${idx + 1}`}
+                            onMove={reorderRows}
+                          />
+                        </section>
                       </section>
                     </TableCell>
                     <TableCell className="px-2 py-2 align-middle">
@@ -543,7 +330,7 @@ export default function RowsConfigurator({
                     <TableCell className="w-96 min-w-96 max-w-96 whitespace-normal px-2 py-2 align-middle">
                       {isHeader ? (
                         <span className="inline-flex rounded-full border border-border bg-background px-2.5 py-1 text-sm text-muted-foreground">
-                          Header Row (No data mapping)
+                          Header row — no data mapping
                         </span>
                       ) : isTotal ? (
                         <div
@@ -642,7 +429,9 @@ export default function RowsConfigurator({
                           title={`Delete row ${row.id}`}
                           onClick={() =>
                             setConfirmAction({
-                              msg: "Delete Row?",
+                              title: `Delete row ${row.id}?`,
+                              msg: `This permanently removes “${row.desc || row.id}” and updates affected row references.`,
+                              actionLabel: "Delete row",
                               onConfirm: () => handleDeleteRow(row.id),
                             })
                           }
@@ -694,19 +483,6 @@ export default function RowsConfigurator({
           </Table>
         </div>
       </CardContent>
-      {isBulkDialogOpen && (
-        <BulkMappingDialog
-          rows={activeReport.rows}
-          selectedIds={selectedIds}
-          masterData={masterData}
-          presets={presets}
-          setPresets={setStoredPresets}
-          setConfirmAction={setConfirmAction}
-          onApply={applyBulkMapping}
-          onClose={() => setIsBulkDialogOpen(false)}
-          dimensionDefinitions={dimensionDefinitions}
-        />
-      )}
     </Card>
   );
 }

@@ -216,6 +216,7 @@ export default function EditMappingModal({
                     testIdPrefix={`mapping-${key}`}
                     normalizeValue={normalizeDimensionValue}
                     searchPlaceholder={`Search ${dimensionLabel.toLowerCase()}...`}
+                    emptyLabel="Not selected"
                   />
                 );
               })}

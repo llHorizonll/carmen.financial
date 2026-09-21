@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/popover.jsx';
 import { cn } from '@/lib/utils.js';
 
-export default function MultiSelectDropdown({ options, selected, onChange, label, testIdPrefix, normalizeValue = normalizeDeptLookupCode, searchPlaceholder = 'Search department...', emptyLabel = 'All' }) {
+export default function MultiSelectDropdown({ options, selected, onChange, label, testIdPrefix, normalizeValue = normalizeDeptLookupCode, searchPlaceholder = 'Search department...', emptyLabel = 'All', noDataLabel = 'No options available' }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const friendlyButtonClassName = 'border-border bg-background text-foreground hover:bg-muted';
@@ -136,7 +136,9 @@ export default function MultiSelectDropdown({ options, selected, onChange, label
         </div>
         <div className="max-h-[min(60vh,320px)] overflow-y-auto p-1">
           {filteredOptions.length === 0 ? (
-            <div className="px-3 py-6 text-center text-sm text-muted-foreground">No data</div>
+            <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+              {searchTerm.trim() ? 'No matching options' : noDataLabel}
+            </div>
           ) : (
             filteredOptions.map((option) => {
               const selectedState = isSelected(option.id);

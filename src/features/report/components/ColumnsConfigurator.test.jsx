@@ -53,6 +53,7 @@ describe('ColumnsConfigurator', () => {
     const handleAddCol = vi.fn();
     const handleUpdateCol = vi.fn();
     const handleDeleteCol = vi.fn();
+    const setConfirmAction = vi.fn();
 
     render(
       <ColumnsConfigurator
@@ -67,6 +68,7 @@ describe('ColumnsConfigurator', () => {
         handleUpdateCol={handleUpdateCol}
         updateActiveReport={vi.fn()}
         handleDeleteCol={handleDeleteCol}
+        setConfirmAction={setConfirmAction}
       />
     );
 
@@ -95,6 +97,13 @@ describe('ColumnsConfigurator', () => {
     expect(within(row).queryByTestId('column-actions')).not.toBeInTheDocument();
 
     fireEvent.click(within(row).getByRole('button', { name: /Delete column C1/i }));
+    expect(setConfirmAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Delete column C1?',
+        actionLabel: 'Delete column',
+      }),
+    );
+    setConfirmAction.mock.calls[0][0].onConfirm();
     expect(handleDeleteCol).toHaveBeenCalledWith('C1');
 
     fireEvent.click(within(row).getAllByRole('combobox')[1]);

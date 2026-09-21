@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
   Check,
   CheckCircle2,
+  CircleHelp,
   FileCheck2,
   FileSpreadsheet,
   Import,
@@ -32,16 +33,31 @@ import {
   parseExcelWorkbook,
 } from "../lib/excelTemplateImport.js";
 import ExcelImportAdvancedSettings from "./ExcelImportAdvancedSettings.jsx";
+import GettingStartedTour from "./GettingStartedTour.jsx";
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
 const EMPTY_MAPPING_CATALOG = [];
 const STEPS = [
   { id: "upload", label: "Upload workbook" },
   { id: "select", label: "Select worksheets" },
-  { id: "done", label: "Templates ready" },
+  { id: "done", label: "Import complete" },
 ];
 
 const getStepIndex = (step) => STEPS.findIndex((item) => item.id === step);
+const IMPORT_TOUR_STEPS = {
+  upload: [
+    { target: "import-progress", title: "Import has three phases", description: "Upload a workbook, choose worksheets, then review the imported reports in Setup." },
+    { target: "import-upload", title: "Choose the source workbook", description: "Drop or browse for an Excel file up to 25 MB. Processing stays in this browser." },
+  ],
+  select: [
+    { target: "import-select-header", title: "Review detected worksheets", description: "The wizard recommends sheets that look like financial report templates." },
+    { target: "import-worksheets", title: "Select and configure sheets", description: "Select each report sheet. Use Configure when detected rows, columns, or mappings need adjustment." },
+    { target: "import-create", title: "Create reports", description: "This creates one report per selected worksheet. Review every imported report in Setup before use." },
+  ],
+  done: [
+    { target: "import-done-heading", title: "Import complete", description: "Open the first report to verify mappings, formulas, access, columns, and rows in Setup." },
+  ],
+};
 
 export default function ExcelTemplateImportWizard({
   companyName,
@@ -50,6 +66,7 @@ export default function ExcelTemplateImportWizard({
   departments = EMPTY_MAPPING_CATALOG,
   accountCodes = EMPTY_MAPPING_CATALOG,
   dimensions = EMPTY_MAPPING_CATALOG,
+  guideStoragePrefix = "carmen_bi_getting_started_v1:anonymous",
   onImportTemplates,
   onOpenImportedReport,
 }) {
@@ -63,6 +80,11 @@ export default function ExcelTemplateImportWizard({
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState("");
   const [importedReports, setImportedReports] = useState([]);
+  const importTourStorageKey = `${guideStoragePrefix}:import:${step}`;
+  const [isImportTourOpen, setIsImportTourOpen] = useState(
+    () => window.localStorage.getItem(`${guideStoragePrefix}:import:upload`) !== "done",
+  );
+  const [importTourStep, setImportTourStep] = useState(0);
   const mappingCatalogs = useMemo(
     () => ({ depts: departments, accCodes: accountCodes, dimensions }),
     [accountCodes, departments, dimensions],
@@ -73,6 +95,10 @@ export default function ExcelTemplateImportWizard({
     [workbook],
   );
   const activeStepIndex = getStepIndex(step);
+  useEffect(() => {
+    setImportTourStep(0);
+    setIsImportTourOpen(window.localStorage.getItem(importTourStorageKey) !== "done");
+  }, [importTourStorageKey]);
   const configuredSheet = useMemo(
     () => workbook?.sheets.find((sheet) => sheet.name === configuredSheetName),
     [configuredSheetName, workbook],
@@ -178,7 +204,7 @@ export default function ExcelTemplateImportWizard({
       invalidSelectedSheets.length > 0
     ) {
       setError(
-        "Resolve worksheet import setting errors before creating templates.",
+        "Resolve worksheet import setting errors before creating reports.",
       );
       return;
     }
@@ -196,7 +222,7 @@ export default function ExcelTemplateImportWizard({
     } catch (importError) {
       setError(
         importError?.message ||
-          "Unable to create report templates from the selected worksheets.",
+          "Unable to create reports from the selected worksheets.",
       );
     } finally {
       setIsImporting(false);
@@ -204,24 +230,27 @@ export default function ExcelTemplateImportWizard({
   };
 
   return (
-    <section className="mx-auto flex h-full w-full max-w-5xl flex-col gap-5 overflow-y-auto px-1 py-2 sm:px-2">
-      <header className="flex flex-col gap-2">
+    <section className="mx-auto flex h-full w-full max-w-7xl flex-col gap-3 overflow-y-auto px-2 py-2 sm:px-4">
+      <header className="flex flex-row items-start justify-between gap-2">
         <section className="flex items-center gap-3">
           <section className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
             <FileSpreadsheet className="size-5" aria-hidden="true" />
           </section>
           <section>
             <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-              Excel template import
+              Excel report import
             </h1>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-              Create one report template per worksheet and review its mappings before saving.
+              Create one report per worksheet, then review its mappings before use.
             </p>
           </section>
         </section>
+        <Button type="button" variant="ghost" size="icon" onClick={() => { setImportTourStep(0); setIsImportTourOpen(true); }} aria-label="Open import guide" title="Import guide">
+          <CircleHelp aria-hidden="true" />
+        </Button>
       </header>
 
-      <nav aria-label="Import progress">
+      <nav data-tour="import-progress" aria-label="Import progress" className="data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-xl data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary">
         <ol className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           {STEPS.map((item, index) => {
             const isActive = index === activeStepIndex;
@@ -256,7 +285,7 @@ export default function ExcelTemplateImportWizard({
 
       {step === "upload" && (
         <Card className="border border-border bg-card shadow-none ring-0">
-          <CardHeader className="border-b pb-4">
+          <CardHeader data-tour="import-select-header" className="border-b pb-4 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary">
             <CardTitle className="text-base font-semibold sm:text-lg">
               Choose a workbook
             </CardTitle>
@@ -277,6 +306,7 @@ export default function ExcelTemplateImportWizard({
               }
             />
             <label
+              data-tour="import-upload"
               htmlFor="excel-template-file"
               onDragEnter={(event) => {
                 event.preventDefault();
@@ -290,7 +320,7 @@ export default function ExcelTemplateImportWizard({
                 handleFileChange(event.dataTransfer.files?.[0] || null);
               }}
               className={cn(
-                "flex min-h-64 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed p-6 text-center outline-none transition-colors",
+                "flex min-h-64 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed p-6 text-center outline-none transition-colors data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary",
                 "peer-focus-visible:border-primary peer-focus-visible:ring-3 peer-focus-visible:ring-primary/20",
                 isDragging
                   ? "border-primary bg-primary/8"
@@ -372,7 +402,7 @@ export default function ExcelTemplateImportWizard({
                     )
                   }
                 >
-                  Select all
+                  Select recommended
                 </Button>
                 <Button
                   type="button"
@@ -386,7 +416,7 @@ export default function ExcelTemplateImportWizard({
             </section>
           </CardHeader>
 
-          <CardContent className="p-0">
+          <CardContent data-tour="import-worksheets" className="p-0 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary">
             <ScrollArea className="h-80 sm:h-96">
               <ul
                 aria-label="Worksheets"
@@ -433,7 +463,7 @@ export default function ExcelTemplateImportWizard({
                             {sheet.columnCount} populated columns
                             {sheet.isRecommended
                               ? ` · ${sheet.detectedRows.length} template rows · ${sheet.detectedColumns.length} report columns`
-                              : " · Not a report worksheet"}
+                              : " · No report structure detected"}
                           </p>
                           {sheet.previewRows.length > 0 && (
                             <p className="mt-1 truncate text-xs text-muted-foreground/80">
@@ -502,6 +532,8 @@ export default function ExcelTemplateImportWizard({
               Choose another file
             </Button>
             <Button
+              data-tour="import-create"
+              className="data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary"
               type="button"
               disabled={
                 selectedSheetNames.size === 0 ||
@@ -518,7 +550,7 @@ export default function ExcelTemplateImportWizard({
               ) : (
                 <Import aria-hidden="true" />
               )}
-              Create {selectedSheetNames.size} templates
+              Create {selectedSheetNames.size} {selectedSheetNames.size === 1 ? "report" : "reports"}
               {!isImporting && <ArrowRight aria-hidden="true" />}
             </Button>
           </CardFooter>
@@ -526,16 +558,16 @@ export default function ExcelTemplateImportWizard({
       )}
 
       {step === "done" && (
-        <Card className="border border-primary/20 bg-card shadow-none ring-0">
+        <Card data-tour="import-done" className="border border-primary/20 bg-card shadow-none ring-0 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary">
           <CardContent className="flex flex-col items-center px-6 py-12 text-center">
             <section className="flex size-14 items-center justify-center rounded-xl bg-primary/10 text-primary">
               <CheckCircle2 className="size-7" aria-hidden="true" />
             </section>
-            <h2 className="mt-5 text-xl font-semibold tracking-tight text-foreground">
-              {importedReports.length} templates created
+            <h2 data-tour="import-done-heading" className="mt-5 rounded-lg text-xl font-semibold tracking-tight text-foreground data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary">
+              {importedReports.length} {importedReports.length === 1 ? "report" : "reports"} created
             </h2>
             <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
-              Your new templates are in the report list. Review mappings and
+              Your imported reports are in the report list. Review mappings and
               calculation rules in Setup before using them.
             </p>
             <section className="mt-6 flex flex-col gap-2 sm:flex-row">
@@ -543,7 +575,7 @@ export default function ExcelTemplateImportWizard({
                 type="button"
                 onClick={() => onOpenImportedReport(importedReports[0]?.id)}
               >
-                Open first template
+                Open first report
                 <ArrowRight aria-hidden="true" />
               </Button>
               <Button type="button" variant="outline" onClick={resetWizard}>
@@ -554,6 +586,17 @@ export default function ExcelTemplateImportWizard({
           </CardContent>
         </Card>
       )}
+      <GettingStartedTour
+        canSetup
+        steps={IMPORT_TOUR_STEPS[step]}
+        open={isImportTourOpen}
+        stepIndex={importTourStep}
+        onStepChange={setImportTourStep}
+        onClose={() => {
+          window.localStorage.setItem(importTourStorageKey, "done");
+          setIsImportTourOpen(false);
+        }}
+      />
     </section>
   );
 }

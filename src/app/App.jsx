@@ -29,6 +29,8 @@ import {
   MoonStar,
   SunMedium,
   AlertTriangle,
+  ArrowUp,
+  CircleHelp,
   LoaderCircle,
 } from "lucide-react";
 
@@ -99,6 +101,7 @@ import {
   deleteCarmenReport,
   fetchCarmenDimensions,
   fetchCarmenMasterData,
+  fetchCarmenReport,
   fetchCarmenReportData,
   fetchCarmenReportOptions,
   fetchCarmenReports,
@@ -154,6 +157,9 @@ const EditMappingModal = React.lazy(
 );
 const DetailSelectorModal = React.lazy(
   () => import("../features/report/components/DetailSelectorModal.jsx"),
+);
+const GettingStartedTour = React.lazy(
+  () => import("../features/report/components/GettingStartedTour.jsx"),
 );
 
 const DEFAULT_REPORT_OPTIONS = {
@@ -322,6 +328,7 @@ const mergeReportOptions = (defaults, loaded) => ({
 });
 
 const REPORT_STORAGE_KEY = "carmen_bi_reports_config_v5_23";
+const GETTING_STARTED_STORAGE_PREFIX = "carmen_bi_getting_started_v1:";
 const NO_REPORT_SELECTED = "__no_report_selected__";
 const NEUTRAL_BUTTON_CLASS =
   "border-border bg-background text-foreground hover:bg-muted transition-colors duration-150";
@@ -366,6 +373,8 @@ export default function App({ onLogout = null }) {
   const [themeMode, setThemeMode] = useState(() => getStoredTheme());
   const [isPageTransitioning, setIsPageTransitioning] = useState(false);
   const [isSetupSaving, setIsSetupSaving] = useState(false);
+  const [isGettingStartedOpen, setIsGettingStartedOpen] = useState(false);
+  const [gettingStartedStep, setGettingStartedStep] = useState(0);
 
   const [alertMsg, setAlertMsg] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
@@ -443,6 +452,7 @@ export default function App({ onLogout = null }) {
   const [modalAccCategory, setModalAccCategory] = useState("ALL");
   const isMobile = useIsMobile();
   const canSetupReports = canSetupFinancialReports(currentUser);
+  const gettingStartedStorageKey = `${GETTING_STARTED_STORAGE_PREFIX}${currentUser?.id || "anonymous"}`;
   const accessibleReports = useMemo(
     () => getAccessibleReports(reports, currentUser),
     [reports, currentUser],
@@ -476,6 +486,24 @@ export default function App({ onLogout = null }) {
     setSetupDraft(activeReport);
     setIsSetupDirty(false);
   }, [activeReport?.id]);
+  useEffect(() => {
+    if (!currentUser?.id || !reportsLoaded) return;
+    setGettingStartedStep(0);
+    setIsGettingStartedOpen(
+      window.localStorage.getItem(gettingStartedStorageKey) !== "done",
+    );
+  }, [currentUser?.id, gettingStartedStorageKey, reportsLoaded]);
+  useEffect(() => {
+    if (!isGettingStartedOpen) return;
+    if (!isMobile) {
+      setIsSidebarCollapsed(false);
+      return;
+    }
+    const sidebarStep = canSetupReports
+      ? gettingStartedStep < 3
+      : gettingStartedStep === 0;
+    setIsSidebarOpen(sidebarStep);
+  }, [canSetupReports, gettingStartedStep, isGettingStartedOpen, isMobile]);
   const activeReportUsesDayFilter = useMemo(() => {
     if (!activeReport) return false;
     if (activeReport.reportType === "Daily") return true;
@@ -759,10 +787,14 @@ export default function App({ onLogout = null }) {
     setIsSetupSaving(true);
     try {
       if (apiConfigured) await saveCarmenReport(setupReport);
+      const refreshedReport = apiConfigured
+        ? await fetchCarmenReport(setupReport.id)
+        : null;
+      const savedReport = refreshedReport || setupReport;
       setReports((currentReports) => currentReports.map((report) =>
-        report.id === setupReport.id ? setupReport : report
+        report.id === savedReport.id ? savedReport : report
       ));
-      setSetupDraft(setupReport);
+      setSetupDraft(savedReport);
       setIsSetupDirty(false);
       setReportCatalogError(null);
     } catch (error) {
@@ -788,9 +820,9 @@ export default function App({ onLogout = null }) {
     setReportCatalogError(null);
   };
 
-  const requestConfirmation = ({ msg, onConfirm }) => {
+  const requestConfirmation = ({ title, msg, actionLabel, onConfirm }) => {
     confirmActionRef.current = onConfirm;
-    setConfirmAction({ msg });
+    setConfirmAction({ title, msg, actionLabel });
   };
 
   const closeConfirmation = () => {
@@ -809,7 +841,11 @@ export default function App({ onLogout = null }) {
       return;
     }
     confirmActionRef.current = discardSetupChanges;
-    setConfirmAction({ msg: "Discard all unsaved report settings?" });
+    setConfirmAction({
+      title: "Discard unsaved changes?",
+      msg: "Changes since the last save will be lost.",
+      actionLabel: "Discard changes",
+    });
   };
 
   const handleCancelSetup = () => confirmDiscardSetup();
@@ -914,9 +950,6 @@ export default function App({ onLogout = null }) {
   const handleDeleteReport = () => {
     confirmActionRef.current = async () => {
       const deletedReport = activeReport;
-      const newReports = reports.filter((r) => r.id !== deletedReport?.id);
-      setReports(newReports);
-      setCurrentReportId(NO_REPORT_SELECTED);
       if (apiConfigured && deletedReport?.id) {
         try {
           await deleteCarmenReport(deletedReport.id);
@@ -924,11 +957,17 @@ export default function App({ onLogout = null }) {
           setReportCatalogError(
             error.message || "Unable to delete report from Carmen API.",
           );
+          return;
         }
       }
+      const newReports = reports.filter((r) => r.id !== deletedReport?.id);
+      setReports(newReports);
+      setCurrentReportId(NO_REPORT_SELECTED);
     };
     setConfirmAction({
-      msg: "Are you sure you want to completely delete this report?",
+      title: `Delete “${activeReport?.name || "this report"}”?`,
+      msg: "This permanently removes the report and cannot be undone.",
+      actionLabel: "Delete report",
     });
   };
 
@@ -974,14 +1013,6 @@ export default function App({ onLogout = null }) {
         r.id === id ? { ...r, ...updates } : r,
       ),
     });
-  const handleBulkUpdateRows = (rowUpdates) => {
-    const updatesById = new Map(rowUpdates.map((item) => [item.id, item.updates]));
-    updateActiveReport({
-      rows: setupReport.rows.map((row) => (
-        updatesById.has(row.id) ? { ...row, ...updatesById.get(row.id) } : row
-      )),
-    });
-  };
   const handleUpdateCol = (id, field, val) =>
     updateActiveReport({
       columns: setupReport.columns.map((c) =>
@@ -1171,6 +1202,9 @@ export default function App({ onLogout = null }) {
       : "flex h-full w-full min-h-0 flex-col gap-3";
 
   const applyTabChange = (nextTab) => {
+    if (nextTab === "setup" || nextTab === "import") {
+      setIsGettingStartedOpen(false);
+    }
     setTabMotionDirection(
       nextTab === "report" ? "backward" : "forward",
     );
@@ -1185,7 +1219,11 @@ export default function App({ onLogout = null }) {
         discardSetupChanges();
         applyTabChange(nextTab);
       };
-      setConfirmAction({ msg: "Discard all unsaved report settings?" });
+      setConfirmAction({
+        title: "Discard unsaved changes?",
+        msg: "Changes since the last save will be lost.",
+        actionLabel: "Discard changes",
+      });
       return;
     }
     applyTabChange(nextTab);
@@ -1202,7 +1240,11 @@ export default function App({ onLogout = null }) {
         discardSetupChanges();
         openReport();
       };
-      setConfirmAction({ msg: "Discard all unsaved report settings?" });
+      setConfirmAction({
+        title: "Discard unsaved changes?",
+        msg: "Changes since the last save will be lost.",
+        actionLabel: "Discard changes",
+      });
       return;
     }
     openReport();
@@ -1221,11 +1263,20 @@ export default function App({ onLogout = null }) {
         discardSetupChanges();
         void createAndOpenReport();
       };
-      setConfirmAction({ msg: "Discard all unsaved report settings?" });
+      setConfirmAction({
+        title: "Discard unsaved changes?",
+        msg: "Changes since the last save will be lost.",
+        actionLabel: "Discard changes",
+      });
       return;
     }
 
     void createAndOpenReport();
+  };
+
+  const closeGettingStarted = () => {
+    window.localStorage.setItem(gettingStartedStorageKey, "done");
+    setIsGettingStartedOpen(false);
   };
 
   useEffect(() => {
@@ -1347,8 +1398,9 @@ export default function App({ onLogout = null }) {
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="w-full justify-start gap-1.5 px-2 text-xs"
+                  className="w-full justify-start gap-1.5 px-2 text-xs data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary"
                   onClick={handleCreateReportFromSidebar}
+                  data-tour="new-report"
                 >
                   <FilePlus className="size-3.5" />
                   <span>New Report</span>
@@ -1357,11 +1409,12 @@ export default function App({ onLogout = null }) {
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="w-full justify-start gap-1.5 px-2 text-xs"
+                  className="w-full justify-start gap-1.5 px-2 text-xs data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary"
                   onClick={() => {
                     handleTabChange("import");
                     setIsSidebarOpen(false);
                   }}
+                  data-tour="import-template"
                 >
                   <FileSpreadsheet className="size-3.5" />
                   <span>Import Excel</span>
@@ -1375,7 +1428,10 @@ export default function App({ onLogout = null }) {
               Reports
             </div>
           </div>
-          <div className="flex flex-col gap-1">
+          <div
+            className="flex flex-col gap-1 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-xl data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary"
+            data-tour="reports"
+          >
             {accessibleReports.map((report) => (
               <Button
                 key={report.id}
@@ -1409,7 +1465,11 @@ export default function App({ onLogout = null }) {
         <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 px-4 sm:right-4 sm:left-auto sm:w-full sm:max-w-136 sm:px-0">
           <Card className="pointer-events-auto mx-auto w-full max-w-136 border border-border/80 bg-background/98 shadow-xl ring-1 ring-black/5 backdrop-blur-sm">
             <CardHeader className="space-y-1.5 pb-3">
-              <CardTitle className="text-base tracking-tight">Notice</CardTitle>
+              <CardTitle className="text-base tracking-tight">
+                {String(alertMsg).includes("Revision selector")
+                  ? "Budget revision not applied"
+                  : "Unable to load report data"}
+              </CardTitle>
               <CardDescription className="whitespace-pre-line text-sm leading-6">
                 {alertMsg}
               </CardDescription>
@@ -1420,7 +1480,7 @@ export default function App({ onLogout = null }) {
                 size="sm"
                 onClick={() => setAlertMsg(null)}
               >
-                OK
+                Dismiss
               </Button>
             </CardContent>
           </Card>
@@ -1534,7 +1594,9 @@ export default function App({ onLogout = null }) {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirm action</AlertDialogTitle>
+            <AlertDialogTitle>
+              {confirmAction?.title || "Confirm action"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
               {confirmAction?.msg || ""}
             </AlertDialogDescription>
@@ -1547,7 +1609,7 @@ export default function App({ onLogout = null }) {
               variant="destructive"
               onClick={confirmPendingAction}
             >
-              Confirm
+              {confirmAction?.actionLabel || "Confirm"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1606,7 +1668,10 @@ export default function App({ onLogout = null }) {
                 <span className="truncate max-w-48 text-foreground/80">{activeReport?.name || "Report"}</span>
               </div>
 
-              <div className={MODE_SWITCH_CLASS}>
+              <div
+                className={`${MODE_SWITCH_CLASS} data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary`}
+                data-tour="mode-switch"
+              >
                 <Button
                   type="button"
                   variant="ghost"
@@ -1632,6 +1697,22 @@ export default function App({ onLogout = null }) {
                   </Button>
                 )}
               </div>
+
+              {visibleActiveTab === "report" && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => {
+                    setGettingStartedStep(0);
+                    setIsGettingStartedOpen(true);
+                  }}
+                  aria-label="Open getting started guide"
+                  title="Getting started"
+                >
+                  <CircleHelp className="size-4" />
+                </Button>
+              )}
 
               <div className="hidden flex-wrap items-center gap-2 sm:flex">
                 {visibleActiveTab === "setup" && (
@@ -1859,7 +1940,6 @@ export default function App({ onLogout = null }) {
                           onValueChange={setGlobalPeriod}
                         >
                           <SelectTrigger
-                            size="sm"
                             className={`h-9 min-w-0 text-sm ${NEUTRAL_FILTER_TRIGGER_CLASS}`}
                           >
                             <SelectValue placeholder="Period" />
@@ -1879,7 +1959,7 @@ export default function App({ onLogout = null }) {
 
                       <div className="space-y-1">
                         <span className="block text-xs font-medium text-muted-foreground">
-                          Rev
+                          Budget revision
                         </span>
                         <Select
                           value={globalRevision}
@@ -1896,7 +1976,6 @@ export default function App({ onLogout = null }) {
                           }}
                         >
                           <SelectTrigger
-                            size="sm"
                             className={`h-9 w-full min-w-0 text-sm ${NEUTRAL_FILTER_TRIGGER_CLASS}`}
                           >
                             <SelectValue placeholder="Revision" />
@@ -1963,7 +2042,9 @@ export default function App({ onLogout = null }) {
                     <AlertTriangle className="size-6" />
                   </div>
                   <h3 className="text-lg font-semibold text-foreground mb-2">
-                    API Connection Error
+                    {masterDataError
+                      ? "Unable to load master data"
+                      : "Unable to load report catalog"}
                   </h3>
                   <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
                     {masterDataError || reportCatalogError}
@@ -1974,7 +2055,7 @@ export default function App({ onLogout = null }) {
                     className="h-9 border border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:border-destructive/40 transition-colors gap-2"
                   >
                     <RefreshCw className="size-3.5" />
-                    Retry Connection
+                    Retry
                   </Button>
                 </CardContent>
               </Card>
@@ -1996,6 +2077,13 @@ export default function App({ onLogout = null }) {
                         displayCompanyLabel={displayCompanyLabel}
                         displayDateLabel={displayDateLabel}
                         displayPeriodLabel={displayPeriodLabel}
+                        departmentContext={
+                          appliedDepts.length === 0
+                            ? "All departments"
+                            : appliedDepts.length === 1
+                              ? masterData.depts.find((dept) => String(dept.id) === String(appliedDepts[0]))?.name || appliedDepts[0]
+                              : `${appliedDepts.length} departments`
+                        }
                         reportData={reportData}
                         activeCols={activeCols}
                         viewMode="dashboard"
@@ -2021,8 +2109,20 @@ export default function App({ onLogout = null }) {
 
                 {visibleActiveTab === "report" && !activeReport && (
                   <Card className="flex h-full items-center justify-center border border-border shadow-none ring-0">
-                    <CardContent className="py-16 text-center text-sm text-muted-foreground">
-                      No Reports Available
+                    <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
+                      <h3 className="text-lg font-semibold text-foreground">
+                        {canSetupReports ? "No reports yet" : "No reports assigned"}
+                      </h3>
+                      <p className="max-w-md text-sm text-muted-foreground">
+                        {canSetupReports
+                          ? "Create a blank report or import an Excel workbook to get started."
+                          : "Ask an administrator to grant you access to a financial report."}
+                      </p>
+                      {canSetupReports && (
+                        <Button size="sm" onClick={handleCreateReportFromSidebar}>
+                          New report
+                        </Button>
+                      )}
                     </CardContent>
                   </Card>
                 )}
@@ -2040,6 +2140,7 @@ export default function App({ onLogout = null }) {
                       }
                     >
                       <ReportSetup
+                        guideStoragePrefix={gettingStartedStorageKey}
                         themeMode={themeMode}
                         masterData={masterData}
                         reportOptions={reportOptions}
@@ -2064,7 +2165,6 @@ export default function App({ onLogout = null }) {
                         handleAddRow={handleAddRow}
                         handleUpdateRow={handleUpdateRow}
                         handleUpdateRowMulti={handleUpdateRowMulti}
-                        handleBulkUpdateRows={handleBulkUpdateRows}
                         moveRow={moveRow}
                         handleDeleteRow={handleDeleteRow}
                         setEditingRow={setEditingRow}
@@ -2084,6 +2184,7 @@ export default function App({ onLogout = null }) {
                     }
                   >
                     <ExcelTemplateImportWizard
+                      guideStoragePrefix={gettingStartedStorageKey}
                       companyName={
                         masterData.companyProfile.name ||
                         activeReport?.companyName ||
@@ -2107,6 +2208,27 @@ export default function App({ onLogout = null }) {
           </div>
         </div>
       </main>
+
+      <Button
+        type="button"
+        size="icon"
+        className="fixed right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-40 rounded-full shadow-md print:hidden"
+        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        aria-label="Scroll to top"
+        title="Scroll to top"
+      >
+        <ArrowUp />
+      </Button>
+
+      <React.Suspense fallback={null}>
+        <GettingStartedTour
+          canSetup={canSetupReports}
+          open={isGettingStartedOpen}
+          stepIndex={gettingStartedStep}
+          onStepChange={setGettingStartedStep}
+          onClose={closeGettingStarted}
+        />
+      </React.Suspense>
 
       <React.Suspense fallback={null}>
         <AccessModal

@@ -100,4 +100,19 @@ describe('MultiSelectDropdown', () => {
 
     expect(within(container).getByTestId('selected-value-dept')).toHaveTextContent('All');
   });
+
+  it('shows contextual empty messages', () => {
+    render(
+      <MultiSelectDropdown
+        options={[]}
+        selected={[]}
+        onChange={() => {}}
+        label="DEPT"
+        testIdPrefix="dept"
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /DEPT/i }));
+    expect(screen.getByText('No options available')).toBeInTheDocument();
+  });
 });

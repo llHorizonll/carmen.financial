@@ -19,10 +19,6 @@ import {
 } from '@/components/ui/select.jsx';
 
 const EMPTY_REPORT_OPTIONS = {};
-const REPORT_TYPE_OPTIONS = [
-  { id: 'Monthly', label: 'Monthly' },
-  { id: 'Daily', label: 'Daily' },
-];
 const PERIOD_FORMAT_LABELS = {
   standard: "Standard (Period : 2026-02)",
   year_month: "Year-Month (2026-02)",
@@ -126,7 +122,7 @@ export default function ReportDetailsPanel({
             <Input
               value={activeReport.companyName || ''}
               onChange={(e) => updateActiveReport({ companyName: e.target.value })}
-              placeholder="Auto mode"
+              placeholder="Use company default"
             />
           </div>
           <div className="space-y-2">
@@ -143,30 +139,6 @@ export default function ReportDetailsPanel({
               </SelectTrigger>
               <SelectContent position="popper">
                 {periodFormatOptions.map((option) => (
-                  <SelectItem key={option.id} value={option.id}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label className="text-foreground">Report Type</Label>
-            <Select
-              value={activeReport.reportType || 'Monthly'}
-              onValueChange={(value) => {
-                onBusyTransition?.();
-                updateActiveReport({
-                  reportType: value,
-                  day: value === 'Daily' ? (activeReport.day || '') : '',
-                });
-              }}
-            >
-              <SelectTrigger className="h-9 w-full">
-                <SelectValue placeholder="Select type" />
-              </SelectTrigger>
-              <SelectContent position="popper">
-                {REPORT_TYPE_OPTIONS.map((option) => (
                   <SelectItem key={option.id} value={option.id}>
                     {option.label}
                   </SelectItem>
@@ -204,7 +176,7 @@ export default function ReportDetailsPanel({
             <Label className="text-foreground">Owner</Label>
             <Input
               value={activeReport.owner || ''}
-              placeholder={masterData?.users?.[0]?.id || 'Creator user id'}
+              placeholder={masterData?.users?.[0]?.id || 'Creator user ID'}
               readOnly
               aria-readonly="true"
             />

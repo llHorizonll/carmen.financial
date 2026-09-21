@@ -27,6 +27,7 @@ describe('EditMappingModal', () => {
     );
 
     expect(screen.getByRole('button', { name: /Dimension 10/i })).toBeInTheDocument();
+    expect(screen.getByTestId('selected-value-mapping-dim1')).toHaveTextContent('Not selected');
   });
 
   it('updates fields and invokes detail selector and apply handlers', async () => {

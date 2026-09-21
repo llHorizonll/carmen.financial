@@ -13,6 +13,7 @@ const reportApiMocks = vi.hoisted(() => ({
   fetchCarmenMasterData: vi.fn(),
   fetchCarmenReportOptions: vi.fn(),
   fetchCarmenReports: vi.fn(),
+  fetchCarmenReport: vi.fn(),
   fetchCarmenReportData: vi.fn(),
   createCarmenReport: vi.fn(),
   saveCarmenReport: vi.fn(() => Promise.resolve()),
@@ -105,6 +106,7 @@ describe('App shell', () => {
 
     reportApiMocks.fetchCarmenReports.mockReset();
     reportApiMocks.fetchCarmenReports.mockResolvedValue([]);
+    reportApiMocks.fetchCarmenReport.mockReset();
 
     reportApiMocks.fetchCarmenReportData.mockReset();
     reportApiMocks.fetchCarmenReportData.mockResolvedValue({ actualRows: [], budgetRows: [] });
@@ -148,8 +150,8 @@ describe('App shell', () => {
 
     expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel changes' }));
-    expect(screen.getByText('Discard all unsaved report settings?')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    expect(screen.getByText('Discard unsaved changes?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
 
     await waitFor(() => expect(screen.getByDisplayValue('Profit and Loss')).toBeInTheDocument());
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
@@ -161,11 +163,17 @@ describe('App shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Import Excel' }));
 
     expect(
-      await screen.findByRole('heading', { name: 'Excel template import' }),
+      await screen.findByRole('heading', { name: 'Excel report import' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/review its mappings before saving/i),
+      screen.getByText(/review its mappings before use/i),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Open import guide' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Open getting started guide' }),
+    ).not.toBeInTheDocument();
   });
 
   it('creates a blank report from the admin sidebar and opens setup', async () => {
@@ -250,7 +258,7 @@ describe('App shell', () => {
     await screen.findByText('Report Details', {}, { timeout: 5000 });
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Confirm' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete report' }));
 
     await waitFor(() => {
       expect(screen.queryByText('Report Details')).not.toBeInTheDocument();
@@ -390,7 +398,7 @@ describe('App shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Loading report data' })).not.toBeInTheDocument());
 
-    expect(await screen.findByText('Notice')).toBeInTheDocument();
+    expect(await screen.findByText('Unable to load report data')).toBeInTheDocument();
     expect(screen.getByText(publishedApiError.message)).toBeInTheDocument();
 
     expect(screen.queryByRole('button', { name: /^GL$/i })).not.toBeInTheDocument();
@@ -645,7 +653,7 @@ describe('App shell', () => {
     );
     fireEvent.click(revisionSelect);
     fireEvent.click(screen.getByRole('option', { name: 'Rev 9' }));
-    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
 
     await waitFor(() => {
       expect(reportApiMocks.fetchCarmenReportData).toHaveBeenLastCalledWith(

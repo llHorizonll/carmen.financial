@@ -1,8 +1,8 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import ExcelTemplateImportWizard from "./ExcelTemplateImportWizard.jsx";
-import { parseExcelWorkbook } from "../lib/excelTemplateImport.js";
+import { createReportsFromExcelSheets, parseExcelWorkbook } from "../lib/excelTemplateImport.js";
 
 vi.mock("../lib/excelTemplateImport.js", () => ({
   configureExcelSheetImport: vi.fn((sheet) => sheet),
@@ -37,6 +37,11 @@ const createSheet = (overrides = {}) => ({
 });
 
 describe("ExcelTemplateImportWizard", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    vi.clearAllMocks();
+  });
+
   it("shows actions only for worksheets that can be selected", async () => {
     parseExcelWorkbook.mockResolvedValue({
       fileName: "long-financial-report-name.xlsx",
@@ -79,6 +84,7 @@ describe("ExcelTemplateImportWizard", () => {
     });
 
     await screen.findByText("Report worksheet");
+    expect(screen.getByText("Review detected worksheets")).toBeInTheDocument();
 
     const actionGroups = document.querySelectorAll(
       '[data-slot="worksheet-actions"]',
@@ -97,5 +103,31 @@ describe("ExcelTemplateImportWizard", () => {
       accCodes: [{ id: "6000102" }],
       dimensions: [],
     });
+  });
+
+  it("shows the completion guide and clear completion copy", async () => {
+    parseExcelWorkbook.mockResolvedValue({
+      fileName: "report.xlsx",
+      sheets: [createSheet()],
+    });
+    createReportsFromExcelSheets.mockReturnValue([{ id: "report-1" }]);
+
+    render(
+      <ExcelTemplateImportWizard
+        companyName="Carmen"
+        userIds={["admin"]}
+        owner="admin"
+        onImportTemplates={vi.fn()}
+        onOpenImportedReport={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Choose an Excel workbook"), {
+      target: { files: [new File(["workbook"], "report.xlsx")] },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Create 1 report" }));
+
+    expect(await screen.findByRole("heading", { name: "1 report created" })).toBeInTheDocument();
+    expect(screen.getAllByText("Import complete").length).toBeGreaterThan(0);
   });
 });
