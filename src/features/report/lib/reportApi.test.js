@@ -472,6 +472,7 @@ describe('reportApi helpers', () => {
       rows: [],
       columns: [],
     })).rejects.toThrow(/Unknown column 'DescriptionPosition'/i);
+    expect(window.localStorage.getItem('carmen_access_token')).toBe('token');
   });
 
   it('includes the server version when saving an existing report', async () => {
@@ -511,7 +512,7 @@ describe('reportApi helpers', () => {
     expect(apiErrorListener).toHaveBeenCalledWith(expect.objectContaining({
       detail: expect.objectContaining({ kind: 'offline' }),
     }));
-    expect(storage.has('carmen_access_token')).toBe(false);
+    expect(storage.has('carmen_access_token')).toBe(true);
     expect(getCarmenApiFailure()).toEqual(expect.objectContaining({ kind: 'offline' }));
 
     window.removeEventListener('carmen-api-error', apiErrorListener);
@@ -653,6 +654,18 @@ describe('reportApi helpers', () => {
       json: async () => ({ message: 'Unauthorized' }),
     });
     vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchCarmenReportOptions()).rejects.toThrow(/session expired/i);
+    expect(window.localStorage.getItem('carmen_access_token')).toBeNull();
+  });
+
+  it('clears the Carmen session when the API returns 403', async () => {
+    createSessionStorageMock({ accessToken: 'token', businessUnit: { tenant: 'tenant-1' } });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({ message: 'Forbidden' }),
+    }));
 
     await expect(fetchCarmenReportOptions()).rejects.toThrow(/session expired/i);
     expect(window.localStorage.getItem('carmen_access_token')).toBeNull();

@@ -45,12 +45,16 @@ export default function LoginShell() {
     getCarmenApiFailure,
     () => null,
   );
-  const sessionNotice = apiFailure && {
+  const sessionNotice = apiFailure?.kind === 'session' ? {
     title: 'Session expired',
-    message: apiFailure.kind === 'session'
-      ? 'Your Carmen session has expired. Please sign in again.'
-      : 'The Carmen API request failed, so this session was closed. Please sign in again.',
-  };
+    message: 'Your Carmen session has expired. Please sign in again.',
+    action: 'Back to sign in',
+  } : null;
+  const apiErrorNotice = apiFailure && apiFailure.kind !== 'session' ? {
+    title: 'API request failed',
+    message: apiFailure.message,
+    action: 'Close',
+  } : null;
 
   React.useEffect(() => {
     initializeTheme();
@@ -59,7 +63,7 @@ export default function LoginShell() {
   React.useEffect(() => {
     const handleApiError = (event) => {
       if (!isAuthenticated) return;
-      clearCarmenSession();
+      if (event?.detail?.kind === 'session') clearCarmenSession();
       reportCarmenApiFailure(event?.detail || {});
     };
 
@@ -67,7 +71,7 @@ export default function LoginShell() {
     return () => window.removeEventListener('carmen-api-error', handleApiError);
   }, [isAuthenticated]);
 
-  const content = isAuthenticated && !apiFailure ? (
+  const content = isAuthenticated ? (
       <Suspense fallback={<div className="flex min-h-dvh items-center justify-center bg-background text-sm text-muted-foreground">Loading Carmen Financial BI...</div>}>
         <App
           onLogout={() => {
@@ -105,14 +109,16 @@ export default function LoginShell() {
   return (
     <>
       {content}
-      <AlertDialog open={Boolean(sessionNotice)} onOpenChange={(open) => !open && clearCarmenApiFailure()}>
+      <AlertDialog open={Boolean(sessionNotice || apiErrorNotice)} onOpenChange={(open) => !open && clearCarmenApiFailure()}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{sessionNotice?.title}</AlertDialogTitle>
-            <AlertDialogDescription>{sessionNotice?.message}</AlertDialogDescription>
+            <AlertDialogTitle>{sessionNotice?.title || apiErrorNotice?.title}</AlertDialogTitle>
+            <AlertDialogDescription>{sessionNotice?.message || apiErrorNotice?.message}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction onClick={clearCarmenApiFailure}>Back to sign in</AlertDialogAction>
+            <AlertDialogAction onClick={clearCarmenApiFailure}>
+              {sessionNotice?.action || apiErrorNotice?.action}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

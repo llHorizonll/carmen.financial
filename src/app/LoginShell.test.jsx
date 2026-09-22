@@ -84,13 +84,13 @@ describe('LoginShell', () => {
     });
   });
 
-  it('shows a session-expired popup and returns to login when an authenticated API request fails', async () => {
+  it('shows a session-expired popup and returns to login for a 401/403 session failure', async () => {
     window.localStorage.setItem('carmen_access_token', 'token');
     render(<LoginShell />);
 
     expect(await screen.findByText('Report workspace')).toBeInTheDocument();
     window.dispatchEvent(new CustomEvent('carmen-api-error', {
-      detail: { kind: 'network', message: 'Unable to reach Carmen API.' },
+      detail: { kind: 'session', status: 401, message: 'Your Carmen session expired.' },
     }));
 
     expect(await screen.findByRole('alertdialog', { name: 'Session expired' })).toBeInTheDocument();
@@ -101,9 +101,23 @@ describe('LoginShell', () => {
     expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument();
   });
 
+  it('keeps the workspace open and shows an API error popup for non-session failures', async () => {
+    window.localStorage.setItem('carmen_access_token', 'token');
+    render(<LoginShell />);
+
+    expect(await screen.findByText('Report workspace')).toBeInTheDocument();
+    window.dispatchEvent(new CustomEvent('carmen-api-error', {
+      detail: { kind: 'api', status: 500, message: 'Carmen API: Database unavailable.' },
+    }));
+
+    expect(await screen.findByRole('alertdialog', { name: 'API request failed' })).toBeInTheDocument();
+    expect(screen.getByText('Report workspace')).toBeInTheDocument();
+    expect(window.localStorage.getItem('carmen_access_token')).toBe('token');
+  });
+
   it('shows the popup even when the API fails before LoginShell mounts', async () => {
     window.localStorage.setItem('carmen_access_token', 'token');
-    reportCarmenApiFailure({ kind: 'network', message: 'Unable to reach Carmen API.' });
+    reportCarmenApiFailure({ kind: 'session', status: 401, message: 'Your Carmen session expired.' });
     clearCarmenSession();
 
     render(<LoginShell />);

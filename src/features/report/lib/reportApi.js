@@ -48,8 +48,8 @@ const joinUrl = (baseUrl, path) => `${baseUrl.replace(/\/$/, '')}/${path.replace
 const publishCarmenApiError = (error) => {
   if (error.affectsSession) {
     clearCarmenSession();
-    reportCarmenApiFailure(error);
   }
+  reportCarmenApiFailure(error);
   if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return;
   window.dispatchEvent(new CustomEvent('carmen-api-error', {
     detail: {
@@ -86,7 +86,7 @@ const fetchWithNetworkHandling = async (url, options = {}, { path = '', affectsS
       isOffline
         ? 'You are offline. Reconnect to the internet and try again.'
         : 'Unable to reach Carmen API. Check your network connection or contact the administrator.',
-      { kind: isOffline ? 'offline' : 'network', path, cause, affectsSession },
+      { kind: isOffline ? 'offline' : 'network', path, cause, affectsSession: false },
     );
   } finally {
     clearTimeout(timeoutId);
@@ -129,7 +129,7 @@ const throwResponseError = async (response, { path, context, isAuthenticated = f
     payload = null;
   }
 
-  const unauthorized = isAuthenticated && [401, 419, 440].includes(response.status);
+  const unauthorized = isAuthenticated && [401, 403].includes(response.status);
   if (unauthorized) {
     throw createCarmenApiError(
       'Your Carmen session expired. Please sign in again.',
@@ -145,7 +145,7 @@ const throwResponseError = async (response, { path, context, isAuthenticated = f
     kind: response.status === 401 || response.status === 403 ? 'authorization' : 'api',
     status: response.status,
     path,
-    affectsSession: isAuthenticated,
+    affectsSession: false,
   });
 };
 
