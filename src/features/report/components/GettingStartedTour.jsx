@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button.jsx";
@@ -57,7 +57,6 @@ export default function GettingStartedTour({
   const safeStepIndex = Math.min(stepIndex, steps.length - 1);
   const step = steps[safeStepIndex];
   const isMobile = useIsMobile();
-  const [anchorTarget, setAnchorTarget] = useState(null);
   const nextButtonRef = useRef(null);
 
   useEffect(() => {
@@ -67,14 +66,12 @@ export default function GettingStartedTour({
       target = document.querySelector(`[data-tour="${step.target}"]`);
       target?.setAttribute("data-tour-active", "true");
       target?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
-      setAnchorTarget(target || null);
     };
     activateTarget();
     const frame = target ? null : window.requestAnimationFrame(activateTarget);
     return () => {
       if (frame) window.cancelAnimationFrame(frame);
       target?.removeAttribute("data-tour-active");
-      setAnchorTarget(null);
     };
   }, [open, step]);
   useEffect(() => {
@@ -187,14 +184,6 @@ export default function GettingStartedTour({
     );
   }
 
-  const targetRect = anchorTarget?.getBoundingClientRect();
-  const horizontalPlacement = targetRect?.left > window.innerWidth / 2
-    ? "left-4"
-    : "right-4";
-  const verticalPlacement = targetRect?.top > window.innerHeight / 2
-    ? "top-4"
-    : "bottom-[calc(1rem+env(safe-area-inset-bottom))]";
-
   return (
     <>
       <section
@@ -203,7 +192,7 @@ export default function GettingStartedTour({
         aria-hidden="true"
       />
       <section
-        className={`fixed ${horizontalPlacement} ${verticalPlacement} z-60 w-sm max-w-[calc(100vw-2rem)] rounded-xl border border-primary/30 bg-background shadow-xl print:hidden`}
+        className="fixed top-1/2 left-1/2 z-60 w-sm max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-primary/30 bg-background shadow-xl print:hidden"
         role="dialog"
         aria-labelledby="getting-started-title"
         aria-describedby="getting-started-description"

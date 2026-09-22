@@ -29,6 +29,12 @@ describe("GettingStartedTour", () => {
       "inset-0",
       "bg-foreground/35",
     );
+    expect(screen.getByRole("dialog", { name: "Choose a report" })).toHaveClass(
+      "top-1/2",
+      "left-1/2",
+      "-translate-x-1/2",
+      "-translate-y-1/2",
+    );
     expect(document.querySelector('[data-tour="reports"]')).toHaveAttribute(
       "data-tour-active",
       "true",
