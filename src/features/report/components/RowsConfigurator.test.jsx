@@ -189,4 +189,35 @@ describe('RowsConfigurator', () => {
     expect(screen.getByRole('columnheader', { name: 'Action' })).toHaveClass('sticky', 'right-0', 'w-32', 'min-w-32', 'max-w-32');
   });
 
+  it('summarizes and visually distinguishes hidden rows', () => {
+    render(
+      <RowsConfigurator
+        activeReport={{
+          rows: [{
+            id: 'r-hidden',
+            desc: 'Hidden row',
+            isActive: false,
+            isHeader: true,
+            isTotal: false,
+            indent: 0,
+            percentBase: '',
+            formula: '',
+          }],
+        }}
+        handleAddRow={vi.fn()}
+        handleUpdateRow={vi.fn()}
+        handleUpdateRowMulti={vi.fn()}
+        moveRow={vi.fn()}
+        handleDeleteRow={vi.fn()}
+        setEditingRow={vi.fn()}
+        setConfirmAction={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('1 rows')).toBeInTheDocument();
+    expect(screen.getByText('1 hidden')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Hidden row').closest('tr')).toHaveClass('opacity-60');
+    expect(screen.getByRole('button', { name: 'Show row r-hidden' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
 });

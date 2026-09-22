@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ReportSetup from './ReportSetup.jsx';
 
@@ -98,5 +98,26 @@ describe('ReportSetup', () => {
 
     expect(screen.getByText('Rows Configurator Content')).toBeInTheDocument();
     expect(screen.queryByText('Columns Configurator Content')).not.toBeInTheDocument();
+  });
+
+  it('opens its guide from the single shell help request', () => {
+    window.localStorage.setItem('test-guide:setup', 'done');
+    const guideRef = React.createRef();
+
+    render(
+      <ReportSetup
+        ref={guideRef}
+        guideStoragePrefix="test-guide"
+        activeReport={{ columns: [], rows: [] }}
+        savedReport={{ columns: [], rows: [] }}
+        isDirty={false}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    act(() => guideRef.current.openGuide());
+    expect(screen.getByRole('dialog', { name: 'Define the report' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open setup guide' })).not.toBeInTheDocument();
   });
 });

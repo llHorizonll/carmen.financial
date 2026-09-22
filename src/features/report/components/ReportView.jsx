@@ -67,7 +67,7 @@ export default function ReportView({
                   {displayColumns.map((col) => col.isDescription ? (
                     <TableHead
                       key={col.id}
-                      className={`${descriptionIsFirst ? 'sticky left-0 z-30' : ''} min-w-[240px] border-r text-center text-xs font-semibold text-white hover:text-white sm:min-w-[300px] ${currentTheme.header}`}
+                      className={`${descriptionIsFirst ? 'sticky left-0 z-30 shadow-[1px_0_0_0_hsl(var(--border))]' : ''} min-w-[240px] border-r text-center text-xs font-semibold text-white hover:text-white sm:min-w-[300px] ${currentTheme.header}`}
                     >
                       Description
                     </TableHead>

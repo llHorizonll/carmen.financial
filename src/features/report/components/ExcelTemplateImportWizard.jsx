@@ -1,11 +1,16 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useState,
+} from "react";
 import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
   Check,
   CheckCircle2,
-  CircleHelp,
   FileCheck2,
   FileSpreadsheet,
   Import,
@@ -59,7 +64,7 @@ const IMPORT_TOUR_STEPS = {
   ],
 };
 
-export default function ExcelTemplateImportWizard({
+const ExcelTemplateImportWizard = forwardRef(function ExcelTemplateImportWizard({
   companyName,
   userIds,
   owner,
@@ -69,7 +74,7 @@ export default function ExcelTemplateImportWizard({
   guideStoragePrefix = "carmen_bi_getting_started_v1:anonymous",
   onImportTemplates,
   onOpenImportedReport,
-}) {
+}, ref) {
   const [step, setStep] = useState("upload");
   const [file, setFile] = useState(null);
   const [workbook, setWorkbook] = useState(null);
@@ -99,6 +104,12 @@ export default function ExcelTemplateImportWizard({
     setImportTourStep(0);
     setIsImportTourOpen(window.localStorage.getItem(importTourStorageKey) !== "done");
   }, [importTourStorageKey]);
+  useImperativeHandle(ref, () => ({
+    openGuide() {
+      setImportTourStep(0);
+      setIsImportTourOpen(true);
+    },
+  }), []);
   const configuredSheet = useMemo(
     () => workbook?.sheets.find((sheet) => sheet.name === configuredSheetName),
     [configuredSheetName, workbook],
@@ -231,7 +242,7 @@ export default function ExcelTemplateImportWizard({
 
   return (
     <section className="mx-auto flex h-full w-full max-w-7xl flex-col gap-3 overflow-y-auto px-2 py-2 sm:px-4">
-      <header className="flex flex-row items-start justify-between gap-2">
+      <header className="flex flex-row items-start gap-2">
         <section className="flex items-center gap-3">
           <section className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
             <FileSpreadsheet className="size-5" aria-hidden="true" />
@@ -245,9 +256,6 @@ export default function ExcelTemplateImportWizard({
             </p>
           </section>
         </section>
-        <Button type="button" variant="ghost" size="icon" onClick={() => { setImportTourStep(0); setIsImportTourOpen(true); }} aria-label="Open import guide" title="Import guide">
-          <CircleHelp aria-hidden="true" />
-        </Button>
       </header>
 
       <nav data-tour="import-progress" aria-label="Import progress" className="data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-xl data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary">
@@ -599,4 +607,6 @@ export default function ExcelTemplateImportWizard({
       />
     </section>
   );
-}
+});
+
+export default ExcelTemplateImportWizard;

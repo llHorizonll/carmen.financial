@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { CircleHelp, LoaderCircle, Save, Undo2 } from 'lucide-react';
+import React, { forwardRef, useImperativeHandle, useState } from 'react';
+import { LoaderCircle, Save, Undo2 } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import usePersistentState from '@/hooks/usePersistentState.js';
 import { Button } from '@/components/ui/button.jsx';
@@ -37,12 +37,18 @@ const hasConfigurationChanged = (draftItems, savedItems) => (
   JSON.stringify(draftItems || []) !== JSON.stringify(savedItems || [])
 );
 
-export default function ReportSetup(props) {
+const ReportSetup = forwardRef(function ReportSetup(props, ref) {
   const setupTourStorageKey = `${props.guideStoragePrefix || 'carmen_bi'}:setup`;
   const [isSetupTourOpen, setIsSetupTourOpen] = useState(
     () => window.localStorage.getItem(setupTourStorageKey) !== 'done',
   );
   const [setupTourStep, setSetupTourStep] = useState(0);
+  useImperativeHandle(ref, () => ({
+    openGuide() {
+      setSetupTourStep(0);
+      setIsSetupTourOpen(true);
+    },
+  }), []);
   const [storedSetupSection, setStoredSetupSection] = usePersistentState(
     SETUP_SECTION_STORAGE_KEY,
     'columns',
@@ -87,9 +93,6 @@ export default function ReportSetup(props) {
           </span>
         </p>
         <nav data-tour="setup-save" aria-label="Save or cancel report settings" className="flex w-full items-center gap-2 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-lg data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary lg:w-auto lg:justify-self-end">
-          <Button type="button" variant="ghost" size="icon" onClick={() => { setSetupTourStep(0); setIsSetupTourOpen(true); }} aria-label="Open setup guide" title="Setup guide">
-            <CircleHelp />
-          </Button>
           <Button className="flex-1 lg:flex-none" type="button" variant="outline" onClick={props.onCancel} disabled={!props.isDirty || props.isSaving}>
             <Undo2 />
             Cancel changes
@@ -144,4 +147,6 @@ export default function ReportSetup(props) {
       />
     </div>
   );
-}
+});
+
+export default ReportSetup;

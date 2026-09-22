@@ -172,6 +172,9 @@ describe('App shell', () => {
       screen.getByRole('button', { name: 'Open import guide' }),
     ).toBeInTheDocument();
     expect(
+      screen.getAllByRole('button', { name: 'Open import guide' }),
+    ).toHaveLength(1);
+    expect(
       screen.queryByRole('button', { name: 'Open getting started guide' }),
     ).not.toBeInTheDocument();
   });

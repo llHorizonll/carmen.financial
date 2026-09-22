@@ -196,13 +196,20 @@ export default function GettingStartedTour({
     : "bottom-[calc(1rem+env(safe-area-inset-bottom))]";
 
   return (
-    <section
-      className={`fixed ${horizontalPlacement} ${verticalPlacement} z-60 w-sm max-w-[calc(100vw-2rem)] rounded-xl border border-primary/30 bg-background shadow-xl print:hidden`}
-      role="dialog"
-      aria-labelledby="getting-started-title"
-      aria-describedby="getting-started-description"
-    >
-      {tourCard}
-    </section>
+    <>
+      <section
+        className="fixed inset-0 z-40 bg-foreground/35 print:hidden"
+        data-testid="tour-backdrop"
+        aria-hidden="true"
+      />
+      <section
+        className={`fixed ${horizontalPlacement} ${verticalPlacement} z-60 w-sm max-w-[calc(100vw-2rem)] rounded-xl border border-primary/30 bg-background shadow-xl print:hidden`}
+        role="dialog"
+        aria-labelledby="getting-started-title"
+        aria-describedby="getting-started-description"
+      >
+        {tourCard}
+      </section>
+    </>
   );
 }

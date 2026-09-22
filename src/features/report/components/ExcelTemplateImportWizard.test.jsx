@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ExcelTemplateImportWizard from "./ExcelTemplateImportWizard.jsx";
 import { createReportsFromExcelSheets, parseExcelWorkbook } from "../lib/excelTemplateImport.js";
@@ -40,6 +40,34 @@ describe("ExcelTemplateImportWizard", () => {
   beforeEach(() => {
     window.localStorage.clear();
     vi.clearAllMocks();
+  });
+
+  it("opens its guide from the single shell help request", () => {
+    window.localStorage.setItem(
+      "test-guide:import:upload",
+      "done",
+    );
+    const guideRef = React.createRef();
+
+    render(
+      <ExcelTemplateImportWizard
+        ref={guideRef}
+        companyName="Carmen"
+        userIds={["admin"]}
+        owner="admin"
+        guideStoragePrefix="test-guide"
+        onImportTemplates={vi.fn()}
+        onOpenImportedReport={vi.fn()}
+      />,
+    );
+
+    act(() => guideRef.current.openGuide());
+    expect(
+      screen.getByRole("dialog", { name: "Import has three phases" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Open import guide" }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows actions only for worksheets that can be selected", async () => {

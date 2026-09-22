@@ -375,6 +375,8 @@ export default function App({ onLogout = null }) {
   const [isSetupSaving, setIsSetupSaving] = useState(false);
   const [isGettingStartedOpen, setIsGettingStartedOpen] = useState(false);
   const [gettingStartedStep, setGettingStartedStep] = useState(0);
+  const setupGuideRef = useRef(null);
+  const importGuideRef = useRef(null);
 
   const [alertMsg, setAlertMsg] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
@@ -1189,6 +1191,11 @@ export default function App({ onLogout = null }) {
   const currentTheme = THEMES[activeReport?.theme || "blue"];
   const showPageSkeleton = isPageTransitioning;
   const visibleActiveTab = canSetupReports ? activeTab : "report";
+  const contextualGuideLabel = visibleActiveTab === "setup"
+    ? "Open setup guide"
+    : visibleActiveTab === "import"
+      ? "Open import guide"
+      : "Open getting started guide";
   const activeTabMotionClass =
     tabMotionDirection === null
       ? ""
@@ -1277,6 +1284,16 @@ export default function App({ onLogout = null }) {
   const closeGettingStarted = () => {
     window.localStorage.setItem(gettingStartedStorageKey, "done");
     setIsGettingStartedOpen(false);
+  };
+
+  const openContextualGuide = () => {
+    if (visibleActiveTab === "report") {
+      setGettingStartedStep(0);
+      setIsGettingStartedOpen(true);
+      return;
+    }
+    const guideRef = visibleActiveTab === "setup" ? setupGuideRef : importGuideRef;
+    guideRef.current?.openGuide();
   };
 
   useEffect(() => {
@@ -1698,21 +1715,16 @@ export default function App({ onLogout = null }) {
                 )}
               </div>
 
-              {visibleActiveTab === "report" && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => {
-                    setGettingStartedStep(0);
-                    setIsGettingStartedOpen(true);
-                  }}
-                  aria-label="Open getting started guide"
-                  title="Getting started"
-                >
-                  <CircleHelp className="size-4" />
-                </Button>
-              )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={openContextualGuide}
+                aria-label={contextualGuideLabel}
+                title={contextualGuideLabel.replace("Open ", "")}
+              >
+                <CircleHelp className="size-4" />
+              </Button>
 
               <div className="hidden flex-wrap items-center gap-2 sm:flex">
                 {visibleActiveTab === "setup" && (
@@ -2140,6 +2152,7 @@ export default function App({ onLogout = null }) {
                       }
                     >
                       <ReportSetup
+                        ref={setupGuideRef}
                         guideStoragePrefix={gettingStartedStorageKey}
                         themeMode={themeMode}
                         masterData={masterData}
@@ -2184,6 +2197,7 @@ export default function App({ onLogout = null }) {
                     }
                   >
                     <ExcelTemplateImportWizard
+                      ref={importGuideRef}
                       guideStoragePrefix={gettingStartedStorageKey}
                       companyName={
                         masterData.companyProfile.name ||

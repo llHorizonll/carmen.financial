@@ -1,5 +1,6 @@
 import React from "react";
 import { Eye, EyeOff, GripVertical, Trash2 } from "lucide-react";
+import { cn } from "@/lib/utils.js";
 import { Button } from "@/components/ui/button.jsx";
 import {
   Card,
@@ -212,6 +213,9 @@ export default function ColumnsConfigurator({
     [activeReport.columns],
   );
   const displayColumnIds = displayColumns.map((column) => column.id);
+  const hiddenColumnCount = activeReport.columns.filter(
+    (column) => column.isActive === false,
+  ).length;
   const reorderColumns = React.useCallback(
     (fromIndex, toIndex) => {
       updateActiveReport(
@@ -254,8 +258,16 @@ export default function ColumnsConfigurator({
       <CardHeader className="border-b bg-card/95 px-4 py-4 sm:px-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-1.5">
-            <CardTitle className="text-base font-semibold tracking-tight text-foreground">
-              Columns Configurator
+            <CardTitle className="flex flex-wrap items-center gap-2 text-base font-semibold tracking-tight text-foreground">
+              <span>Columns Configurator</span>
+              <Badge variant="secondary" className="tabular-nums">
+                {activeReport.columns.length} columns
+              </Badge>
+              {hiddenColumnCount > 0 ? (
+                <Badge variant="outline" className="tabular-nums text-muted-foreground">
+                  {hiddenColumnCount} hidden
+                </Badge>
+              ) : null}
             </CardTitle>
             <CardDescription className="text-sm text-muted-foreground">
               Drag for nearby changes, or choose an exact position for long
@@ -364,7 +376,10 @@ export default function ColumnsConfigurator({
                   key={col.id}
                   {...getItemProps(col.id)}
                   data-testid="column-card"
-                  className="column-card flex min-h-0 w-[310px] shrink-0 flex-col rounded-xl border border-border bg-card transition-[opacity,box-shadow,transform] duration-200 ease-out data-[dragging=true]:opacity-40 data-[drag-over=true]:ring-2 data-[drag-over=true]:ring-primary/40 motion-reduce:transition-none"
+                  className={cn(
+                    "column-card flex min-h-0 w-[310px] shrink-0 flex-col rounded-xl border border-border bg-card transition-[opacity,box-shadow,transform] duration-200 ease-out data-[dragging=true]:opacity-40 data-[drag-over=true]:ring-2 data-[drag-over=true]:ring-primary/40 motion-reduce:transition-none",
+                    col.isActive === false && "border-dashed opacity-60",
+                  )}
                 >
                   {/* Card Header: identify, reorder, and control the column */}
                   <div className="flex flex-row items-center justify-between border-b border-border bg-muted/30 px-3 py-2.5 rounded-t-xl gap-2 w-full overflow-hidden">
@@ -395,10 +410,11 @@ export default function ColumnsConfigurator({
                         size="icon-sm"
                         className={
                           col.isActive !== false
-                            ? "h-7 w-7 border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors duration-150"
-                            : "h-7 w-7 border-border bg-background text-muted-foreground hover:bg-muted"
+                            ? "h-7 w-7 border-border bg-muted/60 text-muted-foreground hover:bg-muted/60 focus-visible:bg-muted/60 hover:text-foreground transition-colors duration-150"
+                            : "h-7 w-7 border-border bg-background text-muted-foreground hover:bg-muted/60 focus-visible:bg-muted/60"
                         }
                         aria-label={`${col.isActive !== false ? "Hide" : "Show"} column ${col.id}`}
+                        aria-pressed={col.isActive === false}
                         title={`${col.isActive !== false ? "Hide" : "Show"} column ${col.id}`}
                         onClick={() =>
                           handleUpdateCol(

@@ -24,6 +24,11 @@ describe("GettingStartedTour", () => {
     );
 
     expect(screen.getByText("Choose a report")).toBeInTheDocument();
+    expect(screen.getByTestId("tour-backdrop")).toHaveClass(
+      "fixed",
+      "inset-0",
+      "bg-foreground/35",
+    );
     expect(document.querySelector('[data-tour="reports"]')).toHaveAttribute(
       "data-tour-active",
       "true",

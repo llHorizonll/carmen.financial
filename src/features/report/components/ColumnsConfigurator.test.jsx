@@ -209,6 +209,29 @@ describe('ColumnsConfigurator', () => {
     expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'isActive', false);
   });
 
+  it('summarizes and visually distinguishes hidden columns', () => {
+    render(
+      <ColumnsConfigurator
+        activeReport={{
+          descriptionPosition: 2,
+          columns: [
+            { id: 'C1', label: 'Actual', isActive: false, type: 'AC', yearMode: 'current', periodMode: 'current', width: '' },
+          ],
+        }}
+        handleAddCol={vi.fn()}
+        handleUpdateCol={vi.fn()}
+        updateActiveReport={vi.fn()}
+        moveCol={vi.fn()}
+        handleDeleteCol={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('1 columns')).toBeInTheDocument();
+    expect(screen.getByText('1 hidden')).toBeInTheDocument();
+    expect(screen.getByTestId('column-card')).toHaveClass('border-dashed', 'opacity-60');
+    expect(screen.getByRole('button', { name: /Show column C1/i })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('moves Description by drag and drop without reordering calculation columns', () => {
     const updateActiveReport = vi.fn();
     const dataTransfer = {

@@ -91,6 +91,9 @@ export default function RowsConfigurator({
     row,
     originalIndex,
   }));
+  const hiddenRowCount = activeReport.rows.filter(
+    (row) => row.isActive === false,
+  ).length;
   const reorderRows = React.useCallback(
     (fromIndex, toIndex) => {
       moveRow(fromIndex, toIndex);
@@ -130,9 +133,17 @@ export default function RowsConfigurator({
       <CardHeader className="border-b bg-muted/20 px-4 py-4 sm:px-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-1.5">
-            <CardTitle className="flex items-center gap-2 text-base font-semibold tracking-tight text-foreground">
+            <CardTitle className="flex flex-wrap items-center gap-2 text-base font-semibold tracking-tight text-foreground">
               <Layout className="size-4 text-muted-foreground" />
-              Rows Configurator
+              <span>Rows Configurator</span>
+              <Badge variant="secondary" className="tabular-nums">
+                {activeReport.rows.length} rows
+              </Badge>
+              {hiddenRowCount > 0 ? (
+                <Badge variant="outline" className="tabular-nums text-muted-foreground">
+                  {hiddenRowCount} hidden
+                </Badge>
+              ) : null}
             </CardTitle>
             <CardDescription className="text-sm text-muted-foreground">
               Drag for nearby changes, or choose an exact position for long
@@ -220,6 +231,7 @@ export default function RowsConfigurator({
                       "row-configurator-row transition-[opacity,box-shadow,transform,background-color] duration-200 ease-out data-[dragging=true]:opacity-40 data-[drag-over=true]:bg-primary/5 data-[drag-over=true]:ring-2 data-[drag-over=true]:ring-inset data-[drag-over=true]:ring-primary/35 motion-reduce:transition-none",
                       isTotal && "bg-muted/30",
                       isHeader && "bg-muted/10",
+                      row.isActive === false && "opacity-60",
                     )}
                   >
                     <TableCell className="px-2 py-2 align-middle">
@@ -422,32 +434,16 @@ export default function RowsConfigurator({
                         data-testid="row-actions"
                       >
                         <Button
-                          variant="destructive"
-                          size="icon-sm"
-                          className="border-destructive/30 bg-destructive/10 text-destructive hover:border-destructive/40 hover:bg-destructive/20"
-                          aria-label={`Delete row ${row.id}`}
-                          title={`Delete row ${row.id}`}
-                          onClick={() =>
-                            setConfirmAction({
-                              title: `Delete row ${row.id}?`,
-                              msg: `This permanently removes “${row.desc || row.id}” and updates affected row references.`,
-                              actionLabel: "Delete row",
-                              onConfirm: () => handleDeleteRow(row.id),
-                            })
-                          }
-                        >
-                          <Trash2 className="size-3.5 text-destructive" />
-                        </Button>
-                        <Button
                           variant="outline"
                           size="icon-sm"
                           className={cn(
-                            "border-border text-muted-foreground hover:bg-muted hover:text-foreground",
+                            "border-border text-muted-foreground hover:bg-muted/60 focus-visible:bg-muted/60 hover:text-foreground",
                             row.isActive !== false
                               ? "bg-muted/60"
                               : "bg-background",
                           )}
                           aria-label={`${row.isActive !== false ? "Hide" : "Show"} row ${row.id}`}
+                          aria-pressed={row.isActive === false}
                           title={`${row.isActive !== false ? "Hide" : "Show"} row ${row.id}`}
                           onClick={() =>
                             handleUpdateRow(
@@ -474,6 +470,23 @@ export default function RowsConfigurator({
                             <Edit3 className="size-3.5" />
                           </Button>
                         ) : null}
+                        <Button
+                          variant="destructive"
+                          size="icon-sm"
+                          className="border-destructive/30 bg-destructive/10 text-destructive hover:border-destructive/40 hover:bg-destructive/20"
+                          aria-label={`Delete row ${row.id}`}
+                          title={`Delete row ${row.id}`}
+                          onClick={() =>
+                            setConfirmAction({
+                              title: `Delete row ${row.id}?`,
+                              msg: `This permanently removes “${row.desc || row.id}” and updates affected row references.`,
+                              actionLabel: "Delete row",
+                              onConfirm: () => handleDeleteRow(row.id),
+                            })
+                          }
+                        >
+                          <Trash2 className="size-3.5 text-destructive" />
+                        </Button>
                       </section>
                     </TableCell>
                   </TableRow>
