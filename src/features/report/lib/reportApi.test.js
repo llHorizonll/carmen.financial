@@ -418,6 +418,29 @@ describe('reportApi helpers', () => {
     }));
   });
 
+  it('allows report detail loads when the API returns UserName access fields', async () => {
+    createSessionStorageMock({
+      accessToken: 'token',
+      username: 'viewer',
+      user: { UserName: 'viewer' },
+      businessUnit: { tenant: 'tenant-1' },
+    });
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: 'rep-access-shape',
+        Access: [{ UserName: 'VIEWER', CanView: true }],
+        rows: [],
+        columns: [],
+      }),
+    }));
+
+    await expect(fetchCarmenReport('rep-access-shape')).resolves.toEqual(expect.objectContaining({
+      id: 'rep-access-shape',
+    }));
+  });
+
   it('creates reports with the client-generated id required by the API', async () => {
     createSessionStorageMock({
       accessToken: 'token',
@@ -477,10 +500,13 @@ describe('reportApi helpers', () => {
 
   it('includes the server version when saving an existing report', async () => {
     createSessionStorageMock({ accessToken: 'token', businessUnit: { tenant: 'tenant-1' } });
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, text: async () => '' });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => JSON.stringify({ lastModified: '2026-09-21T10:01:00' }),
+    });
     vi.stubGlobal('fetch', fetchMock);
 
-    await saveCarmenReport({
+    const saved = await saveCarmenReport({
       id: 'rep-versioned',
       name: 'Versioned report',
       lastModified: '2026-09-21T10:00:00',
@@ -491,6 +517,7 @@ describe('reportApi helpers', () => {
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual(expect.objectContaining({
       lastModified: '2026-09-21T10:00:00',
     }));
+    expect(saved).toEqual({ lastModified: '2026-09-21T10:01:00' });
   });
 
   it('classifies offline fetch failures and publishes a global API error event', async () => {

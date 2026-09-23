@@ -1117,6 +1117,7 @@ describe('App shell', () => {
 
   it('saves setup category and access edits through the API payload', async () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
+    reportApiMocks.saveCarmenReport.mockResolvedValueOnce({ lastModified: '2026-09-23T10:01:00' });
     reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
       currentUser: {
         id: 'admin',
@@ -1175,6 +1176,7 @@ describe('App shell', () => {
       {
         id: 'rep-setup-edits',
         name: 'Setup Edits',
+        lastModified: '2026-09-23T10:00:00',
         companyName: 'Carmen Hotel & Resorts',
         category: ['ALL'],
         assignedUsers: ['admin'],
@@ -1228,6 +1230,15 @@ describe('App shell', () => {
       id: 'rep-setup-edits',
       category: ['B'],
       assignedUsers: ['admin', 'u2'],
+    }));
+    await waitFor(() => expect(saveChanges).toBeDisabled());
+    fireEvent.change(screen.getByDisplayValue('Setup Edits'), { target: { value: 'Setup Edits Again' } });
+    fireEvent.click(saveChanges);
+    await waitFor(() => expect(reportApiMocks.saveCarmenReport).toHaveBeenCalledTimes(2));
+    expect(reportApiMocks.saveCarmenReport).toHaveBeenLastCalledWith(expect.objectContaining({
+      id: 'rep-setup-edits',
+      name: 'Setup Edits Again',
+      lastModified: '2026-09-23T10:01:00',
     }));
   });
 

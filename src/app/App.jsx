@@ -110,6 +110,7 @@ import {
   saveCarmenReport,
   saveCarmenReports,
 } from "../features/report/lib/reportApi.js";
+import { clearCarmenApiFailure } from "../lib/carmenApiFailure.js";
 import {
   THEMES,
   INITIAL_MASTER_DATA,
@@ -438,6 +439,8 @@ export default function App({ onLogout = null }) {
   const pageTransitionTimerRef = useRef(null);
   const reportDataFetchSkipRef = useRef(false);
   const reportDataRequestCountRef = useRef(0);
+  const masterDataLoadKeysRef = useRef(new Set());
+  const reportCatalogLoadRef = useRef(false);
 
   // --- Report Configuration Data ---
   const [reports, setReports] = useState(() => {
@@ -606,6 +609,9 @@ export default function App({ onLogout = null }) {
   useEffect(() => {
     if (!apiConfigured || !/^\d{4}$/.test(String(globalYear))) return;
 
+    const masterDataLoadKey = String(globalYear);
+    if (masterDataLoadKeysRef.current.has(masterDataLoadKey)) return;
+
     let isCancelled = false;
     const loadCarmenMasterData = async () => {
       setIsMasterDataLoading(true);
@@ -616,6 +622,7 @@ export default function App({ onLogout = null }) {
         ]);
         if (isCancelled) return;
 
+        masterDataLoadKeysRef.current.add(masterDataLoadKey);
         setApiDimensions(dimensions);
         setMasterData((prev) => mergeCarmenMasterData(prev, apiData));
         if (apiData.currentUser) setCurrentUser(apiData.currentUser);
@@ -650,6 +657,7 @@ export default function App({ onLogout = null }) {
 
   useEffect(() => {
     if (!apiConfigured) return;
+    if (reportCatalogLoadRef.current) return;
 
     let isCancelled = false;
     const loadCarmenCatalog = async () => {
@@ -660,6 +668,8 @@ export default function App({ onLogout = null }) {
           fetchCarmenReports(),
         ]);
         if (isCancelled) return;
+
+        reportCatalogLoadRef.current = true;
 
         if (optionsResult.status === "fulfilled") {
           setReportOptions(
@@ -684,7 +694,6 @@ export default function App({ onLogout = null }) {
             optionsResult.status === "rejected"
               ? optionsResult.reason
               : reportsResult.reason;
-          setReports([]);
           setReportsLoaded(true);
           throw reason || new Error("Unable to load Carmen report catalog.");
         }
@@ -695,7 +704,6 @@ export default function App({ onLogout = null }) {
             onLogout();
             return;
           }
-          setReports([]);
           setReportsLoaded(true);
           setReportCatalogError(
             error.message || "Unable to load Carmen report catalog.",
@@ -788,11 +796,11 @@ export default function App({ onLogout = null }) {
   const persistSetup = async () => {
     setIsSetupSaving(true);
     try {
-      if (apiConfigured) await saveCarmenReport(setupReport);
-      const refreshedReport = apiConfigured
-        ? await fetchCarmenReport(setupReport.id)
-        : null;
-      const savedReport = refreshedReport || setupReport;
+      const saveResult = apiConfigured ? await saveCarmenReport(setupReport) : null;
+      const savedVersion = saveResult?.lastModified || saveResult?.LastModified;
+      const savedReport = savedVersion
+        ? { ...setupReport, lastModified: savedVersion }
+        : setupReport;
       setReports((currentReports) => currentReports.map((report) =>
         report.id === savedReport.id ? savedReport : report
       ));
@@ -800,6 +808,23 @@ export default function App({ onLogout = null }) {
       setIsSetupDirty(false);
       setReportCatalogError(null);
     } catch (error) {
+      if (error?.status === 409 && setupReport?.id) {
+        try {
+          const latestReport = await fetchCarmenReport(setupReport.id);
+          setReports((currentReports) => currentReports.map((report) =>
+            report.id === latestReport.id ? latestReport : report
+          ));
+          setSetupDraft(latestReport);
+          setIsSetupDirty(false);
+          clearCarmenApiFailure();
+          setReportCatalogError(
+            "This report was updated by another user. The latest version has been reloaded; please review and save again."
+          );
+          return;
+        } catch {
+          // Keep the original conflict message when the refresh also fails.
+        }
+      }
       setReportCatalogError(error.message || "Unable to save report definition.");
     } finally {
       setIsSetupSaving(false);

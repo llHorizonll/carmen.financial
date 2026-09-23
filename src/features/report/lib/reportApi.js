@@ -266,22 +266,41 @@ const getSessionUserIdentity = () => {
     session?.user?.id
     || session?.user?.UserId
     || session?.user?.userId
+    || session?.user?.UserName
+    || session?.user?.userName
     || session?.username
     || ''
   ).trim();
 };
 
+const normalizeIdentity = (value) => String(value ?? '').trim().toLowerCase();
+
+const getReportIdentityValues = (value) => [
+  value?.id,
+  value?.Id,
+  value?.userId,
+  value?.UserId,
+  value?.userName,
+  value?.UserName,
+  value?.username,
+  value?.Username,
+].map(normalizeIdentity).filter(Boolean);
+
 const canAccessCarmenReportDefinition = (report, userId) => {
-  const normalizedUserId = String(userId || '').trim();
+  const normalizedUserId = normalizeIdentity(userId);
   if (!normalizedUserId) return false;
 
-  if (String(report?.owner || report?.Owner || '').trim() === normalizedUserId) return true;
-  if (Array.isArray(report?.assignedUsers || report?.AssignedUsers) && (report.assignedUsers || report.AssignedUsers).includes(normalizedUserId)) {
+  if ([report?.owner, report?.Owner, report?.createdBy, report?.CreatedBy]
+    .map(normalizeIdentity)
+    .includes(normalizedUserId)) return true;
+  if (Array.isArray(report?.assignedUsers || report?.AssignedUsers) && (report.assignedUsers || report.AssignedUsers)
+    .some((item) => normalizeIdentity(item) === normalizedUserId)) {
     return true;
   }
 
   const accessRows = Array.isArray(report?.access || report?.Access) ? (report.access || report.Access) : [];
-  return accessRows.some((item) => String(item?.userId || item?.UserId || '').trim() === normalizedUserId && item?.canView !== false && item?.CanView !== false);
+  return accessRows.some((item) => getReportIdentityValues(item).includes(normalizedUserId)
+    && item?.canView !== false && item?.CanView !== false);
 };
 
 export const loginWithCarmenCredentials = async ({ userName, password, tenant, language }) => {

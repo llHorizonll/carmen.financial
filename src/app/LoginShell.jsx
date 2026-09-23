@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useSyncExternalStore } from 'react';
+import React, { Suspense, lazy, useCallback, useSyncExternalStore } from 'react';
 import { BarChart3 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge.jsx';
 import { Skeleton } from '@/components/ui/skeleton.jsx';
@@ -55,6 +55,13 @@ export default function LoginShell() {
     message: apiFailure.message,
     action: 'Close',
   } : null;
+  const handleLogout = useCallback(() => {
+    clearCarmenSession();
+    clearCarmenApiFailure();
+  }, []);
+  const handleAuthenticated = useCallback(() => {
+    clearCarmenApiFailure();
+  }, []);
 
   React.useEffect(() => {
     initializeTheme();
@@ -74,10 +81,7 @@ export default function LoginShell() {
   const content = isAuthenticated ? (
       <Suspense fallback={<div className="flex min-h-dvh items-center justify-center bg-background text-sm text-muted-foreground">Loading Carmen Financial BI...</div>}>
         <App
-          onLogout={() => {
-            clearCarmenSession();
-            clearCarmenApiFailure();
-          }}
+          onLogout={handleLogout}
         />
       </Suspense>
   ) : (
@@ -97,9 +101,7 @@ export default function LoginShell() {
             </Suspense>
           </section>
           <Suspense fallback={<Skeleton className="order-1 h-148 w-full max-w-md self-center rounded-xl lg:order-2" aria-label="Loading sign-in form" />}>
-            <LoginForm onAuthenticated={() => {
-              clearCarmenApiFailure();
-            }} />
+            <LoginForm onAuthenticated={handleAuthenticated} />
           </Suspense>
         </div>
       </div>
