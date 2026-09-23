@@ -87,4 +87,24 @@ describe("GettingStartedTour", () => {
       screen.getByRole("dialog", { name: "Choose a report" }),
     ).toBeInTheDocument();
   });
+
+  it("anchors the desktop guide to the viewport from inside an animated pane", () => {
+    document.body.innerHTML = '<button data-tour="setup-details">Report details</button>';
+    const { container } = render(
+      <section className="app-pane-enter-from-right">
+        <GettingStartedTour
+          canSetup
+          steps={[{ target: "setup-details", title: "Define the report", description: "Set details." }]}
+          open
+          stepIndex={0}
+          onStepChange={vi.fn()}
+          onClose={vi.fn()}
+        />
+      </section>,
+    );
+
+    expect(container.contains(screen.getByRole("dialog", { name: "Define the report" }))).toBe(false);
+    expect(screen.getByRole("dialog", { name: "Define the report" }).parentElement).toBe(document.body);
+    expect(container.contains(screen.getByTestId("tour-backdrop"))).toBe(true);
+  });
 });

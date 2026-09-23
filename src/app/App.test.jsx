@@ -141,6 +141,47 @@ describe('App shell', () => {
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument(), { timeout: 5000 });
   });
 
+  it('closes and remembers the getting started guide on desktop', async () => {
+    const { unmount } = render(<App />);
+    await screen.findByRole('dialog', { name: 'Choose a report' });
+    fireEvent.click(screen.getByRole('button', { name: 'Close getting started guide' }));
+    expect(screen.queryByRole('dialog', { name: 'Choose a report' })).not.toBeInTheDocument();
+    expect(window.localStorage.setItem).toHaveBeenCalledWith(
+      'carmen_bi_getting_started_v1:admin',
+      'done',
+    );
+
+    unmount();
+    render(<App />);
+    expect(screen.queryByRole('dialog', { name: 'Choose a report' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the getting started guide interactive on mobile after login', async () => {
+    Object.defineProperty(window, 'innerWidth', { value: 390, configurable: true });
+    const originalMatchMedia = window.matchMedia;
+    Object.defineProperty(window, 'matchMedia', { configurable: true, value: (query) => ({
+      matches: query.includes('767px'),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }) });
+    try {
+      render(<App />);
+      await screen.findAllByText('Choose a report');
+      await waitFor(() => {
+        expect(document.querySelectorAll('[data-slot="sheet-content"]')).toHaveLength(1);
+        expect(screen.getByRole('button', { name: 'Close getting started guide' })).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Close getting started guide' }));
+      await waitFor(() => {
+        expect(screen.queryAllByText('Choose a report')).toHaveLength(0);
+      });
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { value: 1024, configurable: true });
+      Object.defineProperty(window, 'matchMedia', { configurable: true, value: originalMatchMedia });
+    }
+  });
+
   it('keeps setup edits as a draft and restores them on Cancel changes', async () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));

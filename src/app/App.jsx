@@ -504,11 +504,8 @@ export default function App({ onLogout = null }) {
       setIsSidebarCollapsed(false);
       return;
     }
-    const sidebarStep = canSetupReports
-      ? gettingStartedStep < 3
-      : gettingStartedStep === 0;
-    setIsSidebarOpen(sidebarStep);
-  }, [canSetupReports, gettingStartedStep, isGettingStartedOpen, isMobile]);
+    setIsSidebarOpen(false);
+  }, [isGettingStartedOpen, isMobile]);
   const activeReportUsesDayFilter = useMemo(() => {
     if (!activeReport) return false;
     if (activeReport.reportType === "Daily") return true;

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button.jsx";
@@ -191,14 +192,17 @@ export default function GettingStartedTour({
         data-testid="tour-backdrop"
         aria-hidden="true"
       />
-      <section
-        className="fixed top-1/2 left-1/2 z-60 w-sm max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-primary/30 bg-background shadow-xl print:hidden"
-        role="dialog"
-        aria-labelledby="getting-started-title"
-        aria-describedby="getting-started-description"
-      >
-        {tourCard}
-      </section>
+      {createPortal(
+        <section
+          className="fixed top-1/2 left-1/2 z-60 w-sm max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-primary/30 bg-background shadow-xl print:hidden"
+          role="dialog"
+          aria-labelledby="getting-started-title"
+          aria-describedby="getting-started-description"
+        >
+          {tourCard}
+        </section>,
+        document.body,
+      )}
     </>
   );
 }
