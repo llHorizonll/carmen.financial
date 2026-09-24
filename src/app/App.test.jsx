@@ -56,6 +56,19 @@ describe('report access filtering', () => {
 });
 
 describe('setup validation', () => {
+  it('allows Daily and Monthly data columns in the same report', () => {
+    const warnings = getSetupWarnings({
+      reportType: 'Monthly',
+      columns: [
+        { id: 'C1', type: 'AC', isFormula: false, isPercent: false },
+        { id: 'C2', type: 'DAC', isFormula: false, isPercent: false },
+      ],
+      rows: [],
+    }, INITIAL_MASTER_DATA);
+
+    expect(warnings).toEqual([]);
+  });
+
   it('checks data column types without rejecting stale types on formula and mix columns', () => {
     const warnings = getSetupWarnings({
       reportType: 'Monthly',
@@ -746,7 +759,7 @@ describe('App shell', () => {
     });
   });
 
-  it('blocks saving incompatible column types for daily reports', async () => {
+  it('allows Monthly data columns in reports previously marked Daily', async () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
       currentUser: {
@@ -818,9 +831,7 @@ describe('App shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
 
     await waitFor(() => expect(screen.getByText('Columns Configurator')).toBeInTheDocument());
-    expect(screen.getByText(/reports should only use compatible column types/i)).toBeInTheDocument();
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalledWith(expect.objectContaining({ id: 'rep-daily-invalid' }));
+    expect(screen.queryByText(/unsupported column types/i)).not.toBeInTheDocument();
   });
 
   it('saves duplicate row mappings without showing a duplicate warning', async () => {
@@ -1891,6 +1902,9 @@ describe('App shell', () => {
     await waitFor(() => expect(screen.getAllByText('PTD Invalid Day').length).toBeGreaterThan(0));
     await waitFor(() => expect(screen.getByText(/Day must be between 1 and 28/i)).toBeInTheDocument());
     expect(reportApiMocks.fetchCarmenReportData).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('Day'), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    await waitFor(() => expect(reportApiMocks.fetchCarmenReportData).toHaveBeenCalledWith(expect.objectContaining({ day: '2' })));
   });
 });
 

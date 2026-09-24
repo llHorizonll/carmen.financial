@@ -399,7 +399,7 @@ describe('buildReportData', () => {
     expect(result[0].results['C3-live']).toBe(100);
   });
 
-  it('shows Actual Mix minus Budget Mix for a variance column instead of dividing by total variance', () => {
+  it('calculates Mix on a formula column against that formula column in the base row', () => {
     const result = buildReportData({
       activeReport: {
         category: ['ALL'],
@@ -431,9 +431,9 @@ describe('buildReportData', () => {
     });
 
     expect(result[0].results['C3-variance']).toBe(-10);
-    expect(result[0].results['C4-mix']).toBeCloseTo((70 / 99 - 60 / 100) * 100);
-    expect(result[1].results['C4-mix']).toBeCloseTo((29 / 99 - 40 / 100) * 100);
-    expect(result[2].results['C4-mix']).toBe(0);
+    expect(result[0].results['C4-mix']).toBe(-1000);
+    expect(result[1].results['C4-mix']).toBe(1100);
+    expect(result[2].results['C4-mix']).toBe(100);
   });
 
   it('matches department lookups even when codes are zero-padded', () => {
@@ -766,6 +766,35 @@ describe('buildReportData', () => {
     expect(result[0].results.C1).toBe(10);
   });
 
+  it('keeps Daily and Monthly actuals separate when API returns both row shapes', () => {
+    const input = {
+      activeReport: {
+        category: ['ALL'],
+        rows: [{ id: 'r1', desc: 'Revenue', dept: '101', accCodes: '4001', groupLevel: 'L4', groups: '' }],
+        columns: [
+          { id: 'C1', type: 'DAC', yearMode: 'current', periodMode: 'current' },
+          { id: 'C2', type: 'AC', yearMode: 'current', periodMode: 'current' },
+        ],
+      },
+      engineData: [
+        { year: '2025', period: '2', day: '1', deptcode: '101', acccode: '4001', amount: '10' },
+        { year: '2025', period: '2', day: '2', deptcode: '101', acccode: '4001', amount: '20' },
+        { year: '2025', deptcode: '101', acccode: '4001', amt2: '30', bfamt2: '0' },
+      ],
+      budgetData: [],
+      appliedDepts: [],
+      appliedYear: '2025',
+      appliedPeriod: '2',
+      appliedDay: '2',
+      appliedRevision: '0',
+      masterData,
+    };
+    const result = buildReportData(input);
+
+    expect(result[0].results).toMatchObject({ C1: 20, C2: 30 });
+    expect(buildReportData({ ...input, appliedDay: '' })[0].results).toMatchObject({ C1: 30, C2: 30 });
+  });
+
   it('expands API-backed account groups into account-code filters', () => {
     const result = buildReportData({
       activeReport: {
@@ -836,6 +865,75 @@ describe('buildReportData', () => {
     });
 
     expect(result[0].results).toMatchObject({ C1: 10, C2: 20 });
+  });
+
+  it('does not lose monthly budget cents when PTDBG reaches the last day', () => {
+    const result = buildReportData({
+      activeReport: {
+        category: ['ALL'], rows: [{ id: 'r1', dept: '101', accCodes: '4001' }],
+        columns: [{ id: 'C1', type: 'PTDBG', yearMode: 'current', periodMode: 'current' }],
+      },
+      engineData: [],
+      budgetData: [{ year: '2025', revision: '0', deptcode: '101', acccode: '4001', amt1: '100', days1: 31 }],
+      appliedDepts: [], appliedYear: '2025', appliedPeriod: '1', appliedDay: '31', appliedRevision: '0', masterData,
+    });
+    expect(result[0].results.C1).toBeCloseTo(100);
+  });
+
+  it('calculates all eight FRD v5.24 data formulas with mixed daily and monthly rows', () => {
+    const result = buildReportData({
+      activeReport: {
+        category: ['ALL'],
+        rows: [{ id: 'r1', dept: '101', accCodes: '4001', groupLevel: 'L4', groups: '' }],
+        columns: ['DAC', 'PTD', 'AC', 'ACC', 'DACBG', 'PTDBG', 'BC', 'BCC'].map((type, index) => ({
+          id: `C${index + 1}`, type, yearMode: 'current', periodMode: 'current',
+        })),
+      },
+      engineData: [
+        { year: '2025', period: '2', day: '1', deptcode: '101', acccode: '4001', amount: '10' },
+        { year: '2025', period: '2', day: '2', deptcode: '101', acccode: '4001', amount: '20' },
+        { year: '2025', deptcode: '101', acccode: '4001', amt2: '30', bfamt2: '40' },
+      ],
+      budgetData: [{ year: '2025', revision: '0', deptcode: '101', acccode: '4001', amt1: '50', amt2: '280', budacc2: '330', days2: 28 }],
+      appliedDepts: [], appliedYear: '2025', appliedPeriod: '2', appliedDay: '2', appliedRevision: '0', masterData,
+    });
+    expect(result[0].results).toMatchObject({ C1: 20, C2: 30, C3: 30, C4: 70, C5: 10, C6: 20, C7: 280, C8: 330 });
+  });
+
+  it('uses the column Budget Revision and previous day without changing the View parameters', () => {
+    const result = buildReportData({
+      activeReport: {
+        category: ['ALL'],
+        rows: [{ id: 'r1', dept: '101', accCodes: '4001', groupLevel: 'L4', groups: '' }],
+        columns: [
+          { id: 'C1', type: 'DAC', dayMode: '-1', yearMode: 'current', periodMode: 'current' },
+          { id: 'C2', type: 'BC', budRev: '1', yearMode: 'current', periodMode: 'current' },
+          { id: 'C3', type: 'BC', budRev: 'REV', yearMode: 'current', periodMode: 'current' },
+        ],
+      },
+      engineData: [
+        { year: '2025', period: '2', day: '1', deptcode: '101', acccode: '4001', amount: '10' },
+        { year: '2025', period: '2', day: '2', deptcode: '101', acccode: '4001', amount: '20' },
+      ],
+      budgetData: [
+        { year: '2025', revision: '0', deptcode: '101', acccode: '4001', amt2: '100' },
+        { year: '2025', revision: '1', deptcode: '101', acccode: '4001', amt2: '200' },
+      ],
+      appliedDepts: [], appliedYear: '2025', appliedPeriod: '2', appliedDay: '2', appliedRevision: '0', masterData,
+    });
+    expect(result[0].results).toMatchObject({ C1: 10, C2: 200, C3: 100 });
+  });
+
+  it('resolves Day -1 across the year boundary', () => {
+    const result = buildReportData({
+      activeReport: {
+        category: ['ALL'], rows: [{ id: 'r1', dept: '101', accCodes: '4001' }],
+        columns: [{ id: 'C1', type: 'DAC', dayMode: '-1', yearMode: 'current', periodMode: 'current' }],
+      },
+      engineData: [{ year: '2024', period: '12', day: '31', deptcode: '101', acccode: '4001', amount: '25' }],
+      budgetData: [], appliedDepts: [], appliedYear: '2025', appliedPeriod: '1', appliedDay: '1', appliedRevision: '0', masterData,
+    });
+    expect(result[0].results.C1).toBe(25);
   });
 
   it('exports Description at the configured column position', () => {

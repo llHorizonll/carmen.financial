@@ -4,6 +4,22 @@ import { describe, expect, it, vi } from 'vitest';
 import ReportDetailsPanel from './ReportDetailsPanel.jsx';
 
 describe('ReportDetailsPanel', () => {
+  it('shows Day when a Monthly report has a Daily data column', () => {
+    render(
+      <ReportDetailsPanel
+        activeReport={{ name: 'Daily values', reportType: 'Monthly', day: '15', columns: [{ id: 'C1', type: 'DAC' }] }}
+        activeCategories={[]}
+        masterData={{ users: [{ id: 'admin' }] }}
+        updateActiveReport={vi.fn()}
+        handleCloneReport={vi.fn()}
+        handleDeleteReport={vi.fn()}
+        setIsAccessModalOpen={vi.fn()}
+      />
+    );
+
+    expect(screen.getByLabelText('Day')).toHaveValue('15');
+  });
+
   it('updates report settings and triggers report actions', async () => {
     const updateActiveReport = vi.fn();
     const handleCloneReport = vi.fn();

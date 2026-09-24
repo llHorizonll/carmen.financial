@@ -3,6 +3,9 @@
 ## Project Overview
 This repository now uses a small Vite React scaffold with the main application implemented in [`src/app/App.jsx`](./src/app/App.jsx). The app behaves like a configurable financial reporting hub with report viewing, report setup, data import, access control, and export/print flows.
 
+## Backend Location
+- The Carmen API used by this frontend is at `C:\dotnet\Carmen4\Carmen.WebApi`. Check and change its `Controllers/ReportV2Controller.cs`, `Functions/FncReportV2.cs`, and BI migration scripts for report API work.
+
 ## Stack
 - React function components
 - JSX

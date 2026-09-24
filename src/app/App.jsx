@@ -231,7 +231,7 @@ const DEFAULT_REPORT_OPTIONS = {
 };
 
 const DAILY_COLUMN_TYPES = new Set(["DAC", "PTD", "DACBG", "PTDBG"]);
-const MONTHLY_COLUMN_TYPES = new Set([
+const SUPPORTED_COLUMN_TYPES = new Set([...DAILY_COLUMN_TYPES,
   "AC",
   "ACC",
   "BUD",
@@ -281,12 +281,11 @@ export const getSetupWarnings = (report, masterData) => {
     warnings.push(`${describeItem("row", issue.id)}: ${issue.value}`);
   });
 
-  const allowedTypes = report.reportType === "Daily" ? DAILY_COLUMN_TYPES : MONTHLY_COLUMN_TYPES;
   (report.columns || []).forEach((column) => {
     if (column?.isFormula || column?.isPercent) return;
     const type = String(column?.type || "").trim().toUpperCase();
-    if (type && !allowedTypes.has(type)) {
-      warnings.push(`${describeItem("column", column.id)}: type ${type} is not compatible with ${report.reportType || "Monthly"} reports.`);
+    if (type && !SUPPORTED_COLUMN_TYPES.has(type)) {
+      warnings.push(`${describeItem("column", column.id)}: unsupported type ${type}.`);
     }
   });
 
@@ -418,6 +417,7 @@ export default function App({ onLogout = null }) {
   const [globalYear, setGlobalYear] = useState(createCurrentYearValue);
   const [globalPeriod, setGlobalPeriod] = useState("2");
   const [globalRevision, setGlobalRevision] = useState("0");
+  const [dayFilterState, setDayFilterState] = useState(null);
 
   const [appliedDepts, setAppliedDepts] = useState([]);
   const [appliedYear, setAppliedYear] = useState(createCurrentYearValue);
@@ -529,7 +529,6 @@ export default function App({ onLogout = null }) {
   }, [isGettingStartedOpen, isMobile]);
   const activeReportUsesDayFilter = useMemo(() => {
     if (!activeReport) return false;
-    if (activeReport.reportType === "Daily") return true;
     return (
       Array.isArray(activeReport.columns) &&
       activeReport.columns.some((col) => {
@@ -540,8 +539,13 @@ export default function App({ onLogout = null }) {
       })
     );
   }, [activeReport]);
+  const defaultReportDay = String(activeReport?.day || (activeReportUsesDayFilter ? '1' : ''));
+  const currentDayFilter = dayFilterState?.reportId === activeReport?.id && dayFilterState?.reportDay === defaultReportDay
+    ? dayFilterState
+    : null;
+  const globalDay = currentDayFilter?.globalDay ?? defaultReportDay;
   const activeReportDay = activeReportUsesDayFilter
-    ? activeReport?.day || ""
+    ? currentDayFilter?.appliedDay ?? defaultReportDay
     : "";
   const activeReportUsesBudget = useMemo(
     () =>
@@ -899,14 +903,17 @@ export default function App({ onLogout = null }) {
   const handleApplyFilters = async () => {
     const nextDepts = [...globalDepts];
     const nextRevision = activeReportUsesBudget ? globalRevision : "0";
+    const nextDay = activeReportUsesDayFilter ? String(globalDay).trim() : '';
     const filtersChanged = String(appliedYear) !== String(globalYear)
       || String(appliedPeriod) !== String(globalPeriod)
       || String(appliedRevision) !== String(nextRevision)
+      || String(activeReportDay) !== nextDay
       || nextDepts.join("|") !== appliedDepts.join("|");
     if (apiConfigured && filtersChanged) reportDataFetchSkipRef.current = true;
     setAppliedDepts(nextDepts);
     setAppliedYear(globalYear);
     setAppliedPeriod(globalPeriod);
+    setDayFilterState({ reportId: activeReport?.id, reportDay: defaultReportDay, globalDay: nextDay, appliedDay: nextDay });
     if (!activeReportUsesBudget && String(globalRevision) !== "0") {
       setAlertMsg(
         "Revision selector is ignored for reports without budget columns.",
@@ -922,7 +929,7 @@ export default function App({ onLogout = null }) {
         period: globalPeriod,
         revision: nextRevision,
         deptIds: nextDepts,
-        day: activeReportDay,
+        day: nextDay,
       });
     } catch {
       // Error already surfaced by loadReportDataFromApi.
@@ -1068,7 +1075,7 @@ export default function App({ onLogout = null }) {
 
   const handleAddCol = (type) => {
     const newColId = "C" + (setupReport.columns.length + 1) + "-" + Date.now();
-    const defaultDataType = setupReport?.reportType === "Daily" ? "DAC" : "AC";
+    const defaultDataType = setupReport?.columns?.some((column) => ['DAC', 'PTD'].includes(String(column.type || '').toUpperCase())) ? "DAC" : "AC";
     const newCol = {
       id: newColId,
       label:
@@ -2012,6 +2019,26 @@ export default function App({ onLogout = null }) {
                           </SelectContent>
                         </Select>
                       </div>
+
+                      {activeReportUsesDayFilter && (
+                        <div className="space-y-1">
+                          <label htmlFor="view-day" className="block text-xs font-medium text-muted-foreground">Day</label>
+                          <Input
+                            id="view-day"
+                            type="number"
+                            min="1"
+                            max="31"
+                            value={globalDay}
+                            onChange={(event) => setDayFilterState({
+                              reportId: activeReport?.id,
+                              reportDay: defaultReportDay,
+                              globalDay: event.target.value,
+                              appliedDay: activeReportDay,
+                            })}
+                            className="h-9 text-sm"
+                          />
+                        </div>
+                      )}
 
                       <div className="space-y-1">
                         <span className="block text-xs font-medium text-muted-foreground">

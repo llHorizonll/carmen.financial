@@ -26,6 +26,7 @@ export default function ReportHistory({ report, isDirty, onRestored }) {
     let cancelled = false;
     setBusy(true);
     setError('');
+    setEntries([]);
     fetchCarmenReportHistory(report.id)
       .then((items) => { if (!cancelled) setEntries(Array.isArray(items) ? items : []); })
       .catch((reason) => { if (!cancelled) setError(reason.message); })
@@ -78,15 +79,15 @@ export default function ReportHistory({ report, isDirty, onRestored }) {
           </DialogHeader>
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           {busy && <p className="flex items-center gap-2 text-sm text-muted-foreground"><LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" /> Loading history...</p>}
-          {!busy && entries.length === 0 && <p className="text-sm text-muted-foreground">No saved versions yet.</p>}
-          <ul className="divide-y border-y" aria-label="Saved versions">
+          {!busy && !error && entries.length === 0 && <p className="text-sm text-muted-foreground">No saved versions yet.</p>}
+          {entries.length > 0 && <ul className="divide-y border-y" aria-label="Saved versions">
             {entries.map((entry) => (
               <li key={entry.id} className="flex items-center justify-between gap-3 py-3">
                 <p className="text-sm"><strong>{entry.changeType}</strong> · {new Date(entry.changedAt).toLocaleString()} · {entry.changedBy}</p>
                 <Button type="button" variant="ghost" size="sm" onClick={() => inspect(entry)}>Inspect</Button>
               </li>
             ))}
-          </ul>
+          </ul>}
           {selected && <section aria-label="Selected version" className="grid gap-2 rounded-lg border p-4 text-sm">
             <h3 className="font-semibold">Version #{selected.id}</h3>
             <p>Name: {selected.definition.name}</p>

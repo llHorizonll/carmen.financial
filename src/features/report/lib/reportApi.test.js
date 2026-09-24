@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildReportDefinitionPayload, cloneCarmenReport, createCarmenReport, deleteCarmenReport, fetchBusinessUnitsByUsername, fetchCarmenAccountGroups, fetchCarmenDepartmentGroups, fetchCarmenDimensions, fetchCarmenReport, fetchCarmenReportOptions, fetchCarmenUsers, loginWithCarmenCredentials, saveCarmenReport, saveCarmenReports } from './reportApi.js';
+import { buildReportDefinitionPayload, cloneCarmenReport, createCarmenReport, deleteCarmenReport, fetchBusinessUnitsByUsername, fetchCarmenAccountGroups, fetchCarmenDepartmentGroups, fetchCarmenDimensions, fetchCarmenReport, fetchCarmenReportHistory, fetchCarmenReportOptions, fetchCarmenUsers, loginWithCarmenCredentials, saveCarmenReport, saveCarmenReports } from './reportApi.js';
 import { clearCarmenApiFailure, getCarmenApiFailure } from '../../../lib/carmenApiFailure.js';
 
 const createSessionStorageMock = (session = {}) => {
@@ -37,6 +37,19 @@ afterEach(() => {
 });
 
 describe('reportApi helpers', () => {
+  it('explains when the report history endpoint is missing without exposing an HTML error page', async () => {
+    createSessionStorageMock({ accessToken: 'token', businessUnit: { tenant: 'tenant-1' } });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      headers: { get: () => 'text/html; charset=utf-8' },
+      text: async () => '<!DOCTYPE html><html><title>404 - File or directory not found.</title></html>',
+    }));
+
+    await expect(fetchCarmenReportHistory('rep-1')).rejects.toThrow(/report history.*unavailable/i);
+    expect(getCarmenApiFailure().message).not.toMatch(/<!DOCTYPE|<html/i);
+  });
+
   it('coalesces concurrent identical GET requests during StrictMode remounts', async () => {
     const storage = createSessionStorageMock({
       accessToken: 'token',

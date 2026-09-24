@@ -4,6 +4,24 @@ import { describe, expect, it, vi } from 'vitest';
 import ColumnsConfigurator, { buildColumnLogicTypeUpdates } from './ColumnsConfigurator.jsx';
 
 describe('ColumnsConfigurator', () => {
+  it('offers Daily data types even when a report was saved as Monthly', async () => {
+    render(
+      <ColumnsConfigurator
+        activeReport={{ reportType: 'Monthly', columns: [{ id: 'C1', label: 'Actual', type: 'AC', isActive: true }] }}
+        handleAddCol={vi.fn()}
+        handleUpdateCol={vi.fn()}
+        updateActiveReport={vi.fn()}
+        handleDeleteCol={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Type' }));
+    expect(await screen.findByRole('option', { name: 'DAC' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'PTD' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'DACBG' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'PTDBG' })).toBeInTheDocument();
+  });
+
   it('does not flag stale source types on formula and mix columns as monthly incompatibilities', () => {
     render(
       <ColumnsConfigurator

@@ -11,6 +11,15 @@ const api = vi.hoisted(() => ({
 vi.mock('../lib/reportApi.js', () => api);
 
 describe('ReportHistory', () => {
+  it('shows the history error without claiming there are no saved versions', async () => {
+    api.fetchCarmenReportHistory.mockRejectedValue(new Error('Report history is unavailable on this Carmen API server.'));
+    render(<ReportHistory report={{ id: 'r1', name: 'Current report' }} isDirty={false} onRestored={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'History' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Report history is unavailable');
+    expect(screen.queryByText('No saved versions yet.')).not.toBeInTheDocument();
+  });
+
   it('inspects a saved version and restores it against the current version', async () => {
     api.fetchCarmenReportHistory.mockResolvedValue([{ id: 7, changeType: 'save', changedAt: '2025-01-01T12:00:00', changedBy: 'admin' }]);
     api.fetchCarmenReportHistoryVersion.mockResolvedValue({ name: 'Old report', rows: [{}], columns: [{}], access: [] });

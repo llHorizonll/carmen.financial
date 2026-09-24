@@ -137,10 +137,16 @@ const throwResponseError = async (response, { path, context, isAuthenticated = f
     );
   }
 
-  const apiMessage = typeof payload === 'string' ? payload.trim() : extractApiErrorMessage(payload);
-  const message = apiMessage
-    ? `Carmen API: ${apiMessage}`
-    : `${context} failed with HTTP ${response.status}.`;
+  const isHtml = response.headers?.get?.('content-type')?.toLowerCase().includes('text/html')
+    || (typeof payload === 'string' && /^\s*(?:<!doctype html|<html\b)/i.test(payload));
+  const apiMessage = isHtml ? '' : typeof payload === 'string' ? payload.trim() : extractApiErrorMessage(payload);
+  const historyEndpointMissing = response.status === 404
+    && /\/api\/reports\/[^/]+\/history(?:\/|$)/.test(path);
+  const message = historyEndpointMissing
+    ? 'Report history is unavailable on this Carmen API server. The history endpoint returned HTTP 404.'
+    : apiMessage
+      ? `Carmen API: ${apiMessage}`
+      : `${context} failed with HTTP ${response.status}.`;
   throw createCarmenApiError(message, {
     kind: response.status === 401 || response.status === 403 ? 'authorization' : 'api',
     status: response.status,

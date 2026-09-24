@@ -129,11 +129,8 @@ export default function ColumnsConfigurator({
     return () => clearTimeout(scrollTimer);
   }, [activeReport.columns.length]);
 
-  const reportType = activeReport?.reportType || "Monthly";
-  const allowedColumnTypes =
-    reportType === "Daily"
-      ? new Set(["DAC", "PTD", "DACBG", "PTDBG"])
-      : new Set(["AC", "ACC", "BC", "BCC", "BUD", "BUDACC"]); // Keep BUD and BUDACC internally allowed for backward compatibility
+  const defaultDataType = activeReport.columns.some((column) => ["DAC", "PTD"].includes(String(column.type).toUpperCase())) ? "DAC" : "AC";
+  const supportedColumnTypes = new Set(["DAC", "PTD", "DACBG", "PTDBG", "AC", "ACC", "BC", "BCC", "BUD", "BUDACC"]);
   const columnTypeOptions = (
     reportOptions.columnTypes?.length > 0
       ? reportOptions.columnTypes
@@ -147,7 +144,7 @@ export default function ColumnsConfigurator({
           { id: "BC", label: "BC" },
           { id: "BCC", label: "BCC" },
         ]
-  ).filter((option) => allowedColumnTypes.has(option.id));
+  ).filter((option) => supportedColumnTypes.has(String(option.id).toUpperCase()));
   const logicTypeLabels = new Map(
     (reportOptions.columnLogicTypes?.length > 0
       ? reportOptions.columnLogicTypes
@@ -189,12 +186,12 @@ export default function ColumnsConfigurator({
             };
           }),
         ];
-  const hasIncompatibleColumns = activeReport.columns.some(
+  const hasUnsupportedColumns = activeReport.columns.some(
     (col) =>
       !col.isFormula &&
       !col.isPercent &&
       col.type &&
-      !allowedColumnTypes.has(String(col.type).trim().toUpperCase()),
+      !supportedColumnTypes.has(String(col.type).trim().toUpperCase()),
   );
   const brokenColumnReferences = React.useMemo(
     () =>
@@ -230,7 +227,6 @@ export default function ColumnsConfigurator({
   );
   const changeColumnLogicType = React.useCallback(
     (column, logicType) => {
-      const defaultDataType = reportType === "Daily" ? "DAC" : "AC";
       const updates = buildColumnLogicTypeUpdates(
         column,
         logicType,
@@ -243,7 +239,7 @@ export default function ColumnsConfigurator({
         ),
       });
     },
-    [activeReport.columns, reportType, updateActiveReport],
+    [activeReport.columns, defaultDataType, updateActiveReport],
   );
   const { announcement, containerRef, getHandleProps, getItemProps } =
     useDragReorder({
@@ -291,10 +287,9 @@ export default function ColumnsConfigurator({
         <p className="sr-only" aria-live="polite">
           {announcement}
         </p>
-        {hasIncompatibleColumns && (
+        {hasUnsupportedColumns && (
           <div className="border-b bg-amber-500/5 px-4 py-2 text-sm text-amber-700">
-            {reportType} reports should only use compatible column types.
-            Mismatched columns may produce incomplete report data.
+            Unsupported column types may produce incomplete report data.
           </div>
         )}
         {brokenColumnReferences.length > 0 && (
@@ -638,8 +633,7 @@ export default function ColumnsConfigurator({
                           </label>
                           <Select
                             value={
-                              col.type ||
-                              (reportType === "Daily" ? "DAC" : "AC")
+                              col.type || defaultDataType
                             }
                             onValueChange={(value) =>
                               handleUpdateCol(col.id, "type", value)
@@ -658,7 +652,7 @@ export default function ColumnsConfigurator({
                                 </SelectItem>
                               ))}
                               {col.type &&
-                                !allowedColumnTypes.has(
+                                !supportedColumnTypes.has(
                                   String(col.type).trim().toUpperCase(),
                                 ) && (
                                   <SelectItem value={col.type}>
@@ -668,6 +662,32 @@ export default function ColumnsConfigurator({
                             </SelectContent>
                           </Select>
                         </div>
+
+                        {['DAC', 'PTD', 'DACBG', 'PTDBG'].includes(String(col.type || '').toUpperCase()) && (
+                          <div className="space-y-1.5">
+                            <label htmlFor={fieldId('day-mode')} className="text-xs font-medium text-muted-foreground">Day</label>
+                            <Select value={col.dayMode || 'current'} onValueChange={(value) => handleUpdateCol(col.id, 'dayMode', value)}>
+                              <SelectTrigger id={fieldId('day-mode')} className="h-9 w-full text-sm"><SelectValue placeholder="Day" /></SelectTrigger>
+                              <SelectContent position="popper">
+                                <SelectItem value="current">Day (Parameter)</SelectItem>
+                                <SelectItem value="-1">Day -1 (Yesterday)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
+                        {['DACBG', 'PTDBG', 'BC', 'BCC', 'BUD', 'BUDACC'].includes(String(col.type || '').toUpperCase()) && (
+                          <div className="space-y-1.5">
+                            <label htmlFor={fieldId('budget-revision')} className="text-xs font-medium text-muted-foreground">BudRev</label>
+                            <Select value={col.budRev || 'REV'} onValueChange={(value) => handleUpdateCol(col.id, 'budRev', value)}>
+                              <SelectTrigger id={fieldId('budget-revision')} className="h-9 w-full text-sm"><SelectValue placeholder="Revision" /></SelectTrigger>
+                              <SelectContent position="popper">
+                                <SelectItem value="REV">REV (Parameter)</SelectItem>
+                                {['0', '1', '2', '3', '4'].map((revision) => <SelectItem key={revision} value={revision}>Rev {revision}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
 
                         {/* Target */}
                         <div className="space-y-1.5">

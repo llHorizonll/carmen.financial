@@ -560,9 +560,8 @@ const matchesPreparedDimensions = (dimensionSets, source) => {
   return true;
 };
 
-const filterPreparedRows = ({ preparedRows, rowConfig, appliedDeptSet, reportCategories, filterRevision = false, appliedRevision }) =>
+const filterPreparedRows = ({ preparedRows, rowConfig, appliedDeptSet, reportCategories }) =>
   preparedRows.filter((prepared) => {
-    if (filterRevision && prepared.revision !== appliedRevision) return false;
     if (appliedDeptSet.size > 0 && !appliedDeptSet.has(prepared.deptCode)) return false;
     if (rowConfig.hasDeptMap && !rowConfig.deptSet.has(prepared.deptCode)) return false;
     if (rowConfig.hasAccMap && !rowConfig.accSet.has(prepared.accCode)) return false;
@@ -578,22 +577,36 @@ const filterPreparedRows = ({ preparedRows, rowConfig, appliedDeptSet, reportCat
     });
   });
 
+const resolveDailySelection = (col, effYear, targetMonths, appliedDay) => {
+  const selectedDay = Number.parseInt(appliedDay, 10);
+  if (col.dayMode !== '-1' || !Number.isInteger(selectedDay)) {
+    return { year: effYear, months: targetMonths, day: selectedDay };
+  }
+  const month = targetMonths[0];
+  if (!Number.isInteger(month) || targetMonths.length !== 1) {
+    return { year: effYear, months: targetMonths, day: selectedDay - 1 };
+  }
+  const previousDate = new Date(Number(effYear), month - 1, selectedDay - 1);
+  return { year: String(previousDate.getFullYear()), months: [previousDate.getMonth() + 1], day: previousDate.getDate() };
+};
+
 const sumActuals = ({ col, matchedRows, appliedYear, appliedPeriod, appliedDay, periodOptions }) => {
   const { effYear, targetMonths } = resolveTime(col, appliedYear, appliedPeriod, periodOptions);
   const type = String(col.type || '').trim().toUpperCase();
   const monthsToEvaluate = ['BUDACC', 'BCC'].includes(type) && col.periodMode === 'FY' ? [targetMonths[0]] : targetMonths;
-  const targetDay = Number.parseInt(appliedDay, 10);
+  const dailySelection = resolveDailySelection(col, effYear, monthsToEvaluate, appliedDay);
+  const targetDay = dailySelection.day;
   const valueMode = getColumnValueMode(col.type);
   let sum = 0;
 
-  monthsToEvaluate.forEach(m => {
+  (type === 'DAC' || type === 'PTD' ? dailySelection.months : monthsToEvaluate).forEach(m => {
     matchedRows.forEach((prepared) => {
       const d = prepared.source;
-      if (prepared.year && prepared.year !== effYear) return;
+      if (prepared.year && prepared.year !== (type === 'DAC' || type === 'PTD' ? dailySelection.year : effYear)) return;
       if (type === 'DAC' || type === 'PTD') {
+        if (!Number.isInteger(prepared.day)) return;
         if (Number.isInteger(prepared.period) && prepared.period !== m) return;
         if (Number.isInteger(targetDay)) {
-          if (!Number.isInteger(prepared.day)) return;
           if (type === 'DAC' && prepared.day !== targetDay) return;
           if (type === 'PTD' && (prepared.day < 1 || prepared.day > targetDay)) return;
         }
@@ -612,18 +625,21 @@ const sumActuals = ({ col, matchedRows, appliedYear, appliedPeriod, appliedDay, 
   return sum;
 };
 
-const sumBudget = ({ col, matchedRows, appliedYear, appliedPeriod, appliedDay, periodOptions }) => {
+const sumBudget = ({ col, matchedRows, appliedYear, appliedPeriod, appliedDay, appliedRevision, periodOptions }) => {
   const { effYear, targetMonths } = resolveTime(col, appliedYear, appliedPeriod, periodOptions);
   const type = String(col.type || '').trim().toUpperCase();
   const monthsToEvaluate = ['BUDACC', 'BCC'].includes(type) && col.periodMode === 'FY' ? [targetMonths[0]] : targetMonths;
-  const targetDay = Number.parseInt(appliedDay, 10);
+  const dailySelection = resolveDailySelection(col, effYear, monthsToEvaluate, appliedDay);
+  const targetDay = dailySelection.day;
+  const revision = /^([0-4])$/.test(String(col.budRev || '')) ? String(col.budRev) : String(appliedRevision ?? '0');
   const valueMode = getColumnValueMode(col.type);
   let sum = 0;
 
-  monthsToEvaluate.forEach(m => {
+  (type === 'DACBG' || type === 'PTDBG' ? dailySelection.months : monthsToEvaluate).forEach(m => {
     matchedRows.forEach((prepared) => {
       const d = prepared.source;
-      if (prepared.year && prepared.year !== effYear) return;
+      if (prepared.year && prepared.year !== (type === 'DACBG' || type === 'PTDBG' ? dailySelection.year : effYear)) return;
+      if (prepared.revision !== revision) return;
       if (type === 'DACBG' || type === 'PTDBG') {
         if (Number.isInteger(prepared.period) && prepared.period !== m) return;
         if (Number.isInteger(targetDay) && Number.isInteger(prepared.day)) {
@@ -638,7 +654,7 @@ const sumBudget = ({ col, matchedRows, appliedYear, appliedPeriod, appliedDay, p
           sum += parseAmount(d.amount ?? d.amt ?? d.val ?? amtM);
         } else {
           const daysInPeriod = Number.parseInt(d['days' + m], 10) || new Date(Number(effYear), m, 0).getDate();
-          const dailyAmount = Math.round((parseAmount(amtM) / daysInPeriod) * 100) / 100;
+          const dailyAmount = parseAmount(amtM) / daysInPeriod;
           sum += dailyAmount * (type === 'PTDBG' ? Math.max(0, targetDay || 0) : 1);
         }
       } else if (valueMode === 'bud') {
@@ -701,30 +717,12 @@ const applyPercentRows = (rows, columns, rowRefMap) => {
       }
       const numerator = Number(rowRefMap[row.id][targetColId]) || 0;
       let denominator = 0;
-      let baseRow;
       if (row.percentBase && !row.percentBase.includes('!REF!')) {
         const baseMatch = row.percentBase.match(/R(\d+)/i);
         if (baseMatch) {
           const bIdx = parseInt(baseMatch[1], 10) - 1;
-          baseRow = rows[bIdx];
+          const baseRow = rows[bIdx];
           if (baseRow) denominator = Number(rowRefMap[baseRow.id][targetColId]) || 0;
-        }
-      }
-
-      const varianceMatch = targetColumn.isFormula && /^\s*(C[1-9]\d*)\s*-\s*(C[1-9]\d*)\s*$/i.exec(targetColumn.formula || '');
-      if (varianceMatch) {
-        const sources = varianceMatch.slice(1).map(ref => columns[Number(ref.slice(1)) - 1]);
-        const actualColumn = sources.find(source => source && !source.isFormula && !source.isPercent && !BUDGET_COLUMN_TYPES.has(String(source.type || '').toUpperCase()));
-        const budgetColumn = sources.find(source => source && BUDGET_COLUMN_TYPES.has(String(source.type || '').toUpperCase()));
-        if (actualColumn && budgetColumn) {
-          const actualBase = Number(rowRefMap[baseRow?.id]?.[actualColumn.id]) || 0;
-          const budgetBase = Number(rowRefMap[baseRow?.id]?.[budgetColumn.id]) || 0;
-          const actual = Number(rowRefMap[row.id][actualColumn.id]) || 0;
-          const budget = Number(rowRefMap[row.id][budgetColumn.id]) || 0;
-          rowRefMap[row.id][col.id] = actualBase && budgetBase
-            ? (actual / actualBase - budget / budgetBase) * 100
-            : 0;
-          return;
         }
       }
 
@@ -774,8 +772,6 @@ export const buildReportData = ({
       rowConfig,
       appliedDeptSet,
       reportCategories,
-      filterRevision: true,
-      appliedRevision,
     });
 
     columns.filter(c => !c.isFormula && !c.isPercent).forEach(col => {
@@ -786,6 +782,7 @@ export const buildReportData = ({
           appliedYear,
           appliedPeriod,
           appliedDay,
+          appliedRevision,
           periodOptions,
         });
       } else {
@@ -838,8 +835,6 @@ export const buildReportDrilldown = ({
     rowConfig,
     appliedDeptSet: new Set((appliedDepts || []).map(normalizeDeptLookupCode).filter(Boolean)),
     reportCategories: Array.isArray(activeReport?.category) ? activeReport.category : ['ALL'],
-    filterRevision: isBudget,
-    appliedRevision,
   });
   const groups = new Map();
   matched.forEach((prepared) => {
@@ -851,7 +846,7 @@ export const buildReportDrilldown = ({
     accountCode: group.accountCode,
     departmentCode: group.departmentCode,
     amount: (isBudget ? sumBudget : sumActuals)({
-      col, matchedRows: group.rows, appliedYear, appliedPeriod, periodOptions,
+      col, matchedRows: group.rows, appliedYear, appliedPeriod, appliedRevision, periodOptions,
     }),
   })).filter((line) => line.amount !== 0).sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
   return { lines, total: lines.reduce((sum, line) => sum + line.amount, 0), source: isBudget ? 'budget' : 'actual' };
