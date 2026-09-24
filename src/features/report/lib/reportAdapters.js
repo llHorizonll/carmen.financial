@@ -379,14 +379,15 @@ const normalizeReportRow = (row) => {
 
 const normalizeReportColumn = (column) => {
   if (!column || typeof column !== 'object') return column;
-  const isFormula = Boolean(column.isFormula ?? column.IsFormula);
-  const isPercent = Boolean(column.isPercent ?? column.IsPercent);
   const rawType = String(column.type || column.Type || '').trim().toUpperCase();
+  const isFormula = Boolean(column.isFormula ?? column.IsFormula ?? (rawType === 'FORMULA'));
+  const isPercent = Boolean(column.isPercent ?? column.IsPercent ?? (rawType === 'MIX'));
   const type = rawType === 'BUD' ? 'BC' : rawType === 'BUDACC' ? 'BCC' : rawType;
   return {
     ...column,
     isFormula,
     isPercent,
+    targetCol: String(column.targetCol ?? column.TargetCol ?? '').trim().toUpperCase(),
     type: isFormula || isPercent ? undefined : type,
   };
 };

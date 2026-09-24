@@ -111,7 +111,7 @@ export default function ReportDetailsPanel({
         <ReportActionButtons friendlyButtonClassName={friendlyButtonClassName} handleCloneReport={handleCloneReport} handleDeleteReport={handleDeleteReport} setIsAccessModalOpen={setIsAccessModalOpen} />
       </CardHeader>
 
-      <CardContent className="space-y-5 pt-4">
+      <CardContent className="space-y-5 pt-0">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <div className="space-y-2">
             <Label className="text-foreground">Report Name</Label>

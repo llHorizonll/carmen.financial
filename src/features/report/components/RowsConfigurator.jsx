@@ -129,7 +129,7 @@ export default function RowsConfigurator({
   }, [activeReport.rows.length]);
 
   return (
-    <Card className="min-h-0 overflow-hidden border border-border bg-card/95 shadow-none ring-0 pt-0">
+    <Card className="min-h-0 gap-0 overflow-hidden border border-border bg-card/95 pb-0 shadow-none ring-0 pt-0">
       <CardHeader className="border-b bg-muted/20 px-4 py-4 sm:px-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-1.5">

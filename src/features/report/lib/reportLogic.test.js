@@ -371,6 +371,71 @@ describe('buildReportData', () => {
     ]);
   });
 
+  it('calculates Mix from a positional C reference when column ids have suffixes', () => {
+    const result = buildReportData({
+      activeReport: {
+        category: ['ALL'],
+        rows: [
+          { id: 'r1', accCodes: '4002', percentBase: 'R2' },
+          { id: 'r2', isTotal: true, formula: 'R1', percentBase: 'R2' },
+        ],
+        columns: [
+          { id: 'C1-live', type: 'DAC' },
+          { id: 'C2-live', isPercent: true, targetCol: 'C1' },
+          { id: 'C3-live', isPercent: true, targetCol: 'C1-live' },
+        ],
+      },
+      engineData: [{ year: '2026', period: '5', day: '18', acccode: '4002', amount: '500' }],
+      budgetData: [],
+      appliedDepts: [],
+      appliedYear: '2026',
+      appliedPeriod: '5',
+      appliedDay: '18',
+      appliedRevision: '0',
+      masterData: INITIAL_MASTER_DATA,
+    });
+
+    expect(result[0].results['C2-live']).toBe(100);
+    expect(result[0].results['C3-live']).toBe(100);
+  });
+
+  it('shows Actual Mix minus Budget Mix for a variance column instead of dividing by total variance', () => {
+    const result = buildReportData({
+      activeReport: {
+        category: ['ALL'],
+        rows: [
+          { id: 'rooms', accCodes: '4001', percentBase: 'R3' },
+          { id: 'food', accCodes: '4002', percentBase: 'R3' },
+          { id: 'total', isTotal: true, formula: 'R1+R2', percentBase: 'R3' },
+        ],
+        columns: [
+          { id: 'C1-budget', type: 'BC', yearMode: 'current', periodMode: 'current' },
+          { id: 'C2-actual', type: 'AC', yearMode: 'current', periodMode: 'current' },
+          { id: 'C3-variance', isFormula: true, formula: 'C1-C2' },
+          { id: 'C4-mix', isPercent: true, targetCol: 'C3' },
+        ],
+      },
+      engineData: [
+        { year: '2026', period: '5', acccode: '4001', amt5: '70' },
+        { year: '2026', period: '5', acccode: '4002', amt5: '29' },
+      ],
+      budgetData: [
+        { year: '2026', period: '5', revision: '0', acccode: '4001', amount: '60', amt5: '60' },
+        { year: '2026', period: '5', revision: '0', acccode: '4002', amount: '40', amt5: '40' },
+      ],
+      appliedDepts: [],
+      appliedYear: '2026',
+      appliedPeriod: '5',
+      appliedRevision: '0',
+      masterData: INITIAL_MASTER_DATA,
+    });
+
+    expect(result[0].results['C3-variance']).toBe(-10);
+    expect(result[0].results['C4-mix']).toBeCloseTo((70 / 99 - 60 / 100) * 100);
+    expect(result[1].results['C4-mix']).toBeCloseTo((29 / 99 - 40 / 100) * 100);
+    expect(result[2].results['C4-mix']).toBe(0);
+  });
+
   it('matches department lookups even when codes are zero-padded', () => {
     const paddedResult = buildReportData({
       activeReport,

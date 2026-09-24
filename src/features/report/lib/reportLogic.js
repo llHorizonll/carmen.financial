@@ -689,20 +689,45 @@ const applyFormulaRows = (rows, columns, rowRefMap) => {
 const applyPercentRows = (rows, columns, rowRefMap) => {
   rows.forEach(row => {
     columns.filter(c => c.isPercent).forEach(col => {
-      const targetColId = col.targetCol;
+      const targetRef = String(col.targetCol || '').trim();
+      const position = /^C([1-9]\d*)$/i.exec(targetRef);
+      const targetColumn = position
+        ? columns[Number(position[1]) - 1]
+        : columns.find(candidate => candidate.id.toUpperCase() === targetRef.toUpperCase());
+      const targetColId = targetColumn?.id;
       if (!targetColId) {
         rowRefMap[row.id][col.id] = 0;
         return;
       }
       const numerator = Number(rowRefMap[row.id][targetColId]) || 0;
       let denominator = 0;
+      let baseRow;
       if (row.percentBase && !row.percentBase.includes('!REF!')) {
         const baseMatch = row.percentBase.match(/R(\d+)/i);
         if (baseMatch) {
           const bIdx = parseInt(baseMatch[1], 10) - 1;
-          if (rows[bIdx]) denominator = Number(rowRefMap[rows[bIdx].id][targetColId]) || 0;
+          baseRow = rows[bIdx];
+          if (baseRow) denominator = Number(rowRefMap[baseRow.id][targetColId]) || 0;
         }
       }
+
+      const varianceMatch = targetColumn.isFormula && /^\s*(C[1-9]\d*)\s*-\s*(C[1-9]\d*)\s*$/i.exec(targetColumn.formula || '');
+      if (varianceMatch) {
+        const sources = varianceMatch.slice(1).map(ref => columns[Number(ref.slice(1)) - 1]);
+        const actualColumn = sources.find(source => source && !source.isFormula && !source.isPercent && !BUDGET_COLUMN_TYPES.has(String(source.type || '').toUpperCase()));
+        const budgetColumn = sources.find(source => source && BUDGET_COLUMN_TYPES.has(String(source.type || '').toUpperCase()));
+        if (actualColumn && budgetColumn) {
+          const actualBase = Number(rowRefMap[baseRow?.id]?.[actualColumn.id]) || 0;
+          const budgetBase = Number(rowRefMap[baseRow?.id]?.[budgetColumn.id]) || 0;
+          const actual = Number(rowRefMap[row.id][actualColumn.id]) || 0;
+          const budget = Number(rowRefMap[row.id][budgetColumn.id]) || 0;
+          rowRefMap[row.id][col.id] = actualBase && budgetBase
+            ? (actual / actualBase - budget / budgetBase) * 100
+            : 0;
+          return;
+        }
+      }
+
       const result = denominator !== 0 ? (numerator / denominator) * 100 : 0;
       rowRefMap[row.id][col.id] = (!isFinite(result) || isNaN(result)) ? 0 : result;
     });

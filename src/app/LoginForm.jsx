@@ -119,7 +119,7 @@ export default function LoginForm({ onAuthenticated }) {
   };
 
   return (
-    <Card className="login-enter-from-right order-1 w-full max-w-md self-center border border-border bg-card shadow-lg ring-0 lg:order-2">
+    <Card className="login-enter-from-left order-1 w-full max-w-md justify-self-center self-center border border-border bg-card shadow-lg ring-0 lg:justify-self-start">
       <CardHeader className="space-y-2">
         <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">Secure sign-in</Badge>
         <CardTitle className="text-xl tracking-tight sm:text-2xl">Carmen BI Login</CardTitle>

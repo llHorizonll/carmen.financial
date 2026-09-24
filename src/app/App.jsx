@@ -377,6 +377,8 @@ export default function App({ onLogout = null }) {
   const [isGettingStartedOpen, setIsGettingStartedOpen] = useState(false);
   const [gettingStartedStep, setGettingStartedStep] = useState(0);
   const setupGuideRef = useRef(null);
+  const workspaceHeaderRef = useRef(null);
+  const sidebarBrandRef = useRef(null);
   const importGuideRef = useRef(null);
 
   const [alertMsg, setAlertMsg] = useState(null);
@@ -456,6 +458,25 @@ export default function App({ onLogout = null }) {
   const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
   const [modalAccCategory, setModalAccCategory] = useState("ALL");
   const isMobile = useIsMobile();
+  useLayoutEffect(() => {
+    if (isMobile || isSidebarCollapsed) return;
+    const header = workspaceHeaderRef.current;
+    const brand = sidebarBrandRef.current;
+    if (!header || !brand) return;
+
+    const alignBrandBorder = () => {
+      const headerHeight = header.getBoundingClientRect().height;
+      if (headerHeight > 0) brand.style.height = `${Math.ceil(headerHeight)}px`;
+    };
+    alignBrandBorder();
+    if (typeof ResizeObserver === "undefined") return () => { brand.style.height = ""; };
+    const observer = new ResizeObserver(alignBrandBorder);
+    observer.observe(header);
+    return () => {
+      observer.disconnect();
+      brand.style.height = "";
+    };
+  }, [isMobile, isSidebarCollapsed]);
   const canSetupReports = canSetupFinancialReports(currentUser);
   const gettingStartedStorageKey = `${GETTING_STARTED_STORAGE_PREFIX}${currentUser?.id || "anonymous"}`;
   const accessibleReports = useMemo(
@@ -1373,7 +1394,7 @@ export default function App({ onLogout = null }) {
   // ============================================================================
   const sidebarPanel = (
     <div className="flex h-full flex-col bg-background">
-      <div className="flex items-center justify-between border-b px-4 py-4">
+      <div ref={sidebarBrandRef} className="flex shrink-0 items-center justify-between border-b px-4 py-2.5">
         <div className="flex items-center gap-3">
           <div className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
             <BarChart3 className="size-5" />
@@ -1676,7 +1697,7 @@ export default function App({ onLogout = null }) {
       <main
         className={`flex min-w-0 flex-1 flex-col ${visibleActiveTab === "setup" ? "overflow-visible" : "overflow-hidden"}`}
       >
-        <header className="w-full border-b border-border bg-card/95 backdrop-blur print:hidden">
+        <header ref={workspaceHeaderRef} className="w-full border-b border-border bg-card/95 backdrop-blur print:hidden">
           <div className="flex flex-col gap-3 px-4 py-2.5 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
               {isMobile ? (

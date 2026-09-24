@@ -89,9 +89,9 @@ export default function LoginShell() {
   ) : (
     <main className="min-h-dvh bg-background text-foreground">
       <div className="mx-auto flex min-h-dvh max-w-6xl items-stretch px-4 py-8 sm:px-6 sm:py-10 lg:items-center lg:px-8">
-        <div className="grid w-full gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:gap-12">
-          <section className="order-2 flex flex-col justify-center gap-8 lg:order-1">
-            <header className="login-enter-from-left max-w-2xl space-y-5">
+        <div className="grid w-full gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:gap-12">
+          <section className="order-2 flex flex-col justify-center gap-8">
+            <header className="login-enter-from-right max-w-2xl space-y-5">
               <Badge variant="outline" className="w-fit rounded-full px-3 py-1"><BarChart3 className="size-3.5" />Carmen Financial BI</Badge>
               <div className="space-y-4">
                 <h1 className="max-w-xl text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl lg:text-5xl">A focused workspace for financial reporting.</h1>
@@ -102,7 +102,7 @@ export default function LoginShell() {
               <LoginFeatures />
             </Suspense>
           </section>
-          <Suspense fallback={<Skeleton className="order-1 h-148 w-full max-w-md self-center rounded-xl lg:order-2" aria-label="Loading sign-in form" />}>
+          <Suspense fallback={<Skeleton className="order-1 h-148 w-full max-w-md justify-self-center self-center rounded-xl lg:justify-self-start" aria-label="Loading sign-in form" />}>
             <LoginForm onAuthenticated={handleAuthenticated} />
           </Suspense>
         </div>

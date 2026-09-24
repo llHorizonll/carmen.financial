@@ -12,6 +12,7 @@ import {
   deriveCarmenFinancialReportAccess,
   mergeCarmenMasterData,
 } from './reportAdapters.js';
+import { buildReportData, INITIAL_MASTER_DATA } from './reportLogic.js';
 
 describe('reportAdapters', () => {
   it('keeps the report concurrency version from the API', () => {
@@ -208,7 +209,7 @@ describe('reportAdapters', () => {
         { id: 'C1', label: 'Actual', type: 'AC' },
         { id: 'C2', label: 'Budget', type: 'BUD' },
         { id: 'C3', label: 'Year Budget', Type: 'BUDACC' },
-        { id: 'C4', label: 'Mix', type: 'MIX', isPercent: true },
+        { id: 'C4', label: 'Mix', type: 'MIX', TargetCol: 'c1' },
         { id: 'C5', label: 'Variance', Type: 'FORMULA', isFormula: true },
       ],
       rows: [{
@@ -234,7 +235,7 @@ describe('reportAdapters', () => {
         expect.objectContaining({ id: 'C1', type: 'AC' }),
         expect.objectContaining({ id: 'C2', type: 'BC' }),
         expect.objectContaining({ id: 'C3', type: 'BCC' }),
-        expect.objectContaining({ id: 'C4', isPercent: true, type: undefined }),
+        expect.objectContaining({ id: 'C4', isPercent: true, targetCol: 'C1', type: undefined }),
         expect.objectContaining({ id: 'C5', isFormula: true, type: undefined }),
       ],
       rows: expect.arrayContaining([
@@ -303,5 +304,32 @@ describe('reportAdapters', () => {
         isTotal: false,
       })],
     }));
+  });
+
+  it('calculates Mix values from API column fields', () => {
+    const activeReport = adaptCarmenReportDefinition({
+      id: 'mix-report',
+      columns: [
+        { id: 'C1', type: 'DAC' },
+        { id: 'C2', Type: 'MIX', TargetCol: 'c1' },
+      ],
+      rows: [
+        { id: 'r1', AccCode: '4002', PercentBase: 'R2' },
+        { id: 'r2', isTotal: true, Formula: 'R1', PercentBase: 'R2' },
+      ],
+    });
+    const result = buildReportData({
+      activeReport,
+      engineData: [{ year: '2026', period: '5', day: '18', acccode: '4002', amount: '500' }],
+      budgetData: [],
+      appliedDepts: [],
+      appliedYear: '2026',
+      appliedPeriod: '5',
+      appliedDay: '18',
+      appliedRevision: '0',
+      masterData: INITIAL_MASTER_DATA,
+    });
+
+    expect(result[0].results.C2).toBe(100);
   });
 });
