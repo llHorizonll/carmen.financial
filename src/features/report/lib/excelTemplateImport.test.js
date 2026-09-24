@@ -177,6 +177,71 @@ describe("Excel template import", () => {
     });
   });
 
+  it("keeps bordered revenue rows as details and reads legacy mapping blocks", () => {
+    const matrix = [
+      ["Description", "Actual", "Budget", "From", "To", "Dept 1", "Dept 2"],
+      ["Room Revenue", "", "", "", "", "", ""],
+      ["Revenue rooms", "10,000.00", "9,000.00", "411010", "", "101", ""],
+      ["Other rooms", "0.00", "0.00", "411020", "411030", "102", ""],
+    ];
+    const styles = new Map([
+      ["1:0", { bold: true, top: true, bottom: true }],
+      ["2:0", { bottom: true }],
+      ["3:0", { top: true, bottom: true }],
+    ]);
+    const sheet = analyzeExcelSheet("DRR REVENUE", matrix, [], styles, {}, {
+      depts: [{ id: "101" }, { id: "102" }],
+      accCodes: [{ id: "411010" }, { id: "411020" }, { id: "411025" }, { id: "411030" }],
+    });
+
+    expect(sheet.detectedRows.map(({ desc, isHeader, dept, accCodes }) => ({ desc, isHeader, dept, accCodes }))).toEqual([
+      { desc: "Room Revenue", isHeader: true, dept: "", accCodes: "" },
+      { desc: "Revenue rooms", isHeader: false, dept: "101", accCodes: "411010" },
+      { desc: "Other rooms", isHeader: false, dept: "102", accCodes: "411020, 411025, 411030" },
+    ]);
+  });
+
+  it("ignores a description heading left of the detail labels", () => {
+    const sheet = analyzeExcelSheet("DRR RO BY MARKET SEGMENT", [
+      ["Description", "", "Actual", "Budget"],
+      ["", "Consumer Direct", "0.00", "0.00"],
+      ["", "Contract", "0.00", "0.00"],
+    ]);
+    expect(sheet.detectedRows.map((row) => row.desc)).toEqual(["Consumer Direct", "Contract"]);
+    expect(sheet.detectedRows.every((row) => !row.isHeader)).toBe(true);
+  });
+
+  it("uses bold text for DAILY F&B headers while keeping bordered regular rows as details", () => {
+    const sheet = analyzeExcelSheet("DAILY F&B", [
+      ["Description", "Actual", "Budget"],
+      ["DINNING ROOM", "", ""],
+      ["Food Revenue", "0.00", "0.00"],
+      ["Total", "0.00", "0.00"],
+    ], [], new Map([
+      ["1:0", { bold: true, bottom: true }],
+      ["2:0", { bold: false, bottom: true }],
+      ["3:0", { bold: true, bottom: true }],
+    ]));
+    expect(sheet.detectedRows.map(({ desc, isHeader }) => ({ desc, isHeader }))).toEqual([
+      { desc: "DINNING ROOM", isHeader: true },
+      { desc: "Food Revenue", isHeader: false },
+      { desc: "Total", isHeader: true },
+    ]);
+  });
+
+  it("imports Variance columns as formulas using their Excel column references", () => {
+    const matrix = [
+      ["Description", "Actual", "Forecast", "Variance", "Last Year", "Actual", "Forecast", "Variance"],
+      ["Revenue", "100", "90", "10", "80", "200", "180", "20"],
+      ["Other", "50", "45", "5", "40", "70", "60", "10"],
+    ];
+    const cells = [[], [null, null, null, { f: "B2-C2" }, null, null, null, { f: "G2-F2" }]];
+    const sheet = analyzeExcelSheet("Revenue", matrix, cells, new Map(), { descriptionColumn: "A" });
+
+    expect(sheet.detectedColumns[2]).toMatchObject({ id: "C3", label: "Variance", isFormula: true, formula: "C1-C2" });
+    expect(sheet.detectedColumns[6]).toMatchObject({ id: "C7", label: "Variance", isFormula: true, formula: "C6-C5" });
+  });
+
   it("validates linked ranges and direct codes before creating a template", () => {
     const sheet = analyzeExcelSheet(
       "PL-RANGES",

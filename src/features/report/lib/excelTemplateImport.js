@@ -19,7 +19,7 @@ const DIMENSION_MAPPING_HEADERS = {
   operator: /^operator$/i,
   value: /^value$/i,
 };
-const NON_REPORT_SHEET = /^(?:intro|cover|glac|sheet1|sheet2|aspenmacro)$/i;
+const NON_REPORT_SHEET = /^(?:intro|cover|glac|sheet1|sheet2|aspenmacro|start|myconnect|carmen parameter|standard_formula)$/i;
 
 const cleanText = (value) =>
   String(value ?? "")
@@ -123,6 +123,26 @@ const detectLinkedMappingColumns = (matrix, options = {}) => {
     });
     return result.dept >= 0 && result.accCodes >= 0;
   });
+
+  const legacyHeader = matrix.slice(0, 12).find((row) =>
+    row.some((value) => /^dept\s*1$/i.test(cleanText(value))) &&
+    row.some((value) => /^from$/i.test(cleanText(value))),
+  );
+  result.legacyAccountRanges = [];
+  result.legacyDeptColumns = [];
+  if (legacyHeader) {
+    const firstDeptColumn = legacyHeader.findIndex((value) => /^dept\s*1$/i.test(cleanText(value)));
+    for (let columnIndex = 0; columnIndex < firstDeptColumn; columnIndex += 1) {
+      if (/^from$/i.test(cleanText(legacyHeader[columnIndex])) &&
+          /^to$/i.test(cleanText(legacyHeader[columnIndex + 1]))) {
+        result.legacyAccountRanges.push([columnIndex, columnIndex + 1]);
+        columnIndex += 1;
+      }
+    }
+    legacyHeader.forEach((value, columnIndex) => {
+      if (/^dept\s*\d+$/i.test(cleanText(value))) result.legacyDeptColumns.push(columnIndex);
+    });
+  }
 
   return result;
 };
@@ -462,6 +482,45 @@ const detectColumns = (
     sourceColumnIndexes.push(candidate.columnIndex);
   });
 
+  const columnIdsBySourceIndex = new Map(
+    sourceColumnIndexes.map((sourceIndex, index) => [sourceIndex, columns[index].id]),
+  );
+  columns.forEach((column, index) => {
+    if (!/\bvariance\b/i.test(column.label) || column.isPercent) return;
+    const sourceIndex = sourceColumnIndexes[index];
+    const excelFormula = cellMatrix.slice(startRowIndex, endRowIndex + 1)
+      .map((row) => row?.[sourceIndex]?.f)
+      .find((formula) => typeof formula === "string" && formula.trim());
+    const match = excelFormula?.replace(/^=/, "").match(
+      /^\s*\$?([A-Z]{1,3})\$?(\d+)\s*([+-])\s*\$?([A-Z]{1,3})\$?(\d+)\s*$/i,
+    );
+    const leftId = match && match[2] === match[5]
+      ? columnIdsBySourceIndex.get(excelColumnToIndex(match[1]))
+      : "";
+    const rightId = match && match[2] === match[5]
+      ? columnIdsBySourceIndex.get(excelColumnToIndex(match[4]))
+      : "";
+    const previousDataColumns = columns.slice(0, index).filter((candidate) =>
+      !candidate.isFormula && !candidate.isPercent && !/\bvariance\b/i.test(candidate.label),
+    );
+    const formula = leftId && rightId && leftId !== column.id && rightId !== column.id
+      ? `${leftId}${match[3]}${rightId}`
+      : previousDataColumns.length >= 2
+        ? `${previousDataColumns.at(-2).id}-${previousDataColumns.at(-1).id}`
+        : "";
+    if (!formula) return;
+    columns[index] = {
+      id: column.id,
+      label: column.label,
+      isActive: column.isActive,
+      isFormula: true,
+      isPercent: false,
+      formatAsPercent: false,
+      formula,
+      width: column.width,
+    };
+  });
+
   return {
     columns:
       columns.length > 0
@@ -572,6 +631,7 @@ const getExcelIndent = (cell, style, original) => {
 };
 
 const detectRows = (
+  sheetName,
   matrix,
   descriptionColumn,
   cellMatrix = [],
@@ -582,7 +642,7 @@ const detectRows = (
   mappingCatalogs = {},
 ) => {
   const descriptionHeaderIndex = matrix.findIndex((row) =>
-    DESCRIPTION_HEADER.test(cleanText(row[descriptionColumn])),
+    (row || []).some((value) => DESCRIPTION_HEADER.test(cleanText(value))),
   );
   const configuredStartRow = toPositiveInteger(options.dataStartRow);
   const configuredEndRow = toPositiveInteger(options.dataEndRow);
@@ -617,10 +677,20 @@ const detectRows = (
       style,
       original,
     );
-    const rawDept = cleanMappingValue(sourceRow[linkedMappingColumns.dept]);
-    const rawAccCodes = cleanMappingValue(
-      sourceRow[linkedMappingColumns.accCodes],
-    );
+    const rawDept = linkedMappingColumns.dept >= 0
+      ? cleanMappingValue(sourceRow[linkedMappingColumns.dept])
+      : (linkedMappingColumns.legacyDeptColumns || [])
+          .map((columnIndex) => cleanMappingValue(sourceRow[columnIndex]))
+          .filter(Boolean).join(', ');
+    const rawAccCodes = linkedMappingColumns.accCodes >= 0
+      ? cleanMappingValue(sourceRow[linkedMappingColumns.accCodes])
+      : (linkedMappingColumns.legacyAccountRanges || [])
+          .map(([fromIndex, toIndex]) => {
+            const from = cleanMappingValue(sourceRow[fromIndex]);
+            const to = cleanMappingValue(sourceRow[toIndex]);
+            return from && to && from !== to ? `${from}-${to}` : from || to;
+          })
+          .filter(Boolean).join(', ');
     const deptResolution = resolveLinkedMappingValue(
       rawDept,
       mappingCatalogs.depts,
@@ -675,12 +745,24 @@ const detectRows = (
         ? Math.max(1, sourceIndent)
         : sourceIndent;
     const letters = desc.replace(/[^\p{L}]/gu, "");
-    const isHeader = hasLinkedMapping
-      ? false
-      : style
-        ? isStyleBoundary
-        : populatedCells.length <= 2 ||
-          (letters.length >= 4 && desc === desc.toUpperCase());
+    const firstMappingColumn = Math.min(
+      ...[
+        linkedMappingColumns.dept,
+        linkedMappingColumns.accCodes,
+        linkedMappingColumns.legacyAccountRanges?.[0]?.[0],
+        linkedMappingColumns.legacyDeptColumns?.[0],
+        dimensionMappingColumns.fieldName,
+      ].filter((index) => Number.isInteger(index) && index >= 0),
+      sourceRow.length,
+    );
+    const hasReportValue = sourceRow.slice(0, firstMappingColumn).some((value, columnIndex) =>
+      columnIndex !== descriptionColumn && isNumericValue(value),
+    );
+    const isHeader = (/^DAILY\s+F&B$/i.test(sheetName) && Boolean(style?.bold)) ||
+      (!hasLinkedMapping && !hasReportValue && (
+        isStyleBoundary || populatedCells.length <= 2 ||
+        (letters.length >= 4 && desc === desc.toUpperCase())
+      ));
     if (isStyleBoundary) hasSection = true;
     sourceRowNumbers.push(sourceRowNumber);
 
@@ -860,6 +942,8 @@ export const analyzeExcelSheet = (
   const excludedMappingColumns = new Set([
     linkedMappingColumns.dept,
     linkedMappingColumns.accCodes,
+    ...(linkedMappingColumns.legacyAccountRanges || []).flat(),
+    ...(linkedMappingColumns.legacyDeptColumns || []),
     dimensionMappingColumns.fieldName,
     dimensionMappingColumns.operator,
     dimensionMappingColumns.value,
@@ -876,6 +960,7 @@ export const analyzeExcelSheet = (
     mappingWarnings,
     mappingRequirements,
   } = detectRows(
+    name,
     matrix,
     descriptionColumn,
     cellMatrix,
