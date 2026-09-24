@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card.jsx';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area.jsx';
 import {
@@ -9,7 +9,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table.jsx';
-import { getReportDisplayColumns } from '../lib/reportLogic.js';
+import { buildReportDrilldown, getReportDisplayColumns } from '../lib/reportLogic.js';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet.jsx';
 import ReportViewModeToggle from './ReportViewModeToggle.jsx';
 
 export default function ReportView({
@@ -24,7 +25,29 @@ export default function ReportView({
   getIndentClass,
   viewMode = 'table',
   onViewModeChange,
+  engineData,
+  budgetData,
+  appliedDepts,
+  appliedYear,
+  appliedPeriod,
+  appliedRevision,
+  periodOptions,
+  masterData,
 }) {
+  const [selectedCell, setSelectedCell] = useState(null);
+  const drilldown = useMemo(() => selectedCell && activeReport ? buildReportDrilldown({
+    activeReport,
+    row: selectedCell.row,
+    col: selectedCell.col,
+    engineData,
+    budgetData,
+    appliedDepts,
+    appliedYear,
+    appliedPeriod,
+    appliedRevision,
+    periodOptions,
+    masterData,
+  }) : null, [selectedCell, activeReport, engineData, budgetData, appliedDepts, appliedYear, appliedPeriod, appliedRevision, periodOptions, masterData]);
   if (!activeReport) return null;
   const displayColumns = getReportDisplayColumns(activeReport, activeCols);
   const descriptionIsFirst = displayColumns[0]?.isDescription;
@@ -119,7 +142,11 @@ export default function ReportView({
                             key={col.id}
                             className={`border-r px-2 py-2.5 text-right tabular-nums sm:px-3 ${currentTheme.cellBorder} ${isNegativeVar || val < 0 ? 'font-bold text-destructive' : ''}`}
                           >
-                            {isDisplayPercent
+                            {['AC', 'BC'].includes(String(col.type || '').toUpperCase()) && !row.isTotal && !col.isFormula && !col.isPercent ? (
+                              <button type="button" className="w-full cursor-pointer text-right underline-offset-2 hover:underline focus-visible:underline" aria-label={`View ${row.desc} ${col.label} breakdown`} onClick={() => setSelectedCell({ row, col, value: val })}>
+                                {val < 0 ? `(${Math.abs(val).toLocaleString(undefined, { minimumFractionDigits: 2 })})` : val.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </button>
+                            ) : isDisplayPercent
                               ? (val < 0 ? `(${Math.abs(val).toFixed(2)}%)` : `${val.toFixed(2)}%`)
                               : (val < 0 ? `(${Math.abs(val).toLocaleString(undefined, { minimumFractionDigits: 2 })})` : val.toLocaleString(undefined, { minimumFractionDigits: 2 }))}
                           </TableCell>
@@ -134,6 +161,28 @@ export default function ReportView({
           <ScrollBar orientation="horizontal" />
         </ScrollArea>
       </CardContent>
+      <Sheet open={Boolean(selectedCell)} onOpenChange={(open) => { if (!open) setSelectedCell(null); }}>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
+          <SheetHeader>
+            <SheetTitle>{selectedCell?.row.desc} · {selectedCell?.col.label}</SheetTitle>
+            <SheetDescription>Account and department contributions from the {drilldown?.source || 'report'} summary data.</SheetDescription>
+          </SheetHeader>
+          {drilldown && <section className="grid gap-3 p-4 text-sm">
+            <p>Cell: {selectedCell.value.toLocaleString(undefined, { minimumFractionDigits: 2 })} · Breakdown: {drilldown.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+            <p role="status" className={Math.abs(selectedCell.value - drilldown.total) < 0.005 ? 'text-emerald-700' : 'text-destructive'}>
+              Difference: {(selectedCell.value - drilldown.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </p>
+            <table className="w-full text-left tabular-nums">
+              <thead><tr className="border-b"><th className="py-2">Account</th><th>Department</th><th className="text-right">Amount</th></tr></thead>
+              <tbody>{drilldown.lines.map((line) => <tr key={`${line.accountCode}:${line.departmentCode}`} className="border-b">
+                <td className="py-2">{line.accountCode || '—'}</td><td>{line.departmentCode || '—'}</td>
+                <td className="text-right">{line.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+              </tr>)}</tbody>
+            </table>
+            {drilldown.lines.length === 0 && <p className="text-muted-foreground">No matching source rows.</p>}
+          </section>}
+        </SheetContent>
+      </Sheet>
     </Card>
   );
 }

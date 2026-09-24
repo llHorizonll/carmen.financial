@@ -50,7 +50,9 @@ export default function LoginShell() {
     message: 'Your Carmen session has expired. Please sign in again.',
     action: 'Back to sign in',
   } : null;
-  const apiErrorNotice = apiFailure && apiFailure.kind !== 'session' ? {
+  // The authenticated workspace already renders API failures inline. Keep the
+  // global modal for sign-in failures only so it cannot block in-app guides.
+  const apiErrorNotice = !isAuthenticated && apiFailure && apiFailure.kind !== 'session' ? {
     title: 'API request failed',
     message: apiFailure.message,
     action: 'Close',

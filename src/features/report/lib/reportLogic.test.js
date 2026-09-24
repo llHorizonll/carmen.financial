@@ -10,6 +10,7 @@ import {
   cloneReport,
   getLatestCreatedReport,
   buildReportData,
+  buildReportDrilldown,
   findBrokenReferences,
   findRowMappingConflicts,
   getRowMappingWarnings,
@@ -22,6 +23,29 @@ import {
 } from './reportLogic.js';
 
 describe('reportLogic helpers', () => {
+  it('reconciles actual and budget account detail to direct report cells', () => {
+    const row = { id: 'r1', desc: 'Revenue', dept: '101', accCodes: '4001,4002', groups: '', isHeader: false, isTotal: false };
+    const actual = { id: 'C1', label: 'Actual', type: 'AC', yearMode: 'current', periodMode: 'current' };
+    const budget = { id: 'C2', label: 'Budget', type: 'BC', yearMode: 'current', periodMode: 'current' };
+    const activeReport = { category: ['ALL'], rows: [row], columns: [actual, budget] };
+    const inputs = {
+      activeReport,
+      engineData: [
+        { year: '2025', deptcode: '101', acccode: '4001', amt2: 40 },
+        { year: '2025', deptcode: '101', acccode: '4002', amt2: -10 },
+      ],
+      budgetData: [
+        { year: '2025', revision: '0', deptcode: '101', acccode: '4001', amt2: 25 },
+        { year: '2025', revision: '1', deptcode: '101', acccode: '4001', amt2: 999 },
+      ],
+      appliedDepts: [], appliedYear: '2025', appliedPeriod: '2', appliedRevision: '0',
+      masterData: INITIAL_MASTER_DATA,
+    };
+    const report = buildReportData(inputs)[0];
+    expect(buildReportDrilldown({ ...inputs, row, col: actual }).total).toBe(report.results.C1);
+    expect(buildReportDrilldown({ ...inputs, row, col: budget }).total).toBe(report.results.C2);
+    expect(buildReportDrilldown({ ...inputs, row, col: actual }).lines).toHaveLength(2);
+  });
   it('parses financial amounts', () => {
     expect(parseAmount('(1,234.50)')).toBe(-1234.5);
     expect(parseAmount('NULL')).toBe(0);

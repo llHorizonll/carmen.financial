@@ -90,6 +90,7 @@ describe("GettingStartedTour", () => {
 
   it("anchors the desktop guide to the viewport from inside an animated pane", () => {
     document.body.innerHTML = '<button data-tour="setup-details">Report details</button>';
+    const onClose = vi.fn();
     const { container } = render(
       <section className="app-pane-enter-from-right">
         <GettingStartedTour
@@ -98,13 +99,16 @@ describe("GettingStartedTour", () => {
           open
           stepIndex={0}
           onStepChange={vi.fn()}
-          onClose={vi.fn()}
+          onClose={onClose}
         />
       </section>,
     );
 
     expect(container.contains(screen.getByRole("dialog", { name: "Define the report" }))).toBe(false);
     expect(screen.getByRole("dialog", { name: "Define the report" }).parentElement).toBe(document.body);
-    expect(container.contains(screen.getByTestId("tour-backdrop"))).toBe(true);
+    expect(container.contains(screen.getByTestId("tour-backdrop"))).toBe(false);
+    expect(screen.getByTestId("tour-backdrop").parentElement).toBe(document.body);
+    fireEvent.click(screen.getByTestId("tour-backdrop"));
+    expect(onClose).toHaveBeenCalledOnce();
   });
 });

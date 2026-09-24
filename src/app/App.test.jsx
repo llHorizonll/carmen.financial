@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import App, { getSetupWarnings } from './App.jsx';
 import { getAccessibleReports } from './reportAccess.js';
@@ -41,6 +41,17 @@ describe('report access filtering', () => {
   it('keeps every report visible to report administrators', () => {
     const admin = { id: 'admin', permissions: { financialReport: { view: true, update: true } } };
     expect(getAccessibleReports(reports, admin)).toEqual(reports);
+  });
+
+  it('does not restore revoked report access through assignedUsers', () => {
+    const viewer = { id: 'viewer', permissions: { financialReport: { view: true } } };
+    const report = {
+      id: 'revoked', isActive: true, assignedUsers: ['viewer'],
+      access: [{ userId: 'viewer', canView: false }],
+    };
+
+    expect(getAccessibleReports([report], viewer)).toEqual([]);
+    expect(getAccessibleReports([{ ...report, access: [{ userId: 'viewer', canView: true }] }], viewer)).toHaveLength(1);
   });
 });
 
@@ -424,14 +435,16 @@ describe('App shell', () => {
     await waitFor(() => expect(screen.getAllByText('API Sync Report').length).toBeGreaterThan(0));
     await waitFor(() => expect(reportApiMocks.fetchCarmenReportData).toHaveBeenCalled());
 
-    let resolveApply;
-    reportApiMocks.fetchCarmenReportData.mockImplementationOnce(() => new Promise((resolve) => {
-      resolveApply = resolve;
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Loading report data' })).not.toBeInTheDocument());
+
+    const resolveApply = [];
+    reportApiMocks.fetchCarmenReportData.mockImplementation(() => new Promise((resolve) => {
+      resolveApply.push(resolve);
     }));
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
     expect(await screen.findByRole('dialog', { name: 'Loading report data' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Apply' })).not.toBeInTheDocument();
-    resolveApply({ actualRows: [], budgetRows: [] });
+    resolveApply.forEach((resolve) => resolve({ actualRows: [], budgetRows: [] }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Loading report data' })).not.toBeInTheDocument());
 
     const publishedApiError = Object.assign(
@@ -447,6 +460,33 @@ describe('App shell', () => {
 
     expect(screen.queryByRole('button', { name: /^GL$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^BUD$/i })).not.toBeInTheDocument();
+  });
+
+  it('keeps the newest report data when an older request finishes later', async () => {
+    const user = { id: 'finance-owner', role: 'Admin', permissions: { financialReport: { view: true, setup: true } } };
+    const report = {
+      id: 'rep-a', name: 'Report A', owner: user.id, assignedUsers: [user.id], isActive: true,
+      reportType: 'Monthly', periodFormat: 'standard', theme: 'blue', category: ['ALL'],
+      columns: [{ id: 'C1', label: 'Actual', isActive: true, type: 'AC', yearMode: 'current', periodMode: 'current' }],
+      rows: [{ id: 'r1', desc: 'Revenue', isActive: true, accCodes: '4001', dept: '', groupLevel: 'L4', groups: '', formula: '', percentBase: '' }],
+    };
+    const pending = [];
+    reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
+    reportApiMocks.getStoredCarmenSession.mockReturnValue({ user });
+    reportApiMocks.fetchCarmenMasterData.mockResolvedValue({ currentUser: user, users: [user], companyProfile: {}, depts: [], accCodes: [], periods: [], budgetRevisions: [], groups: {} });
+    reportApiMocks.fetchCarmenReports.mockResolvedValue([report, { ...report, id: 'rep-b', name: 'Report B' }]);
+    reportApiMocks.fetchCarmenReportData.mockImplementation(() => new Promise((resolve) => pending.push(resolve)));
+
+    render(<App />);
+    await waitFor(() => expect(pending).toHaveLength(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Report B', hidden: true }));
+    await waitFor(() => expect(pending).toHaveLength(2));
+
+    await act(async () => pending[1]({ actualRows: [{ year: Number(new Date().getFullYear()), period: 2, deptcode: '101', acccode: '4001', amt2: 222 }], budgetRows: [] }));
+    await waitFor(() => expect(screen.getByText('222.00')).toBeInTheDocument());
+    await act(async () => pending[0]({ actualRows: [{ year: Number(new Date().getFullYear()), period: 2, deptcode: '101', acccode: '4001', amt2: 111 }], budgetRows: [] }));
+    expect(screen.getByText('222.00')).toBeInTheDocument();
+    expect(screen.queryByText('111.00')).not.toBeInTheDocument();
   });
 
   it('warns about broken references but allows saving anyway', async () => {

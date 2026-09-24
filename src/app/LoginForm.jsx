@@ -69,7 +69,7 @@ export default function LoginForm({ onAuthenticated }) {
       setBusinessUnits(items);
       usernameUsedForBusinessUnitsRef.current = trimmedUserName;
       const defaultItem = getDefaultBusinessUnit(items);
-      if (!defaultItem) setError('No business unit found for this username.');
+      if (!defaultItem) setError('No business unit was found for this username. Check the username and try again.');
     } catch (fetchError) {
       setBusinessUnits([]);
       setSelectedTenant('');
@@ -188,7 +188,7 @@ export default function LoginForm({ onAuthenticated }) {
           </Suspense>
 
           {error && (
-            <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <div role="alert" className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               <AlertTriangle className="mt-0.5 size-4 shrink-0" />
               <p className="leading-5">{error}</p>
             </div>

@@ -797,6 +797,41 @@ export const buildReportData = ({
   return rows.map((r, i) => ({ ...r, rowLabel: `R${i + 1}`, results: rowRefMap[r.id] }));
 };
 
+// Uses the same row matching and amount calculation as the report cell. The
+// source rows are report aggregates, so this is account/department detail.
+export const buildReportDrilldown = ({
+  activeReport, row, col, engineData, budgetData, appliedDepts,
+  appliedYear, appliedPeriod, appliedRevision, periodOptions = [], masterData,
+}) => {
+  const type = String(col?.type || '').trim().toUpperCase();
+  if (!row || !col || row.isHeader || row.isTotal || col.isFormula || col.isPercent || !['AC', 'BC'].includes(type)) return null;
+  const rowConfig = filterEngineRows(row, masterData);
+  if (rowConfig.depts.length === 0 && rowConfig.accs.length === 0 && rowConfig.grps.length === 0) return null;
+  const isBudget = type === 'BC';
+  const matched = filterPreparedRows({
+    preparedRows: prepareSourceRows(isBudget ? budgetData : engineData, masterData),
+    rowConfig,
+    appliedDeptSet: new Set((appliedDepts || []).map(normalizeDeptLookupCode).filter(Boolean)),
+    reportCategories: Array.isArray(activeReport?.category) ? activeReport.category : ['ALL'],
+    filterRevision: isBudget,
+    appliedRevision,
+  });
+  const groups = new Map();
+  matched.forEach((prepared) => {
+    const key = `${prepared.accCode}\u0000${prepared.deptCode}`;
+    if (!groups.has(key)) groups.set(key, { accountCode: prepared.accCode, departmentCode: prepared.deptCode, rows: [] });
+    groups.get(key).rows.push(prepared);
+  });
+  const lines = [...groups.values()].map((group) => ({
+    accountCode: group.accountCode,
+    departmentCode: group.departmentCode,
+    amount: (isBudget ? sumBudget : sumActuals)({
+      col, matchedRows: group.rows, appliedYear, appliedPeriod, periodOptions,
+    }),
+  })).filter((line) => line.amount !== 0).sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
+  return { lines, total: lines.reduce((sum, line) => sum + line.amount, 0), source: isBudget ? 'budget' : 'actual' };
+};
+
 export const deleteRowAndRewriteReferences = (activeReport, rowId) => {
   const delIdx = activeReport.rows.findIndex(r => r.id === rowId);
   if (delIdx === -1) return activeReport;

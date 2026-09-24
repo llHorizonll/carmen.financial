@@ -8,6 +8,7 @@ import ColumnsConfigurator from './ColumnsConfigurator.jsx';
 import RowsConfigurator from './RowsConfigurator.jsx';
 import SetupSectionTabs from './SetupSectionTabs.jsx';
 import GettingStartedTour from './GettingStartedTour.jsx';
+import ReportHistory from './ReportHistory.jsx';
 
 const SETUP_SECTION_STORAGE_KEY = 'carmen.report-setup.active-section.v1';
 const SETUP_TOUR_STEPS = [
@@ -93,6 +94,7 @@ const ReportSetup = forwardRef(function ReportSetup(props, ref) {
           </span>
         </p>
         <nav data-tour="setup-save" aria-label="Save or cancel report settings" className="flex w-full items-center gap-2 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-lg data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary lg:w-auto lg:justify-self-end">
+          {props.apiConfigured && <ReportHistory key={savedReport.id} report={savedReport} isDirty={props.isDirty} onRestored={props.onHistoryRestored} />}
           <Button className="flex-1 lg:flex-none" type="button" variant="outline" onClick={props.onCancel} disabled={!props.isDirty || props.isSaving}>
             <Undo2 />
             Cancel changes

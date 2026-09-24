@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildReportDefinitionPayload, cloneCarmenReport, createCarmenReport, deleteCarmenReport, fetchCarmenAccountGroups, fetchCarmenDepartmentGroups, fetchCarmenDimensions, fetchCarmenReport, fetchCarmenReportOptions, fetchCarmenUsers, loginWithCarmenCredentials, saveCarmenReport, saveCarmenReports } from './reportApi.js';
+import { buildReportDefinitionPayload, cloneCarmenReport, createCarmenReport, deleteCarmenReport, fetchBusinessUnitsByUsername, fetchCarmenAccountGroups, fetchCarmenDepartmentGroups, fetchCarmenDimensions, fetchCarmenReport, fetchCarmenReportOptions, fetchCarmenUsers, loginWithCarmenCredentials, saveCarmenReport, saveCarmenReports } from './reportApi.js';
 import { clearCarmenApiFailure, getCarmenApiFailure } from '../../../lib/carmenApiFailure.js';
 
 const createSessionStorageMock = (session = {}) => {
@@ -684,6 +684,19 @@ describe('reportApi helpers', () => {
 
     await expect(fetchCarmenReportOptions()).rejects.toThrow(/session expired/i);
     expect(window.localStorage.getItem('carmen_access_token')).toBeNull();
+  });
+
+  it('treats an empty business unit response as no matching username', async () => {
+    window.__CARMEN_CONFIG__ = {
+      apiUrl: 'http://localhost/Carmen.WebApi',
+      adminToken: 'admin-token',
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+    }));
+
+    await expect(fetchBusinessUnitsByUsername('missing-user')).resolves.toEqual([]);
   });
 
   it('clears the Carmen session when the API returns 403', async () => {

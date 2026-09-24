@@ -59,6 +59,8 @@ export default function GettingStartedTour({
   const step = steps[safeStepIndex];
   const isMobile = useIsMobile();
   const nextButtonRef = useRef(null);
+  const closeRef = useRef(onClose);
+  useEffect(() => { closeRef.current = onClose; }, [onClose]);
 
   useEffect(() => {
     if (!open || !step) return undefined;
@@ -80,6 +82,12 @@ export default function GettingStartedTour({
     const frame = window.requestAnimationFrame(() => nextButtonRef.current?.focus());
     return () => window.cancelAnimationFrame(frame);
   }, [isMobile, open, safeStepIndex]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOnEscape = (event) => { if (event.key === 'Escape') closeRef.current(); };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  }, [open]);
 
   if (!open || !step) return null;
 
@@ -185,14 +193,15 @@ export default function GettingStartedTour({
     );
   }
 
-  return (
+  return createPortal(
     <>
-      <section
-        className="fixed inset-0 z-40 bg-foreground/35 print:hidden"
+      <button
+        type="button"
+        className="fixed inset-0 z-40 cursor-default bg-foreground/35 print:hidden"
         data-testid="tour-backdrop"
-        aria-hidden="true"
+        aria-label="Dismiss guide backdrop"
+        onClick={onClose}
       />
-      {createPortal(
         <section
           className="fixed top-1/2 left-1/2 z-60 w-sm max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-primary/30 bg-background shadow-xl print:hidden"
           role="dialog"
@@ -200,9 +209,7 @@ export default function GettingStartedTour({
           aria-describedby="getting-started-description"
         >
           {tourCard}
-        </section>,
-        document.body,
-      )}
-    </>
+        </section>
+    </>, document.body,
   );
 }

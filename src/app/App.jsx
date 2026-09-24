@@ -438,7 +438,7 @@ export default function App({ onLogout = null }) {
   }), [apiDimensions, budgetData, engineData]);
   const pageTransitionTimerRef = useRef(null);
   const reportDataFetchSkipRef = useRef(false);
-  const reportDataRequestCountRef = useRef(0);
+  const latestReportDataRequestRef = useRef(0);
   const masterDataLoadKeysRef = useRef(new Set());
   const reportCatalogLoadRef = useRef(false);
 
@@ -574,7 +574,7 @@ export default function App({ onLogout = null }) {
         }
       }
 
-      reportDataRequestCountRef.current += 1;
+      const requestId = ++latestReportDataRequestRef.current;
       setIsLoading(true);
       try {
         const apiData = await fetchCarmenReportData({
@@ -586,18 +586,19 @@ export default function App({ onLogout = null }) {
           day,
         });
 
-        setEngineData(apiData.actualRows || []);
-        setBudgetData(apiData.budgetRows || []);
-        setAlertMsg(null);
+        if (requestId === latestReportDataRequestRef.current) {
+          setEngineData(apiData.actualRows || []);
+          setBudgetData(apiData.budgetRows || []);
+          setAlertMsg(null);
+        }
         return apiData;
       } catch (error) {
         const message =
           error.message || `Unable to load Carmen ${source} data.`;
-        setAlertMsg(message);
+        if (requestId === latestReportDataRequestRef.current) setAlertMsg(message);
         throw error;
       } finally {
-        reportDataRequestCountRef.current = Math.max(0, reportDataRequestCountRef.current - 1);
-        setIsLoading(reportDataRequestCountRef.current > 0);
+        if (requestId === latestReportDataRequestRef.current) setIsLoading(false);
       }
     },
     [apiConfigured, activeReport, activeReportUsesDayFilter, periodOptions],
@@ -2126,6 +2127,14 @@ export default function App({ onLogout = null }) {
                     ) : (
                       <ReportView
                         activeReport={activeReport}
+                        engineData={engineData}
+                        budgetData={budgetData}
+                        appliedDepts={appliedDepts}
+                        appliedYear={appliedYear}
+                        appliedPeriod={appliedPeriod}
+                        appliedRevision={appliedBudgetRevision}
+                        periodOptions={periodOptions}
+                        masterData={masterData}
                         displayCompanyLabel={displayCompanyLabel}
                         displayDateLabel={displayDateLabel}
                         displayPeriodLabel={displayPeriodLabel}
@@ -2185,6 +2194,15 @@ export default function App({ onLogout = null }) {
                         updateActiveReport={updateActiveReport}
                         isDirty={isSetupDirty}
                         isSaving={isSetupSaving}
+                        apiConfigured={apiConfigured}
+                        onHistoryRestored={(restored) => {
+                          setReports((currentReports) => currentReports.map((report) =>
+                            report.id === restored.id ? restored : report
+                          ));
+                          setSetupDraft(restored);
+                          setIsSetupDirty(false);
+                          setReportCatalogError(null);
+                        }}
                         onSave={handleSaveSetup}
                         onCancel={handleCancelSetup}
                         onBusyTransition={triggerPageTransition}

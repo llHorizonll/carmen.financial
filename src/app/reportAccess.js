@@ -35,19 +35,17 @@ export const getAccessibleReports = (reports, user) => {
   return reports.filter((report) => {
     if (String(report?.owner || "").trim() === userId) return true;
     if (report?.isActive === false) return false;
+    if (Array.isArray(report?.access) && report.access.length > 0) {
+      return report.access.some(
+        (item) => String(item?.userId || item?.userName || "").trim() === userId && item?.canView === true,
+      );
+    }
     if (
       Array.isArray(report?.assignedUsers) &&
       report.assignedUsers.includes(userId)
     )
       return true;
-    return (
-      Array.isArray(report?.access) &&
-      report.access.some(
-        (item) =>
-          String(item?.userId || "").trim() === userId &&
-          item?.canView !== false,
-      )
-    );
+    return false;
   });
 };
 

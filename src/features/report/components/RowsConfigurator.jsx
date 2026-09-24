@@ -177,26 +177,26 @@ export default function RowsConfigurator({
         )}
 
         <div className="overflow-auto">
-          <Table className="min-w-[1000px] table-fixed [&_td]:px-1 [&_th]:px-1">
-            <TableHeader className="sticky top-0 z-10 bg-muted/30">
+          <Table className="min-w-[1000px] table-fixed text-sm [&_td]:px-2 [&_th]:px-2">
+            <TableHeader className="sticky top-0 z-10 bg-muted/80">
               <TableRow>
-                <TableHead className="w-32 text-center align-middle">
+                <TableHead className="w-32 text-center align-middle text-xs font-semibold uppercase tracking-wide text-foreground">
                   Type
                 </TableHead>
-                <TableHead className="w-48">Description</TableHead>
-                <TableHead className="w-24 text-center align-middle">
+                <TableHead className="w-48 text-xs font-semibold uppercase tracking-wide text-foreground">Description</TableHead>
+                <TableHead className="w-24 text-center align-middle text-xs font-semibold uppercase tracking-wide text-foreground">
                   Indent
                 </TableHead>
-                <TableHead className="w-24 text-center align-middle">
+                <TableHead className="w-24 text-center align-middle text-xs font-semibold uppercase tracking-wide text-foreground">
                   Row
                 </TableHead>
-                <TableHead className="w-24 text-center align-middle">
+                <TableHead className="w-24 text-center align-middle text-xs font-semibold uppercase tracking-wide text-foreground">
                   % Base
                 </TableHead>
-                <TableHead className="w-96 min-w-96 max-w-96 whitespace-normal">
+                <TableHead className="w-96 min-w-96 max-w-96 whitespace-normal text-xs font-semibold uppercase tracking-wide text-foreground">
                   Row mapping rules
                 </TableHead>
-                <TableHead className="sticky right-0 z-20 w-32 min-w-32 max-w-32 border-l bg-muted/95 text-center align-middle">
+                <TableHead className="sticky right-0 z-20 w-32 min-w-32 max-w-32 border-l bg-muted text-center align-middle text-xs font-semibold uppercase tracking-wide text-foreground">
                   Action
                 </TableHead>
               </TableRow>
@@ -228,9 +228,10 @@ export default function RowsConfigurator({
                     key={row.id}
                     {...getItemProps(row.id)}
                     className={cn(
-                      "row-configurator-row transition-[opacity,box-shadow,transform,background-color] duration-200 ease-out data-[dragging=true]:opacity-40 data-[drag-over=true]:bg-primary/5 data-[drag-over=true]:ring-2 data-[drag-over=true]:ring-inset data-[drag-over=true]:ring-primary/35 motion-reduce:transition-none",
+                      "row-configurator-row border-b border-border/60 even:bg-muted/20 hover:bg-muted/40 transition-[opacity,box-shadow,transform,background-color] duration-200 ease-out data-[dragging=true]:opacity-40 data-[drag-over=true]:bg-primary/5 data-[drag-over=true]:ring-2 data-[drag-over=true]:ring-inset data-[drag-over=true]:ring-primary/35 motion-reduce:transition-none",
                       isTotal && "bg-muted/30",
                       isHeader && "bg-muted/10",
+                      (isPctBroken || isFormulaBroken || rowWarnings.length > 0) && "border-l-2 border-l-destructive/70",
                       row.isActive === false && "opacity-60",
                     )}
                   >
@@ -304,7 +305,7 @@ export default function RowsConfigurator({
                     </TableCell>
                     <TableCell className="px-2 py-2 align-middle">
                       <section className="flex flex-col items-center gap-1.5 whitespace-nowrap">
-                        <Badge variant="secondary">R{idx + 1}</Badge>
+                        <Badge variant="secondary" className="font-mono tabular-nums">R{idx + 1}</Badge>
                         <section className="flex items-center gap-1">
                           <Button
                             variant="ghost"
@@ -334,7 +335,8 @@ export default function RowsConfigurator({
                               e.target.value.toUpperCase(),
                             )
                           }
-                          className={isPctBroken ? "border-destructive" : ""}
+                          className={isPctBroken ? "border-destructive bg-destructive/5 font-mono" : "font-mono"}
+                          aria-invalid={Boolean(isPctBroken)}
                           placeholder="R#"
                         />
                       ) : null}
@@ -427,7 +429,7 @@ export default function RowsConfigurator({
                         </section>
                       )}
                     </TableCell>
-                    <TableCell className="sticky right-0 z-10 w-32 min-w-32 max-w-32 border-l bg-card px-2 py-2 text-center align-middle">
+                    <TableCell className="sticky right-0 z-10 w-32 min-w-32 max-w-32 border-l bg-background px-2 py-2 text-center align-middle">
                       <section
                         className="flex items-center justify-center gap-1.5 whitespace-nowrap"
                         aria-label={`Actions for row ${row.id}`}

@@ -192,6 +192,7 @@ export const fetchBusinessUnitsByUsername = async (username) => {
       context: 'Business unit request',
     });
   }
+  if (response.status === 204) return [];
   const payload = await response.json();
   if (!Array.isArray(payload)) return [];
   return payload;
@@ -624,6 +625,20 @@ export const createCarmenReport = async (report) => {
     id: createdId,
   });
 };
+
+export const fetchCarmenReportHistory = (id) =>
+  requestCarmenJson(`/api/reports/${encodeURIComponent(id)}/history`);
+
+export const fetchCarmenReportHistoryVersion = async (id, historyId) =>
+  adaptCarmenReportDefinition(await requestCarmenJson(
+    `/api/reports/${encodeURIComponent(id)}/history/${encodeURIComponent(historyId)}`,
+  ));
+
+export const restoreCarmenReportHistoryVersion = async (id, historyId, lastModified) =>
+  adaptCarmenReportDefinition(await requestCarmenJson(
+    `/api/reports/${encodeURIComponent(id)}/history/${encodeURIComponent(historyId)}/restore`,
+    { method: 'POST', body: { lastModified } },
+  ));
 
 export const saveCarmenReport = async (report) => {
   if (!isCarmenApiConfigured()) {

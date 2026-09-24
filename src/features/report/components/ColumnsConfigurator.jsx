@@ -370,6 +370,7 @@ export default function ColumnsConfigurator({
                 : col.isPercent
                   ? COLUMN_CLASY_MAP.percent
                   : COLUMN_CLASY_MAP.data;
+              const columnIssues = brokenColumnReferences.filter((issue) => issue.id === col.id);
 
               return (
                 <section
@@ -379,14 +380,15 @@ export default function ColumnsConfigurator({
                   className={cn(
                     "column-card flex min-h-0 w-[310px] shrink-0 flex-col rounded-xl border border-border bg-card transition-[opacity,box-shadow,transform] duration-200 ease-out data-[dragging=true]:opacity-40 data-[drag-over=true]:ring-2 data-[drag-over=true]:ring-primary/40 motion-reduce:transition-none",
                     col.isActive === false && "border-dashed opacity-60",
+                    columnIssues.length > 0 && "border-destructive/60",
                   )}
                 >
                   {/* Card Header: identify, reorder, and control the column */}
-                  <div className="flex flex-row items-center justify-between border-b border-border bg-muted/30 px-3 py-2.5 rounded-t-xl gap-2 w-full overflow-hidden">
+                  <div className="flex flex-row items-center justify-between border-b border-border bg-muted/60 px-3 py-2.5 rounded-t-xl gap-2 w-full overflow-hidden">
                     <div className="flex items-center gap-1.5 min-w-0 flex-1">
                       <Badge
                         variant="secondary"
-                        className="font-mono text-xs font-semibold px-2 py-0.5 shrink-0"
+                        className="font-mono tabular-nums text-xs font-semibold px-2 py-0.5 shrink-0"
                       >
                         C{idx + 1}
                       </Badge>
@@ -467,6 +469,11 @@ export default function ColumnsConfigurator({
 
                   {/* Card Content: Inputs and configurations */}
                   <div className="p-4 space-y-4">
+                    {columnIssues.length > 0 && (
+                      <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1 text-xs text-destructive">
+                        Broken {columnIssues.map((issue) => issue.field).join(', ')} reference. Check the highlighted field.
+                      </p>
+                    )}
                     <div className="space-y-1.5">
                       <label
                         htmlFor={fieldId("logic-type")}
@@ -528,11 +535,12 @@ export default function ColumnsConfigurator({
                           <Input
                             id={fieldId("formula")}
                             value={col.formula || ""}
+                            aria-invalid={columnIssues.some((issue) => issue.field === 'formula')}
                             onChange={(e) =>
                               handleUpdateCol(col.id, "formula", e.target.value)
                             }
                             placeholder="e.g. C1-C2+C3"
-                            className="h-9 font-mono text-sm"
+                            className={cn('h-9 font-mono text-sm', columnIssues.some((issue) => issue.field === 'formula') && 'border-destructive bg-destructive/5')}
                           />
                         </div>
 

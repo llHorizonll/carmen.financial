@@ -101,7 +101,7 @@ describe('LoginShell', () => {
     expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument();
   });
 
-  it('keeps the workspace open and shows an API error popup for non-session failures', async () => {
+  it('keeps non-session API errors non-blocking inside the authenticated workspace', async () => {
     window.localStorage.setItem('carmen_access_token', 'token');
     render(<LoginShell />);
 
@@ -110,7 +110,7 @@ describe('LoginShell', () => {
       detail: { kind: 'api', status: 500, message: 'Carmen API: Database unavailable.' },
     }));
 
-    expect(await screen.findByRole('alertdialog', { name: 'API request failed' })).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog', { name: 'API request failed' })).not.toBeInTheDocument();
     expect(screen.getByText('Report workspace')).toBeInTheDocument();
     expect(window.localStorage.getItem('carmen_access_token')).toBe('token');
   });
