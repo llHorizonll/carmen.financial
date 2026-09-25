@@ -20,6 +20,19 @@ const DIMENSION_MAPPING_HEADERS = {
   value: /^value$/i,
 };
 const NON_REPORT_SHEET = /^(?:intro|cover|glac|sheet1|sheet2|aspenmacro|start|myconnect|carmen parameter|standard_formula)$/i;
+const SUPPORTED_SOURCE_FORMULAS = new Set(["DAC", "PTD", "YTD", "DACBG", "PTDBG", "YTDBG", "AC", "ACC", "BC", "BCC"]);
+
+const getSourceFormulaType = (cellMatrix, sourceIndex, startRowIndex, endRowIndex) => {
+  for (let rowIndex = startRowIndex; rowIndex <= endRowIndex; rowIndex += 1) {
+    const formula = cellMatrix[rowIndex]?.[sourceIndex]?.f;
+    const match = typeof formula === "string" && formula.match(/^\s*(?:_xll\.)?([A-Z]+)\s*\(/i);
+    const type = match?.[1]?.toUpperCase();
+    if (SUPPORTED_SOURCE_FORMULAS.has(type)) {
+      return { type, yearMode: /\bYR\s*-\s*1\b/i.test(formula) ? "-1" : "current" };
+    }
+  }
+  return null;
+};
 
 const cleanText = (value) =>
   String(value ?? "")
@@ -461,6 +474,9 @@ const detectColumns = (
     const previousDataColumn = [...columns]
       .reverse()
       .find((column) => !column.isPercent);
+    const sourceFormula = getSourceFormulaType(
+      cellMatrix, candidate.columnIndex, startRowIndex, endRowIndex,
+    );
     columns.push({
       id: `C${columns.length + 1}`,
       label,
@@ -471,8 +487,8 @@ const detectColumns = (
       ...(isPercent
         ? { targetCol: previousDataColumn?.id || "C1", width: "80" }
         : {
-            type: /budget|plan/.test(lowerLabel) ? "BC" : "AC",
-            yearMode: /last year|prior year/.test(lowerLabel)
+            type: sourceFormula?.type || (/budget|plan|forecast/.test(lowerLabel) ? "BC" : "AC"),
+            yearMode: sourceFormula?.yearMode === "-1" || /last year|prior year/.test(lowerLabel)
               ? "-1"
               : "current",
             periodMode: "current",

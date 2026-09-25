@@ -179,7 +179,7 @@ export const resolveTime = (col, appliedYear, appliedPeriod, periodOptions = [])
   return { effYear: y.toString(), targetMonths: months };
 };
 
-const BUDGET_COLUMN_TYPES = new Set(['BUD', 'BC', 'BUDACC', 'BCC', 'DACBG', 'PTDBG']);
+const BUDGET_COLUMN_TYPES = new Set(['BUD', 'BC', 'BUDACC', 'BCC', 'DACBG', 'PTDBG', 'YTDBG']);
 
 const getColumnValueMode = (colType) => {
   const type = String(colType || '').trim().toUpperCase();
@@ -593,6 +593,12 @@ const resolveDailySelection = (col, effYear, targetMonths, appliedDay) => {
 const sumActuals = ({ col, matchedRows, appliedYear, appliedPeriod, appliedDay, periodOptions }) => {
   const { effYear, targetMonths } = resolveTime(col, appliedYear, appliedPeriod, periodOptions);
   const type = String(col.type || '').trim().toUpperCase();
+  if (type === 'YTD') {
+    const valueFor = (sourceType) => sumActuals({
+      col: { ...col, type: sourceType }, matchedRows, appliedYear, appliedPeriod, appliedDay, periodOptions,
+    });
+    return valueFor('ACC') - valueFor('AC') + valueFor('PTD');
+  }
   const monthsToEvaluate = ['BUDACC', 'BCC'].includes(type) && col.periodMode === 'FY' ? [targetMonths[0]] : targetMonths;
   const dailySelection = resolveDailySelection(col, effYear, monthsToEvaluate, appliedDay);
   const targetDay = dailySelection.day;
@@ -628,6 +634,13 @@ const sumActuals = ({ col, matchedRows, appliedYear, appliedPeriod, appliedDay, 
 const sumBudget = ({ col, matchedRows, appliedYear, appliedPeriod, appliedDay, appliedRevision, periodOptions }) => {
   const { effYear, targetMonths } = resolveTime(col, appliedYear, appliedPeriod, periodOptions);
   const type = String(col.type || '').trim().toUpperCase();
+  if (type === 'YTDBG') {
+    const valueFor = (sourceType) => sumBudget({
+      col: { ...col, type: sourceType }, matchedRows, appliedYear, appliedPeriod,
+      appliedDay, appliedRevision, periodOptions,
+    });
+    return valueFor('BCC') - valueFor('BC') + valueFor('PTDBG');
+  }
   const monthsToEvaluate = ['BUDACC', 'BCC'].includes(type) && col.periodMode === 'FY' ? [targetMonths[0]] : targetMonths;
   const dailySelection = resolveDailySelection(col, effYear, monthsToEvaluate, appliedDay);
   const targetDay = dailySelection.day;

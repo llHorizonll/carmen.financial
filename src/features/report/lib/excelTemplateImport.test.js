@@ -242,6 +242,50 @@ describe("Excel template import", () => {
     expect(sheet.detectedColumns[6]).toMatchObject({ id: "C7", label: "Variance", isFormula: true, formula: "C6-C5" });
   });
 
+  it("uses Carmen formulas in DDR Revenue cells for daily actual and forecast columns", () => {
+    const matrix = [
+      ["Description", "", "TODAY", "", "", "", "M-T-D", ""],
+      ["", "", "Actual", "forecast", "Variance", "Last Year", "Actual", "forecast"],
+      ["Revenue rooms", "", "100", "90", "10", "80", "200", "180"],
+      ["Other rooms", "", "50", "45", "5", "40", "70", "60"],
+    ];
+    const formulas = ["DAC", "DACBG", null, "DAC", "PTD", "PTDBG"];
+    const cells = matrix.map(() => []);
+    formulas.forEach((type, index) => {
+      if (!type) return;
+      const sourceIndex = index + 2;
+      cells[2][sourceIndex] = { f: `_xll.${type}(DB,ArrayDPT(),ArrayCOA(),YR,PRD,DT)` };
+    });
+    cells[2][5].f = "_xll.DAC(DB,ArrayDPT(),ArrayCOA(),YR-1,PRD,DT)";
+    cells[2][4] = { f: "C3-D3" };
+
+    const sheet = analyzeExcelSheet("DRR REVENUE", matrix, cells, new Map(), {
+      descriptionColumn: "A", reportStartColumn: "C", reportEndColumn: "H",
+    });
+
+    expect(sheet.detectedColumns.map(({ type, formula, yearMode }) => ({ type, formula, yearMode }))).toEqual([
+      { type: "DAC", formula: undefined, yearMode: "current" },
+      { type: "DACBG", formula: undefined, yearMode: "current" },
+      { type: undefined, formula: "C1-C2", yearMode: undefined },
+      { type: "DAC", formula: undefined, yearMode: "-1" },
+      { type: "PTD", formula: undefined, yearMode: "current" },
+      { type: "PTDBG", formula: undefined, yearMode: "current" },
+    ]);
+  });
+
+  it("imports day-aware YTD and YTDBG formulas from the workbook", () => {
+    const sheet = analyzeExcelSheet("DRR REVENUE", [
+      ["Description", "Y-T-D Actual", "Y-T-D forecast"],
+      ["Rooms", "30", "20"],
+      ["Food", "40", "25"],
+    ], [[], [null, { f: "_xll.YTD(DB,ArrayDPT(),ArrayCOA(),YR,PRD,DT)" },
+      { f: "_xll.YTDBG(DB,ArrayDPT(),ArrayCOA(),YR,PRD,DT,0)" }]], new Map(), {
+      descriptionColumn: "A", reportStartColumn: "B", reportEndColumn: "C",
+    });
+
+    expect(sheet.detectedColumns.map(({ type }) => type)).toEqual(["YTD", "YTDBG"]);
+  });
+
   it("validates linked ranges and direct codes before creating a template", () => {
     const sheet = analyzeExcelSheet(
       "PL-RANGES",

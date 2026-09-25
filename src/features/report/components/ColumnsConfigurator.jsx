@@ -130,17 +130,19 @@ export default function ColumnsConfigurator({
   }, [activeReport.columns.length]);
 
   const defaultDataType = activeReport.columns.some((column) => ["DAC", "PTD"].includes(String(column.type).toUpperCase())) ? "DAC" : "AC";
-  const supportedColumnTypes = new Set(["DAC", "PTD", "DACBG", "PTDBG", "AC", "ACC", "BC", "BCC", "BUD", "BUDACC"]);
+  const supportedColumnTypes = new Set(["DAC", "PTD", "YTD", "DACBG", "PTDBG", "YTDBG", "AC", "ACC", "BC", "BCC", "BUD", "BUDACC"]);
   const columnTypeOptions = (
     reportOptions.columnTypes?.length > 0
       ? reportOptions.columnTypes
       : [
           { id: "DAC", label: "DAC" },
           { id: "PTD", label: "PTD" },
+          { id: "YTD", label: "YTD" },
           { id: "AC", label: "AC" },
           { id: "ACC", label: "ACC" },
           { id: "DACBG", label: "DACBG" },
           { id: "PTDBG", label: "PTDBG" },
+          { id: "YTDBG", label: "YTDBG" },
           { id: "BC", label: "BC" },
           { id: "BCC", label: "BCC" },
         ]
@@ -663,7 +665,7 @@ export default function ColumnsConfigurator({
                           </Select>
                         </div>
 
-                        {['DAC', 'PTD', 'DACBG', 'PTDBG'].includes(String(col.type || '').toUpperCase()) && (
+                        {['DAC', 'PTD', 'YTD', 'DACBG', 'PTDBG', 'YTDBG'].includes(String(col.type || '').toUpperCase()) && (
                           <div className="space-y-1.5">
                             <label htmlFor={fieldId('day-mode')} className="text-xs font-medium text-muted-foreground">Day</label>
                             <Select value={col.dayMode || 'current'} onValueChange={(value) => handleUpdateCol(col.id, 'dayMode', value)}>
@@ -676,7 +678,7 @@ export default function ColumnsConfigurator({
                           </div>
                         )}
 
-                        {['DACBG', 'PTDBG', 'BC', 'BCC', 'BUD', 'BUDACC'].includes(String(col.type || '').toUpperCase()) && (
+                        {['DACBG', 'PTDBG', 'YTDBG', 'BC', 'BCC', 'BUD', 'BUDACC'].includes(String(col.type || '').toUpperCase()) && (
                           <div className="space-y-1.5">
                             <label htmlFor={fieldId('budget-revision')} className="text-xs font-medium text-muted-foreground">BudRev</label>
                             <Select value={col.budRev || 'REV'} onValueChange={(value) => handleUpdateCol(col.id, 'budRev', value)}>

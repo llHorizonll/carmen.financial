@@ -921,6 +921,27 @@ describe('buildReportData', () => {
     expect(result[0].results).toMatchObject({ C1: 20, C2: 30, C3: 30, C4: 70, C5: 10, C6: 20, C7: 280, C8: 330 });
   });
 
+  it('calculates Carmen YTD and YTDBG through the selected day', () => {
+    const result = buildReportData({
+      activeReport: {
+        category: ['ALL'],
+        rows: [{ id: 'r1', dept: '101', accCodes: '4001' }],
+        columns: ['YTD', 'YTDBG'].map((type, index) => ({
+          id: `C${index + 1}`, type, yearMode: 'current', periodMode: 'current',
+        })),
+      },
+      engineData: [
+        { year: '2025', deptcode: '101', acccode: '4001', amt2: '100', bfamt2: '200' },
+        { year: '2025', period: '2', day: '1', deptcode: '101', acccode: '4001', amount: '10' },
+        { year: '2025', period: '2', day: '2', deptcode: '101', acccode: '4001', amount: '20' },
+        { year: '2025', period: '2', day: '3', deptcode: '101', acccode: '4001', amount: '30' },
+      ],
+      budgetData: [{ year: '2025', revision: '0', deptcode: '101', acccode: '4001', amt2: '280', budacc2: '380', days2: 28 }],
+      appliedDepts: [], appliedYear: '2025', appliedPeriod: '2', appliedDay: '2', appliedRevision: '0', masterData,
+    });
+    expect(result[0].results).toMatchObject({ C1: 230, C2: 120 });
+  });
+
   it('uses the column Budget Revision and previous day without changing the View parameters', () => {
     const result = buildReportData({
       activeReport: {

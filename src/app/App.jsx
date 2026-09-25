@@ -189,10 +189,12 @@ const DEFAULT_REPORT_OPTIONS = {
   columnTypes: [
     { id: "DAC", label: "DAC (Actual Daily)" },
     { id: "PTD", label: "PTD" },
+    { id: "YTD", label: "YTD (Actual Year to Date by Day)" },
     { id: "AC", label: "AC (Actual Month)" },
     { id: "ACC", label: "ACC (Actual YTD)" },
     { id: "DACBG", label: "DACBG" },
     { id: "PTDBG", label: "PTDBG" },
+    { id: "YTDBG", label: "YTDBG (Budget Year to Date by Day)" },
     { id: "BC", label: "BC (Budget Month)" },
     { id: "BCC", label: "BCC (Budget YTD)" },
   ],
@@ -230,7 +232,7 @@ const DEFAULT_REPORT_OPTIONS = {
   })),
 };
 
-const DAILY_COLUMN_TYPES = new Set(["DAC", "PTD", "DACBG", "PTDBG"]);
+const DAILY_COLUMN_TYPES = new Set(["DAC", "PTD", "YTD", "DACBG", "PTDBG", "YTDBG"]);
 const SUPPORTED_COLUMN_TYPES = new Set([...DAILY_COLUMN_TYPES,
   "AC",
   "ACC",
@@ -246,6 +248,7 @@ const BUDGET_COLUMN_TYPES = new Set([
   "BCC",
   "DACBG",
   "PTDBG",
+  "YTDBG",
 ]);
 const createCurrentYearValue = () => new Date().getFullYear().toString();
 const parseSelectedItems = (value) =>
