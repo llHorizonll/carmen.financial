@@ -10,6 +10,27 @@ import {
 } from "./excelTemplateImport.js";
 
 describe("Excel template import", () => {
+  it("classifies imported reports from data column types", () => {
+    const columnSets = [
+      [{ type: "DAC" }, { type: "DACBG" }, { type: "PTDBG" }, { type: "YTDBG" }],
+      [{ type: "AC" }, { type: "BC" }, { type: "BCC" }],
+      [{ type: "DAC" }, { type: "AC" }, { type: "CALC", isFormula: true }],
+    ];
+    const sheets = columnSets.map((detectedColumns, index) => ({
+      name: `Sheet ${index + 1}`,
+      isRecommended: true,
+      detectedColumns,
+      detectedRows: [],
+    }));
+    const reports = createReportsFromExcelSheets(
+      { fileName: "Example.xlsx", sheets },
+      sheets.map((sheet) => sheet.name),
+      { companyName: "Hotel", userIds: [], owner: "admin", idSeed: 1 },
+    );
+
+    expect(reports.map((report) => report.reportType)).toEqual(["Daily", "Monthly", "Mixed"]);
+  });
+
   it("converts Excel column references in both directions", () => {
     expect(excelColumnToIndex("A")).toBe(0);
     expect(excelColumnToIndex("BZ")).toBe(77);

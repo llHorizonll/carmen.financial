@@ -18,6 +18,27 @@ describe('ReportDetailsPanel', () => {
     );
 
     expect(screen.getByLabelText('Day')).toHaveValue('15');
+    expect(screen.getByLabelText('Report Type')).toHaveTextContent('Monthly');
+  });
+
+  it('updates Report Type as metadata', async () => {
+    const updateActiveReport = vi.fn();
+    render(
+      <ReportDetailsPanel
+        activeReport={{ name: 'Mixed report', reportType: 'Monthly', columns: [{ type: 'DAC' }] }}
+        activeCategories={[]}
+        masterData={{ users: [] }}
+        updateActiveReport={updateActiveReport}
+        handleCloneReport={vi.fn()}
+        handleDeleteReport={vi.fn()}
+        setIsAccessModalOpen={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByLabelText('Report Type'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Mixed' }));
+    expect(updateActiveReport).toHaveBeenCalledWith({ reportType: 'Mixed' });
+    expect(screen.getByLabelText('Day')).toBeInTheDocument();
   });
 
   it('updates report settings and triggers report actions', async () => {
@@ -54,7 +75,7 @@ describe('ReportDetailsPanel', () => {
     });
     expect(updateActiveReport).toHaveBeenCalledWith({ name: 'P&L Summary' });
 
-    fireEvent.click(screen.getAllByRole('combobox')[0]);
+    fireEvent.click(screen.getByRole('combobox', { name: 'Auto Period Format' }));
     fireEvent.click(await screen.findByRole('option', { name: /Short Month \+ YYYY/i }));
     expect(updateActiveReport).toHaveBeenCalledWith({ periodFormat: 'short' });
     expect(screen.getByPlaceholderText('admin')).toHaveAttribute('readonly');

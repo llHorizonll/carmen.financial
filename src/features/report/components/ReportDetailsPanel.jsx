@@ -126,7 +126,20 @@ export default function ReportDetailsPanel({
             />
           </div>
           <div className="space-y-2">
-            <Label className="text-foreground">Auto Period Format</Label>
+            <Label htmlFor="report-type" className="text-foreground">Report Type</Label>
+            <Select value={activeReport.reportType || 'Monthly'} onValueChange={(value) => updateActiveReport({ reportType: value })}>
+              <SelectTrigger id="report-type" className="h-9 w-full">
+                <SelectValue placeholder="Select report type" />
+              </SelectTrigger>
+              <SelectContent position="popper">
+                <SelectItem value="Monthly">Monthly</SelectItem>
+                <SelectItem value="Daily">Daily</SelectItem>
+                <SelectItem value="Mixed">Mixed</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="auto-period-format" className="text-foreground">Auto Period Format</Label>
             <Select
               value={activeReport.periodFormat || 'standard'}
               onValueChange={(value) => {
@@ -134,7 +147,7 @@ export default function ReportDetailsPanel({
                 updateActiveReport({ periodFormat: value });
               }}
             >
-              <SelectTrigger className="h-9 w-full">
+              <SelectTrigger id="auto-period-format" className="h-9 w-full">
                 <SelectValue placeholder="Select format" />
               </SelectTrigger>
               <SelectContent position="popper">

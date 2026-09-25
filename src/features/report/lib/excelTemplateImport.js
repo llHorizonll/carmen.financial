@@ -1149,6 +1149,15 @@ export const parseExcelWorkbook = async (file, mappingCatalogs = {}) => {
   };
 };
 
+const DAILY_COLUMN_TYPES = new Set(["DAC", "PTD", "YTD", "DACBG", "PTDBG", "YTDBG"]);
+
+const inferReportType = (columns) => {
+  const dataColumns = columns.filter((column) => !column.isFormula && !column.isPercent);
+  const hasDaily = dataColumns.some((column) => DAILY_COLUMN_TYPES.has(String(column.type || "").trim().toUpperCase()));
+  const hasMonthly = dataColumns.some((column) => !DAILY_COLUMN_TYPES.has(String(column.type || "").trim().toUpperCase()));
+  return hasDaily && hasMonthly ? "Mixed" : hasDaily ? "Daily" : "Monthly";
+};
+
 export const createReportsFromExcelSheets = (
   workbook,
   selectedSheetNames,
@@ -1167,7 +1176,7 @@ export const createReportsFromExcelSheets = (
       assignedUsers: [...userIds],
       isActive: true,
       periodFormat: "standard",
-      reportType: "Monthly",
+      reportType: inferReportType(sheet.detectedColumns),
       owner,
       overrideDateDisplay: "",
       overridePeriodDisplay: "",
