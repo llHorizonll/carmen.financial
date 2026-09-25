@@ -800,19 +800,28 @@ export const buildReportData = ({
   applyFormulaRows(rows, columns, rowRefMap);
 
   rows.forEach(row => {
-    columns.filter(c => c.isFormula).forEach(col => {
-      let evalStr = col.formula?.toUpperCase() || '';
-      (evalStr.match(/C\d+/g) || []).forEach(v => {
-        const idx = parseInt(v.replace('C', ''), 10) - 1;
-        evalStr = evalStr.replace(new RegExp(`\\b${v}\\b`, 'g'), (columns[idx] && rowRefMap[row.id][columns[idx].id]) || 0);
-      });
+    const resolving = new Set();
+    const resolved = new Set();
+    const resolveColumn = (col) => {
+      if (!col) return 0;
+      if (!col.isFormula) return rowRefMap[row.id][col.id] || 0;
+      if (resolved.has(col.id)) return rowRefMap[row.id][col.id] || 0;
+      if (resolving.has(col.id)) throw new Error('Circular column formula');
+      resolving.add(col.id);
       try {
-        const res = evaluateArithmeticExpression(evalStr);
-        rowRefMap[row.id][col.id] = (!isFinite(res) || isNaN(res)) ? 0 : res;
+        const expression = String(col.formula || '').toUpperCase().replace(/\bC(\d+)\b/g, (_, position) =>
+          String(resolveColumn(columns[Number(position) - 1])));
+        const result = evaluateArithmeticExpression(expression);
+        rowRefMap[row.id][col.id] = Number.isFinite(result) ? result : 0;
       } catch {
         rowRefMap[row.id][col.id] = 0;
+      } finally {
+        resolving.delete(col.id);
+        resolved.add(col.id);
       }
-    });
+      return rowRefMap[row.id][col.id];
+    };
+    columns.filter(col => col.isFormula).forEach(resolveColumn);
   });
   applyPercentRows(rows, columns, rowRefMap);
 

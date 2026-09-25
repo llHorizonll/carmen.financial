@@ -625,11 +625,15 @@ export const createCarmenReport = async (report) => {
     throw new Error('Carmen API did not return an id for the new report.');
   }
 
-  return adaptCarmenReportDefinition({
-    ...payload,
-    ...(createdReport && typeof createdReport === 'object' ? createdReport : {}),
-    id: createdId,
-  });
+  // POST returns a success flag on Carmen API. Read the stored timestamp before
+  // the first edit, because PUT requires it for optimistic concurrency.
+  const savedReport = adaptCarmenReportDefinition(
+    await requestCarmenJson(`/api/reports/${encodeURIComponent(createdId)}`),
+  );
+  if (!savedReport?.lastModified) {
+    throw new Error('Carmen API did not return a version for the new report.');
+  }
+  return savedReport;
 };
 
 export const fetchCarmenReportHistory = (id) =>

@@ -329,6 +329,27 @@ describe('buildReportData', () => {
     expect(result[1].results.C6).toBe(200);
   });
 
+  it('resolves a budget variance formula referenced by an earlier column', () => {
+    const result = buildReportData({
+      activeReport: {
+        category: ['ALL'],
+        rows: [{ id: 'revenue', accCodes: '4001' }],
+        columns: [
+          { id: 'doubleVariance', isFormula: true, formula: 'C4*2' },
+          { id: 'actual', type: 'AC', yearMode: 'current', periodMode: 'current' },
+          { id: 'budget', type: 'BC', yearMode: 'current', periodMode: 'current' },
+          { id: 'variance', isFormula: true, formula: 'C2-C3' },
+        ],
+      },
+      engineData: [{ year: '2025', acccode: '4001', amt2: '100' }],
+      budgetData: [{ year: '2025', revision: '0', acccode: '4001', amt2: '80' }],
+      appliedDepts: [], appliedYear: '2025', appliedPeriod: '2', appliedRevision: '0',
+      masterData: INITIAL_MASTER_DATA,
+    });
+
+    expect(result[0].results).toMatchObject({ actual: 100, budget: 80, variance: 20, doubleVariance: 40 });
+  });
+
   it('matches the FRD golden report across all four calculation passes', () => {
     const result = buildReportData({
       activeReport: {

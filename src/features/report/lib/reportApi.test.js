@@ -461,10 +461,17 @@ describe('reportApi helpers', () => {
       user: { id: 'owner-1' },
       businessUnit: { tenant: 'tenant-1' },
     });
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => true,
-    });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => true })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 'rep-client-provisional',
+          name: 'New Custom Report',
+          lastModified: '2026-09-25T10:00:00',
+          rows: [], columns: [],
+        }),
+      });
     vi.stubGlobal('fetch', fetchMock);
 
     const createdReport = await createCarmenReport({
@@ -485,7 +492,12 @@ describe('reportApi helpers', () => {
     expect(createdReport).toEqual(expect.objectContaining({
       id: 'rep-client-provisional',
       name: 'New Custom Report',
+      lastModified: '2026-09-25T10:00:00',
     }));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      expect.stringContaining('/api/reports/rep-client-provisional?useTenant=tenant-1'),
+      expect.objectContaining({ method: 'GET' }),
+    );
   });
 
   it('surfaces Carmen API UserMessage details instead of a generic HTTP error', async () => {
