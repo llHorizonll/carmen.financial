@@ -542,7 +542,7 @@ export default function App({ onLogout = null }) {
       })
     );
   }, [activeReport]);
-  const defaultReportDay = String(activeReport?.day || (activeReportUsesDayFilter ? '1' : ''));
+  const defaultReportDay = activeReportUsesDayFilter ? '1' : '';
   const currentDayFilter = dayFilterState?.reportId === activeReport?.id && dayFilterState?.reportDay === defaultReportDay
     ? dayFilterState
     : null;
@@ -1403,7 +1403,7 @@ export default function App({ onLogout = null }) {
   // 4. RENDER UI
   // ============================================================================
   const sidebarPanel = (
-    <div className="flex h-full flex-col bg-background">
+    <div className="flex h-full min-w-0 flex-col bg-background">
       <div ref={sidebarBrandRef} className="flex shrink-0 items-center justify-between border-b px-4 py-2.5">
         <div className="flex items-center gap-3">
           <div className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
@@ -1457,7 +1457,7 @@ export default function App({ onLogout = null }) {
         </Select>
       </div>
 
-      <ScrollArea className="flex-1">
+      <ScrollArea className="min-w-0 flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
         <div className="p-3">
                     {canSetupReports && (
             <div className="mb-4 space-y-1.5">
@@ -1469,26 +1469,26 @@ export default function App({ onLogout = null }) {
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="w-full justify-start gap-1.5 px-2 text-xs data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary"
+                  className="min-w-0 w-full justify-start gap-1.5 px-2 text-xs data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary"
                   onClick={handleCreateReportFromSidebar}
                   data-tour="new-report"
                 >
-                  <FilePlus className="size-3.5" />
-                  <span>New Report</span>
+                  <FilePlus className="size-3.5 shrink-0" />
+                  <span className="min-w-0 truncate">New Report</span>
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="w-full justify-start gap-1.5 px-2 text-xs data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary"
+                  className="min-w-0 w-full justify-start gap-1.5 px-2 text-xs data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary"
                   onClick={() => {
                     handleTabChange("import");
                     setIsSidebarOpen(false);
                   }}
                   data-tour="import-template"
                 >
-                  <FileSpreadsheet className="size-3.5" />
-                  <span>Import Excel</span>
+                  <FileSpreadsheet className="size-3.5 shrink-0" />
+                  <span className="min-w-0 truncate">Import Excel</span>
                 </Button>
               </div>
             </div>
@@ -1509,14 +1509,14 @@ export default function App({ onLogout = null }) {
                 variant={
                   resolvedCurrentReportId === report.id ? "secondary" : "ghost"
                 }
-                className="w-full justify-start gap-2"
+                className="min-w-0 w-full justify-start gap-2 overflow-hidden"
                 onClick={() => handleReportChange(report.id)}
                 aria-current={
                   resolvedCurrentReportId === report.id ? "page" : undefined
                 }
               >
-                <FileText className="size-4" />
-                <span className="truncate">{report.name}</span>
+                <FileText className="size-4 shrink-0" />
+                <span className="min-w-0 flex-1 truncate text-left" title={report.name}>{report.name}</span>
               </Button>
             ))}
           </div>
@@ -1971,8 +1971,8 @@ export default function App({ onLogout = null }) {
           <div className="px-4 pt-4 print:hidden">
             <Card className="border border-border bg-card/95 shadow-none ring-0">
                 <CardContent className="p-3">
-                  <div className="flex flex-col gap-2 xl:flex-row xl:items-end xl:justify-between">
-                    <div className="grid gap-2 sm:grid-cols-2 sm:items-end md:grid-cols-[minmax(0,1.3fr)_96px_minmax(0,1.3fr)_104px_80px] xl:flex-none xl:grid-cols-[180px_110px_180px_120px_88px]">
+                  <div className="flex flex-col gap-2 2xl:flex-row 2xl:items-end 2xl:justify-between">
+                    <div className={`grid gap-2 sm:grid-cols-2 sm:items-end md:grid-cols-3 lg:grid-cols-4 2xl:flex-none ${activeReportUsesDayFilter ? "2xl:grid-cols-[180px_110px_180px_120px_88px_88px]" : "2xl:grid-cols-[180px_110px_180px_88px_88px]"}`}>
                       <div className="min-w-0">
                         <MultiSelectDropdown
                           testIdPrefix="dept"
@@ -2081,7 +2081,7 @@ export default function App({ onLogout = null }) {
 
                       <Button
                         size="sm"
-                        className={`h-9 w-full self-end border px-3 text-sm xl:w-auto ${NEUTRAL_BUTTON_CLASS}`}
+                        className="h-9 w-full self-end px-3 text-sm"
                         onClick={handleApplyFilters}
                         disabled={isLoading}
                       >
@@ -2090,7 +2090,7 @@ export default function App({ onLogout = null }) {
                       </Button>
                     </div>
 
-                    <div className="flex flex-wrap gap-2 xl:ml-4 xl:flex-nowrap xl:self-end xl:justify-end">
+                    <div className="flex flex-wrap gap-2 2xl:ml-4 2xl:flex-nowrap 2xl:self-end 2xl:justify-end">
                       <Button
                         variant="outline"
                         size="sm"

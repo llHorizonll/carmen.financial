@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import ReportDetailsPanel from './ReportDetailsPanel.jsx';
 
 describe('ReportDetailsPanel', () => {
-  it('shows Day when a Monthly report has a Daily data column', () => {
+  it('keeps Day out of setup even when a report has daily columns', () => {
     render(
       <ReportDetailsPanel
         activeReport={{ name: 'Daily values', reportType: 'Monthly', day: '15', columns: [{ id: 'C1', type: 'DAC' }] }}
@@ -17,7 +17,7 @@ describe('ReportDetailsPanel', () => {
       />
     );
 
-    expect(screen.getByLabelText('Day')).toHaveValue('15');
+    expect(screen.queryByLabelText('Day')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Report Type')).toHaveTextContent('Monthly');
   });
 
@@ -38,7 +38,7 @@ describe('ReportDetailsPanel', () => {
     fireEvent.click(screen.getByLabelText('Report Type'));
     fireEvent.click(await screen.findByRole('option', { name: 'Mixed' }));
     expect(updateActiveReport).toHaveBeenCalledWith({ reportType: 'Mixed' });
-    expect(screen.getByLabelText('Day')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Day')).not.toBeInTheDocument();
   });
 
   it('updates report settings and triggers report actions', async () => {

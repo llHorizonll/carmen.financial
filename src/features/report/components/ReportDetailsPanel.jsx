@@ -175,19 +175,6 @@ export default function ReportDetailsPanel({
               placeholder="Auto (Based on format)"
             />
           </div>
-          {activeReport.columns?.some((column) =>
-            ['DAC', 'PTD', 'YTD', 'DACBG', 'PTDBG', 'YTDBG'].includes(String(column?.type || '').trim().toUpperCase())
-          ) && (
-            <div className="space-y-2">
-              <Label htmlFor="report-day" className="text-foreground">Day</Label>
-              <Input
-                id="report-day"
-                value={activeReport.day || ''}
-                onChange={(e) => updateActiveReport({ day: e.target.value })}
-                placeholder="Daily reports only"
-              />
-            </div>
-          )}
           <div className="space-y-2">
             <Label className="text-foreground">Owner</Label>
             <Input
