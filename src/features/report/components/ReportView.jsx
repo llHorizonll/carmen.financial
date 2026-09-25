@@ -90,7 +90,7 @@ export default function ReportView({
                   {displayColumns.map((col) => col.isDescription ? (
                     <TableHead
                       key={col.id}
-                      className={`${descriptionIsFirst ? 'sticky left-0 z-30 shadow-[1px_0_0_0_hsl(var(--border))]' : ''} min-w-[240px] border-r text-center text-xs font-semibold text-white hover:text-white sm:min-w-[300px] ${currentTheme.header}`}
+                      className={`${descriptionIsFirst ? 'sticky left-0 z-30 shadow-[1px_0_0_0_var(--border)]' : ''} min-w-[240px] border-r text-center text-xs font-semibold sm:min-w-[300px] ${currentTheme.header}`}
                     >
                       Description
                     </TableHead>
@@ -98,7 +98,7 @@ export default function ReportView({
                     <TableHead
                       key={col.id}
                       style={{ width: col.width ? `${col.width}px` : 'auto', minWidth: col.width ? `${col.width}px` : '96px' }}
-                      className={`border-r text-center text-white hover:text-white ${currentTheme.header}`}
+                      className={`border-r text-center ${currentTheme.header}`}
                     >
                       <div className="text-xs font-semibold">{col.label}</div>
                     </TableHead>

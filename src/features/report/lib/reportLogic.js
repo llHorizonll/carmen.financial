@@ -4,13 +4,13 @@ export { normalizeLookupCode, normalizeDeptLookupCode, normalizeAccLookupCode } 
 export const THEMES = {
   blue: {
     name: 'Classic Blue',
-    header: 'bg-[#2D4A8C] text-white border-blue-200 dark:border-blue-800 hover:bg-[#2D4A8C] hover:text-white',
-    subHeader: 'bg-blue-100/60 text-blue-950 font-bold hover:bg-blue-100/60 hover:text-blue-950 dark:bg-blue-950/60 dark:text-blue-100 dark:hover:bg-blue-950/60 dark:hover:text-blue-100',
-    total: 'bg-blue-50 text-slate-950 font-bold hover:bg-blue-50 hover:text-slate-950 dark:bg-blue-950/40 dark:text-blue-50 dark:hover:bg-blue-950/40 dark:hover:text-blue-50',
-    rowHover: 'hover:bg-blue-50/60 dark:hover:bg-blue-950/30',
-    borderColor: 'border-blue-100 dark:border-blue-900/60',
-    cellBorder: 'border-blue-200 dark:border-blue-800',
-    hexHeader: '#2D4A8C', hexSubHeader: '#dbeafe', hexTotal: '#eff6ff', hexCellBorder: '#eff6ff'
+    header: 'bg-primary text-primary-foreground border-primary/25 hover:bg-primary hover:text-primary-foreground',
+    subHeader: 'bg-primary/10 text-foreground font-bold hover:bg-primary/10 hover:text-foreground dark:bg-primary/15 dark:hover:bg-primary/15',
+    total: 'bg-primary/5 text-foreground font-bold hover:bg-primary/5 hover:text-foreground dark:bg-primary/10 dark:hover:bg-primary/10',
+    rowHover: 'hover:bg-primary/5 dark:hover:bg-primary/10',
+    borderColor: 'border-primary/15',
+    cellBorder: 'border-primary/20',
+    hexHeader: '#0974d4', hexSubHeader: '#e8f2fc', hexTotal: '#f3f8fe', hexCellBorder: '#d6eafb'
   },
   green: {
     name: 'Emerald Green',
