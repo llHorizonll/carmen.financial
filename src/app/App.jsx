@@ -1643,6 +1643,7 @@ export default function App({ onLogout = null }) {
             </AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
+              className={confirmAction?.actionLabel === "Delete report" ? "bg-destructive text-white hover:bg-destructive/90 dark:bg-destructive dark:hover:bg-destructive/90" : undefined}
               onClick={confirmPendingAction}
             >
               {confirmAction?.actionLabel || "Confirm"}
@@ -1985,7 +1986,6 @@ export default function App({ onLogout = null }) {
                 <div data-tour="report-actions" className="flex flex-wrap items-center justify-end gap-2 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-lg data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary">
                   <Button
                     size="sm"
-                    variant="outline"
                     onClick={handleCreateReportFromSidebar}
                   >
                     <FilePlus />
@@ -2013,6 +2013,7 @@ export default function App({ onLogout = null }) {
                       <Button
                         size="sm"
                         variant="outline"
+                        className="border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive focus-visible:border-destructive focus-visible:ring-destructive/20"
                         onClick={handleDeleteReport}
                       >
                         <Trash2 />

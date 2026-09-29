@@ -327,8 +327,12 @@ describe('App shell', () => {
     ]);
 
     render(<App />);
+    expect(screen.getByRole('button', { name: 'New Report' })).toHaveAttribute('data-variant', 'default');
+    expect(screen.getByRole('button', { name: 'Delete' })).toHaveClass('border-destructive/50', 'text-destructive');
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Delete report' }));
+    const confirmDelete = await screen.findByRole('button', { name: 'Delete report' });
+    expect(confirmDelete).toHaveClass('bg-destructive', 'text-white');
+    fireEvent.click(confirmDelete);
 
     await waitFor(() => {
       expect(screen.queryByText('Report Details')).not.toBeInTheDocument();
@@ -1783,11 +1787,12 @@ describe('App shell', () => {
     printSpy.mockRestore();
   });
 
-  it('uses the neutral filter/action button palette in the report toolbar', async () => {
+  it('emphasizes New Report and Delete while keeping filters neutral', async () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByText('Carmen Hotel & Resorts')).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: 'New Report' })).toHaveAttribute('data-variant', 'outline');
+    expect(screen.getByRole('button', { name: 'New Report' })).toHaveAttribute('data-variant', 'default');
+    expect(screen.getByRole('button', { name: 'Delete' })).toHaveClass('border-destructive/50', 'text-destructive');
     expect(screen.getByRole('button', { name: /DEPT/i }).className).toMatch(/bg-stone|border-stone|text-stone|bg-muted|border-border|text-muted/);
     expect(screen.getByRole('button', { name: 'Apply' })).toHaveAttribute('data-variant', 'default');
     expect(screen.getByTitle('Export to Excel').className).toMatch(/bg-stone|border-stone|text-stone|bg-muted|border-border|text-muted/);
