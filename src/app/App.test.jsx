@@ -406,10 +406,10 @@ describe('App shell', () => {
       groups: { L1: [], L2: [], L3: [], L4: [] },
     });
     reportApiMocks.fetchCarmenReportOptions.mockResolvedValue({});
-    reportApiMocks.fetchCarmenReportData.mockResolvedValue({
-      actualRows: [{ deptcode: '101', acccode: '4001', amt1: 123 }],
-      budgetRows: [{ deptcode: '101', acccode: '4001', amt1: 456 }],
-    });
+    let resolveInitialLoad;
+    reportApiMocks.fetchCarmenReportData.mockImplementation(() => new Promise((resolve) => {
+      resolveInitialLoad = resolve;
+    }));
     reportApiMocks.fetchCarmenReports.mockResolvedValue([
       {
         id: 'rep-sync',
@@ -438,8 +438,16 @@ describe('App shell', () => {
     render(<App />);
     await waitFor(() => expect(screen.getAllByText('API Sync Report').length).toBeGreaterThan(0));
     await waitFor(() => expect(reportApiMocks.fetchCarmenReportData).toHaveBeenCalled());
-
+    expect(await screen.findByRole('dialog', { name: 'Loading report data' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Choose a report' })).not.toBeInTheDocument();
+    await act(async () => resolveInitialLoad({
+      actualRows: [{ deptcode: '101', acccode: '4001', amt1: 123 }],
+      budgetRows: [{ deptcode: '101', acccode: '4001', amt1: 456 }],
+    }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Loading report data' })).not.toBeInTheDocument());
+    expect(await screen.findByRole('dialog', { name: 'Choose a report' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close getting started guide' }));
+    expect(screen.queryByRole('dialog', { name: 'Choose a report' })).not.toBeInTheDocument();
 
     const resolveApply = [];
     reportApiMocks.fetchCarmenReportData.mockImplementation(() => new Promise((resolve) => {

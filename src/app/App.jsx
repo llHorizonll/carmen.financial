@@ -2426,7 +2426,7 @@ export default function App({ onLogout = null }) {
       <React.Suspense fallback={null}>
         <GettingStartedTour
           canSetup={canSetupReports}
-          open={isGettingStartedOpen}
+          open={isGettingStartedOpen && !isLoading && !isReportCatalogLoading}
           stepIndex={gettingStartedStep}
           onStepChange={setGettingStartedStep}
           onClose={closeGettingStarted}
