@@ -51,22 +51,21 @@ const STEPS = [
 const getStepIndex = (step) => STEPS.findIndex((item) => item.id === step);
 const IMPORT_TOUR_STEPS = {
   upload: [
-    { target: "import-progress", title: "Import has three phases", description: "Upload a workbook, choose worksheets, then review the imported reports in Setup." },
+    { target: "import-progress", title: "Import has three phases", description: "Upload a workbook, choose worksheets, then open an imported report and select Edit to review it." },
     { target: "import-upload", title: "Choose the source workbook", description: "Drop or browse for an Excel file up to 25 MB. Processing stays in this browser." },
   ],
   select: [
     { target: "import-select-header", title: "Review detected worksheets", description: "The wizard recommends sheets that look like financial report templates." },
     { target: "import-worksheets", title: "Select and configure sheets", description: "Select each report sheet. Use Configure when detected rows, columns, or mappings need adjustment." },
-    { target: "import-create", title: "Create reports", description: "This creates one report per selected worksheet. Review every imported report in Setup before use." },
+    { target: "import-create", title: "Create reports", description: "This creates one report per selected worksheet. Review each imported report with Edit before use." },
   ],
   done: [
-    { target: "import-done-heading", title: "Import complete", description: "Open the first report to verify mappings, formulas, access, columns, and rows in Setup." },
+    { target: "import-done-heading", title: "Import complete", description: "Open the first report, then select Edit to verify its mappings, formulas, columns, and rows." },
   ],
 };
 
 const ExcelTemplateImportWizard = forwardRef(function ExcelTemplateImportWizard({
   companyName,
-  userIds,
   owner,
   departments = EMPTY_MAPPING_CATALOG,
   accountCodes = EMPTY_MAPPING_CATALOG,
@@ -225,7 +224,7 @@ const ExcelTemplateImportWizard = forwardRef(function ExcelTemplateImportWizard(
       const reports = createReportsFromExcelSheets(
         workbook,
         selectedSheetNames,
-        { companyName, userIds, owner },
+        { companyName, userIds: [], owner },
       );
       await onImportTemplates(reports);
       setImportedReports(reports);

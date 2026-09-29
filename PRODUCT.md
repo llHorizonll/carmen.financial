@@ -10,7 +10,7 @@ Finance staff, analysts, and administrators who review reports, adjust report st
 
 ## Product Purpose
 
-Carmen Financial BI Hub is an internal reporting workspace for viewing financial reports, configuring report definitions, loading GL and budget data, managing access, and exporting or printing the final reports.
+Carmen Blue Financial Report is an internal reporting workspace for viewing financial reports, configuring report definitions, loading GL and budget data, managing access, and exporting or printing the final reports.
 
 ## Brand Personality
 

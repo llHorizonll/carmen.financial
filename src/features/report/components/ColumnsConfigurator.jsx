@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card.jsx";
 import { Checkbox } from "@/components/ui/checkbox.jsx";
 import { Input } from "@/components/ui/input.jsx";
+import { Textarea } from "@/components/ui/textarea.jsx";
 import { Badge } from "@/components/ui/badge.jsx";
 import {
   Select,
@@ -273,8 +274,8 @@ export default function ColumnsConfigurator({
             </CardDescription>
           </div>
           <Select value="" onValueChange={(value) => handleAddCol(value)}>
-            <SelectTrigger className="w-full sm:w-44" aria-label="Add column">
-              <SelectValue placeholder="Add Column" />
+            <SelectTrigger className="w-full sm:w-44" aria-label="+ Add column">
+              <SelectValue placeholder="+ Add Column" />
             </SelectTrigger>
             <SelectContent position="popper">
               <SelectItem value="data">{logicTypeLabels.get("DATA") || "Data"}</SelectItem>
@@ -508,14 +509,15 @@ export default function ColumnsConfigurator({
                       >
                         Column label
                       </label>
-                      <Input
+                      <Textarea
                         id={fieldId("label")}
                         value={col.label}
                         onChange={(e) =>
-                          handleUpdateCol(col.id, "label", e.target.value)
+                          handleUpdateCol(col.id, "label", e.target.value.replace(/\r\n?/g, "\n").split("\n").slice(0, 2).join("\n"))
                         }
                         placeholder="Column label"
-                        className="h-9 text-sm"
+                        rows={2}
+                        className="min-h-16 resize-none text-sm"
                       />
                     </div>
 

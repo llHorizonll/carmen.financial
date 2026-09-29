@@ -1,5 +1,6 @@
 import React from 'react';
-import { SearchIcon, Settings2 } from 'lucide-react';
+import { ChevronDown, SearchIcon, Settings2 } from 'lucide-react';
+import { Accordion } from 'radix-ui';
 import { Button } from '@/components/ui/button.jsx';
 import {
   Dialog,
@@ -62,9 +63,14 @@ export default function EditMappingModal({
   const selectedDepartmentGroup = departmentGroups.find((group) => String(group.id).toUpperCase() === String(editingRow.deptGroup || '').toUpperCase());
   const hasAccountGroup = Boolean(selectedAccountGroup);
   const hasDepartmentGroup = Boolean(selectedDepartmentGroup);
+  const departmentCount = parseDimensionValues(editingRow.dept).length;
+  const accountCount = parseDimensionValues(editingRow.accCodes).length;
+  const departmentSummary = selectedDepartmentGroup?.name || editingRow.deptGroup || (departmentCount ? `${departmentCount} department${departmentCount === 1 ? '' : 's'}` : 'Not configured');
+  const accountSummary = selectedAccountGroup?.name || editingRow.groups || (accountCount ? `${accountCount} account code${accountCount === 1 ? '' : 's'}` : 'Not configured');
+  const dimensionCount = DIMENSION_FIELDS.filter(({ key }) => parseDimensionValues(editingRow[key]).length > 0).length;
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="w-full bg-popover sm:max-w-6xl">
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] w-full min-h-0 flex-col overflow-hidden bg-popover sm:max-w-6xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings2 className="size-4" />
@@ -73,13 +79,20 @@ export default function EditMappingModal({
           <DialogDescription>Adjust row mapping details and detail selectors.</DialogDescription>
         </DialogHeader>
 
-        <section className="grid max-h-dvh gap-4 overflow-y-auto pr-1">
+        <section className="grid min-h-0 flex-1 gap-4 overflow-y-auto pr-1">
           <section className="space-y-2">
             <Label>Description</Label>
             <Input value={editingRow.desc} onChange={(e) => setEditingRow({ ...editingRow, desc: e.target.value })} />
           </section>
 
-          <section className="space-y-3 rounded-xl border border-border bg-background p-4">
+          <Accordion.Root type="multiple" defaultValue={['department', 'account']} className="grid gap-3">
+          <Accordion.Item value="department" className="rounded-xl border border-border bg-background">
+            <Accordion.Header>
+              <Accordion.Trigger aria-label={`Department: ${departmentSummary}`} className="flex w-full items-center gap-3 p-4 text-left text-sm font-medium focus-visible:rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&[data-state=open]>svg]:rotate-180">
+                <span>Department</span><span className="min-w-0 flex-1 truncate text-xs font-normal text-muted-foreground">{departmentSummary}</span><ChevronDown className="size-4 shrink-0 transition-transform" />
+              </Accordion.Trigger>
+            </Accordion.Header>
+            <Accordion.Content className="space-y-3 px-4 pb-4">
             <section className="space-y-2">
               <Label>Department Group</Label>
               <GroupSelectDropdown
@@ -125,9 +138,16 @@ export default function EditMappingModal({
               placeholder="e.g. 101, 102"
               disabled={hasDepartmentGroup}
             />
-          </section>
+            </Accordion.Content>
+          </Accordion.Item>
 
-          <section className="space-y-3 rounded-xl border border-border bg-background p-4">
+          <Accordion.Item value="account" className="rounded-xl border border-border bg-background">
+            <Accordion.Header>
+              <Accordion.Trigger aria-label={`Account: ${accountSummary}`} className="flex w-full items-center gap-3 p-4 text-left text-sm font-medium focus-visible:rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&[data-state=open]>svg]:rotate-180">
+                <span>Account</span><span className="min-w-0 flex-1 truncate text-xs font-normal text-muted-foreground">{accountSummary}</span><ChevronDown className="size-4 shrink-0 transition-transform" />
+              </Accordion.Trigger>
+            </Accordion.Header>
+            <Accordion.Content className="space-y-3 px-4 pb-4">
             <section className="space-y-2">
               <Label>Account Group</Label>
               <GroupSelectDropdown
@@ -196,10 +216,16 @@ export default function EditMappingModal({
                 disabled={hasAccountGroup}
               />
             </section>
-          </section>
+            </Accordion.Content>
+          </Accordion.Item>
 
-          <section className="space-y-3 rounded-xl border border-border bg-background p-4">
-            <Label>Dimensions</Label>
+          <Accordion.Item value="dimensions" className="rounded-xl border border-border bg-background">
+            <Accordion.Header>
+              <Accordion.Trigger aria-label={`Dimensions: ${dimensionCount} of 10 configured`} className="flex w-full items-center gap-3 p-4 text-left text-sm font-medium focus-visible:rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&[data-state=open]>svg]:rotate-180">
+                <span>Dimensions</span><span className="min-w-0 flex-1 truncate text-xs font-normal text-muted-foreground">{dimensionCount ? `${dimensionCount} of 10 configured` : 'Not configured'}</span><ChevronDown className="size-4 shrink-0 transition-transform" />
+              </Accordion.Trigger>
+            </Accordion.Header>
+            <Accordion.Content className="px-4 pb-4">
             <section className="grid gap-3 md:grid-cols-2">
               {DIMENSION_FIELDS.map(({ key, label }) => {
                 const definition = dimensionDefinitions.find((item) => item.key === key);
@@ -221,10 +247,12 @@ export default function EditMappingModal({
                 );
               })}
             </section>
-          </section>
+            </Accordion.Content>
+          </Accordion.Item>
+          </Accordion.Root>
         </section>
 
-        <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <DialogFooter className="shrink-0 flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button variant="outline" size="sm" className={`w-full sm:w-auto ${friendlyButtonClassName}`} onClick={onClose}>
             Cancel
           </Button>

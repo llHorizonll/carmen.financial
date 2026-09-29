@@ -19,11 +19,13 @@ describe('reportAdapters', () => {
     expect(adaptCarmenReportDefinition({
       Id: 'rep-1',
       Name: 'Report',
+      Remark: 'Monthly close notes',
       LastModified: '2026-09-21T10:00:00',
       Rows: [],
       Columns: [],
     })).toEqual(expect.objectContaining({
       lastModified: '2026-09-21T10:00:00',
+      remark: 'Monthly close notes',
     }));
   });
 

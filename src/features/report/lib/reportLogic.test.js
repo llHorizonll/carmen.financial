@@ -853,7 +853,7 @@ describe('buildReportData', () => {
   it('builds excel html output', () => {
     const html = buildExcelHtml({
       activeReport: { name: 'Report' },
-      activeCols: [{ id: 'C1', label: 'Actual', width: '' }],
+      activeCols: [{ id: 'C1', label: 'Actual\nThis & That', width: '' }],
       displayCompanyLabel: 'Carmen',
       displayDateLabel: 'As of Feb',
       displayPeriodLabel: 'P2',
@@ -861,7 +861,7 @@ describe('buildReportData', () => {
       themeColors: THEMES.blue,
     });
     expect(html).toContain('Carmen');
-    expect(html).toContain('Actual');
+    expect(html).toContain('Actual<br>This &amp; That');
     expect(html).toContain('Revenue');
   });
 

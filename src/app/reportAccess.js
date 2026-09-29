@@ -1,6 +1,3 @@
-const hasFinancialReportPermission = (user) =>
-  Boolean(user?.permissions?.financialReport);
-
 export const canSetupFinancialReports = (user) => {
   const permission = user?.permissions?.financialReport;
   if (permission) {
@@ -29,24 +26,5 @@ export const canViewFinancialReports = (user) => {
 };
 
 export const getAccessibleReports = (reports, user) => {
-  if (!canViewFinancialReports(user)) return [];
-  if (canSetupFinancialReports(user)) return reports;
-  const userId = String(user?.id || "").trim();
-  return reports.filter((report) => {
-    if (String(report?.owner || "").trim() === userId) return true;
-    if (report?.isActive === false) return false;
-    if (Array.isArray(report?.access) && report.access.length > 0) {
-      return report.access.some(
-        (item) => String(item?.userId || item?.userName || "").trim() === userId && item?.canView === true,
-      );
-    }
-    if (
-      Array.isArray(report?.assignedUsers) &&
-      report.assignedUsers.includes(userId)
-    )
-      return true;
-    return false;
-  });
+  return canViewFinancialReports(user) ? reports : [];
 };
-
-export { hasFinancialReportPermission };

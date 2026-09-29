@@ -267,49 +267,6 @@ const resolveReportOwner = (report) => {
   return firstAccessUser;
 };
 
-const getSessionUserIdentity = () => {
-  const session = getStoredCarmenSession();
-  return String(
-    session?.user?.id
-    || session?.user?.UserId
-    || session?.user?.userId
-    || session?.user?.UserName
-    || session?.user?.userName
-    || session?.username
-    || ''
-  ).trim();
-};
-
-const normalizeIdentity = (value) => String(value ?? '').trim().toLowerCase();
-
-const getReportIdentityValues = (value) => [
-  value?.id,
-  value?.Id,
-  value?.userId,
-  value?.UserId,
-  value?.userName,
-  value?.UserName,
-  value?.username,
-  value?.Username,
-].map(normalizeIdentity).filter(Boolean);
-
-const canAccessCarmenReportDefinition = (report, userId) => {
-  const normalizedUserId = normalizeIdentity(userId);
-  if (!normalizedUserId) return false;
-
-  if ([report?.owner, report?.Owner, report?.createdBy, report?.CreatedBy]
-    .map(normalizeIdentity)
-    .includes(normalizedUserId)) return true;
-  if (Array.isArray(report?.assignedUsers || report?.AssignedUsers) && (report.assignedUsers || report.AssignedUsers)
-    .some((item) => normalizeIdentity(item) === normalizedUserId)) {
-    return true;
-  }
-
-  const accessRows = Array.isArray(report?.access || report?.Access) ? (report.access || report.Access) : [];
-  return accessRows.some((item) => getReportIdentityValues(item).includes(normalizedUserId)
-    && item?.canView !== false && item?.CanView !== false);
-};
-
 export const loginWithCarmenCredentials = async ({ userName, password, tenant, language }) => {
   const { adminToken } = getCarmenApiConfig();
   if (!adminToken) {
@@ -535,12 +492,7 @@ export const fetchCarmenReport = async (id) => {
     throw new Error('Carmen API session is not configured.');
   }
 
-  const report = await requestCarmenJson(`/api/reports/${encodeURIComponent(id)}`);
-  const userId = getSessionUserIdentity();
-  if (!canAccessCarmenReportDefinition(report, userId)) {
-    throw new Error('You do not have access to this report.');
-  }
-  return adaptCarmenReportDefinition(report);
+  return adaptCarmenReportDefinition(await requestCarmenJson(`/api/reports/${encodeURIComponent(id)}`));
 };
 
 export const buildReportDefinitionPayload = (report) => ({
@@ -559,6 +511,7 @@ export const buildReportDefinitionPayload = (report) => ({
   customPeriodLabel: String(report?.customPeriodLabel || '').trim(),
   overrideDateDisplay: String(report?.overrideDateDisplay || '').trim(),
   overridePeriodDisplay: String(report?.overridePeriodDisplay || '').trim(),
+  remark: String(report?.remark || '').trim(),
   owner: resolveReportOwner(report),
   reportType: String(report?.reportType || 'Monthly').trim() || 'Monthly',
   day: String(report?.day || '').trim(),

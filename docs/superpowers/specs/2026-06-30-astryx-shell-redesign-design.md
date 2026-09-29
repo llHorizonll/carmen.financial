@@ -2,7 +2,7 @@
 
 ## Goal
 
-Apply Astryx design conventions to the Carmen Financial BI app without disturbing business logic, starting with a shell-first redesign for login, app framing, filters, and setup surfaces.
+Apply Astryx design conventions to the Carmen Blue Financial Report without disturbing business logic, starting with a shell-first redesign for login, app framing, filters, and setup surfaces.
 
 Ship this in two phases:
 

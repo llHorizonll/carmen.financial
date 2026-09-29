@@ -90,15 +90,15 @@ describe('ColumnsConfigurator', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('combobox', { name: 'Add column' }));
+    fireEvent.click(screen.getByRole('combobox', { name: '+ Add column' }));
     fireEvent.click(await screen.findByRole('option', { name: 'Data' }));
     expect(handleAddCol).toHaveBeenCalledWith('data');
 
-    fireEvent.click(screen.getByRole('combobox', { name: 'Add column' }));
+    fireEvent.click(screen.getByRole('combobox', { name: '+ Add column' }));
     fireEvent.click(await screen.findByRole('option', { name: 'Formula' }));
     expect(handleAddCol).toHaveBeenCalledWith('formula');
 
-    fireEvent.click(screen.getByRole('combobox', { name: 'Add column' }));
+    fireEvent.click(screen.getByRole('combobox', { name: '+ Add column' }));
     fireEvent.click(await screen.findByRole('option', { name: 'Mix %' }));
     expect(handleAddCol).toHaveBeenCalledWith('percent');
 
@@ -109,6 +109,11 @@ describe('ColumnsConfigurator', () => {
       target: { value: 'Operating Revenue' },
     });
     expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'label', 'Operating Revenue');
+
+    fireEvent.change(labelInput, {
+      target: { value: 'Actual\nThis Month\nExtra' },
+    });
+    expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'label', 'Actual\nThis Month');
 
     fireEvent.click(within(row).getByRole('button', { name: /Hide column C1/i }));
     expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'isActive', false);

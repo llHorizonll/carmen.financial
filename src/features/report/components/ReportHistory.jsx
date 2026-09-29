@@ -59,7 +59,7 @@ export default function ReportHistory({ report, isDirty, onRestored }) {
     } catch (reason) {
       setConfirming(false);
       setError(reason.status === 409
-        ? 'The report changed since you opened history. Reload it before restoring.'
+        ? 'The report changed since you opened activity. Reload it before restoring.'
         : reason.message);
     } finally {
       setBusy(false);
@@ -68,17 +68,17 @@ export default function ReportHistory({ report, isDirty, onRestored }) {
 
   return (
     <>
-      <Button type="button" variant="outline" onClick={() => setOpen(true)} disabled={isDirty}>
-        <History className="size-4" /> History
+      <Button type="button" size="sm" variant="outline" onClick={() => setOpen(true)} disabled={isDirty}>
+        <History className="size-4" /> Activity
       </Button>
       <Dialog open={open} onOpenChange={(value) => { setOpen(value); if (!value) setSelected(null); }}>
         <DialogContent className="max-h-[80vh] max-w-2xl overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Report history</DialogTitle>
+            <DialogTitle>Report activity</DialogTitle>
             <DialogDescription>Review saved versions of {report.name} and restore one if needed.</DialogDescription>
           </DialogHeader>
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-          {busy && <p className="flex items-center gap-2 text-sm text-muted-foreground"><LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" /> Loading history...</p>}
+          {busy && <p className="flex items-center gap-2 text-sm text-muted-foreground"><LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" /> Loading activity...</p>}
           {!busy && !error && entries.length === 0 && <p className="text-sm text-muted-foreground">No saved versions yet.</p>}
           {entries.length > 0 && <ul className="divide-y border-y" aria-label="Saved versions">
             {entries.map((entry) => (
@@ -91,7 +91,7 @@ export default function ReportHistory({ report, isDirty, onRestored }) {
           {selected && <section aria-label="Selected version" className="grid gap-2 rounded-lg border p-4 text-sm">
             <h3 className="font-semibold">Version #{selected.id}</h3>
             <p>Name: {selected.definition.name}</p>
-            <p>Rows: {selected.definition.rows?.length || 0} · Columns: {selected.definition.columns?.length || 0} · Access entries: {selected.definition.access?.length || 0}</p>
+            <p>Rows: {selected.definition.rows?.length || 0} · Columns: {selected.definition.columns?.length || 0}</p>
             <p className="text-muted-foreground">Restoring this version replaces the current report setup and creates a new history entry.</p>
             <Button type="button" className="justify-self-start" disabled={busy || isDirty} onClick={() => setConfirming(true)}>Restore this version</Button>
           </section>}

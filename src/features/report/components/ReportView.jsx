@@ -18,6 +18,7 @@ export default function ReportView({
   displayCompanyLabel,
   displayDateLabel,
   displayPeriodLabel,
+  remark,
   reportData,
   activeCols,
   currentTheme,
@@ -53,8 +54,8 @@ export default function ReportView({
   const descriptionIsFirst = displayColumns[0]?.isDescription;
 
   return (
-    <Card className="flex h-full min-h-0 flex-col border border-border shadow-none ring-0">
-      <CardHeader className="relative space-y-1 border-b px-4 pt-14 pb-3 sm:px-5 sm:pt-4 sm:pb-4">
+    <Card className="flex h-full min-h-0 flex-col gap-0 border border-border shadow-none ring-0">
+      <CardHeader className="relative border-b px-4 pt-14 sm:px-5 sm:pt-4">
         <ReportViewModeToggle
           className="absolute top-3 right-3 sm:top-4 sm:right-4"
           value={viewMode}
@@ -69,6 +70,7 @@ export default function ReportView({
         <CardDescription className="text-center text-sm text-muted-foreground">
           {displayDateLabel}
         </CardDescription>
+        {remark && <CardDescription className="whitespace-pre-line text-center text-sm text-muted-foreground">{remark}</CardDescription>}
         <CardDescription className="text-center text-sm text-muted-foreground">
           {displayPeriodLabel}
         </CardDescription>
@@ -100,7 +102,7 @@ export default function ReportView({
                       style={{ width: col.width ? `${col.width}px` : 'auto', minWidth: col.width ? `${col.width}px` : '96px' }}
                       className={`border-r text-center ${currentTheme.header}`}
                     >
-                      <div className="text-xs font-semibold">{col.label}</div>
+                      <div className="whitespace-pre-line text-xs font-semibold">{col.label}</div>
                     </TableHead>
                   ))}
                 </TableRow>

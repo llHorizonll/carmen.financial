@@ -152,8 +152,8 @@ export default function RowsConfigurator({
           </div>
           <div className="w-full sm:w-auto">
             <Select value="" onValueChange={handleAddRow}>
-              <SelectTrigger className="w-full sm:w-44" aria-label="Add row">
-                <SelectValue placeholder="Add Row" />
+              <SelectTrigger className="w-full sm:w-44" aria-label="+ Add row">
+                <SelectValue placeholder="+ Add Row" />
               </SelectTrigger>
               <SelectContent position="popper">
                 <SelectItem value="data">Data</SelectItem>

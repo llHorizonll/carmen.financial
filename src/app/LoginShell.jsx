@@ -81,18 +81,18 @@ export default function LoginShell() {
   }, [isAuthenticated]);
 
   const content = isAuthenticated ? (
-      <Suspense fallback={<div className="flex min-h-dvh items-center justify-center bg-background text-sm text-muted-foreground">Loading Carmen Financial BI...</div>}>
+      <Suspense fallback={<div className="flex min-h-dvh items-center justify-center bg-background text-sm text-muted-foreground">Loading Carmen Blue Financial Report...</div>}>
         <App
           onLogout={handleLogout}
         />
       </Suspense>
   ) : (
     <main className="min-h-dvh bg-background text-foreground">
-      <div className="mx-auto flex min-h-dvh max-w-6xl items-stretch px-4 py-8 sm:px-6 sm:py-10 lg:items-center lg:px-8">
-        <div className="grid w-full gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:gap-12">
+      <div className="mx-auto flex min-h-dvh max-w-5xl items-stretch px-4 py-6 sm:px-6 lg:items-center lg:px-8">
+        <div className="grid w-full gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
           <section className="order-2 flex flex-col justify-center gap-8">
             <header className="login-enter-from-right max-w-2xl space-y-5">
-              <Badge variant="outline" className="w-fit rounded-full px-3 py-1"><BarChart3 className="size-3.5" />Carmen Financial BI</Badge>
+              <Badge variant="outline" className="w-fit rounded-full px-3 py-1"><BarChart3 className="size-3.5" />Carmen Blue Financial Report</Badge>
               <div className="space-y-4">
                 <h1 className="max-w-xl text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl lg:text-5xl">A focused workspace for financial reporting.</h1>
                 <p className="max-w-xl text-base leading-7 text-pretty text-muted-foreground">Sign in to review reports, adjust report structure, and manage access in one consistent workspace.</p>

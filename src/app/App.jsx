@@ -17,9 +17,7 @@ import {
   ChevronRight,
   Check,
   Monitor,
-  BarChart3,
   Building2,
-  ShieldCheck,
   ZoomIn,
   ZoomOut,
   Download,
@@ -32,6 +30,9 @@ import {
   ArrowUp,
   CircleHelp,
   LoaderCircle,
+  Pencil,
+  Copy,
+  Trash2,
 } from "lucide-react";
 
 import { useIsMobile } from "@/hooks/use-mobile.js";
@@ -44,6 +45,7 @@ import {
   CardTitle,
 } from "@/components/ui/card.jsx";
 import { Badge } from "@/components/ui/badge.jsx";
+import ReportHistory from "@/features/report/components/ReportHistory.jsx";
 import { Input } from "@/components/ui/input.jsx";
 import { Slider } from "@/components/ui/slider";
 import { ScrollArea } from "@/components/ui/scroll-area.jsx";
@@ -132,7 +134,6 @@ import {
   canSetupFinancialReports,
   canViewFinancialReports,
   getAccessibleReports,
-  hasFinancialReportPermission,
 } from "./reportAccess.js";
 
 const ReportView = React.lazy(
@@ -145,13 +146,7 @@ const ReportSetup = React.lazy(
   () => import("../features/report/components/ReportSetup.jsx"),
 );
 const ExcelTemplateImportWizard = React.lazy(
-  () =>
-    import(
-      "../features/report/components/ExcelTemplateImportWizard.jsx"
-    ),
-);
-const AccessModal = React.lazy(
-  () => import("../features/report/components/AccessModal.jsx"),
+  () => import("../features/report/components/ExcelTemplateImportWizard.jsx"),
 );
 const EditMappingModal = React.lazy(
   () => import("../features/report/components/EditMappingModal.jsx"),
@@ -232,8 +227,16 @@ const DEFAULT_REPORT_OPTIONS = {
   })),
 };
 
-const DAILY_COLUMN_TYPES = new Set(["DAC", "PTD", "YTD", "DACBG", "PTDBG", "YTDBG"]);
-const SUPPORTED_COLUMN_TYPES = new Set([...DAILY_COLUMN_TYPES,
+const DAILY_COLUMN_TYPES = new Set([
+  "DAC",
+  "PTD",
+  "YTD",
+  "DACBG",
+  "PTDBG",
+  "YTDBG",
+]);
+const SUPPORTED_COLUMN_TYPES = new Set([
+  ...DAILY_COLUMN_TYPES,
   "AC",
   "ACC",
   "BUD",
@@ -278,7 +281,9 @@ export const getSetupWarnings = (report, masterData) => {
   };
 
   findBrokenReferences(report).forEach((issue) => {
-    warnings.push(`${describeItem(issue.scope, issue.id)}: ${issue.field} contains invalid reference ${issue.value}.`);
+    warnings.push(
+      `${describeItem(issue.scope, issue.id)}: ${issue.field} contains invalid reference ${issue.value}.`,
+    );
   });
   findRowMappingConflicts(report, masterData).forEach((issue) => {
     warnings.push(`${describeItem("row", issue.id)}: ${issue.value}`);
@@ -286,9 +291,13 @@ export const getSetupWarnings = (report, masterData) => {
 
   (report.columns || []).forEach((column) => {
     if (column?.isFormula || column?.isPercent) return;
-    const type = String(column?.type || "").trim().toUpperCase();
+    const type = String(column?.type || "")
+      .trim()
+      .toUpperCase();
     if (type && !SUPPORTED_COLUMN_TYPES.has(type)) {
-      warnings.push(`${describeItem("column", column.id)}: unsupported type ${type}.`);
+      warnings.push(
+        `${describeItem("column", column.id)}: unsupported type ${type}.`,
+      );
     }
   });
 
@@ -337,12 +346,6 @@ const NEUTRAL_BUTTON_CLASS =
   "border-border bg-background text-foreground hover:bg-muted transition-colors duration-150";
 const NEUTRAL_FILTER_TRIGGER_CLASS =
   "border-border bg-background text-foreground hover:bg-muted transition-colors duration-150";
-const MODE_SWITCH_CLASS =
-  "inline-flex items-center rounded-xl border border-border bg-muted/60 p-1 shadow-inner";
-const ACTIVE_MODE_CLASS =
-  "bg-primary text-primary-foreground shadow-sm ring-1 ring-primary/20 transition-colors duration-150";
-const INACTIVE_MODE_CLASS =
-  "text-muted-foreground hover:bg-background hover:text-foreground transition-colors duration-150";
 
 const readStoredReports = () => {
   if (typeof window === "undefined" || !window.localStorage) return null;
@@ -379,8 +382,6 @@ export default function App({ onLogout = null }) {
   const [isGettingStartedOpen, setIsGettingStartedOpen] = useState(false);
   const [gettingStartedStep, setGettingStartedStep] = useState(0);
   const setupGuideRef = useRef(null);
-  const workspaceHeaderRef = useRef(null);
-  const sidebarBrandRef = useRef(null);
   const importGuideRef = useRef(null);
 
   const [alertMsg, setAlertMsg] = useState(null);
@@ -430,17 +431,41 @@ export default function App({ onLogout = null }) {
   const [engineData, setEngineData] = useState([]);
   const [budgetData, setBudgetData] = useState([]);
   const [apiDimensions, setApiDimensions] = useState({});
-  const dimensionDefinitions = useMemo(() => Array.from({ length: 10 }, (_, index) => `dim${index + 1}`).map((field, index) => {
-    const apiDefinition = apiDimensions.definitions?.find((definition) => definition.key === field);
-    const fallbackValues = [...new Set([...engineData, ...budgetData]
-      .map((row) => String(row?.[field] ?? row?.[field.toUpperCase()] ?? "").trim())
-      .filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
-    return {
-      key: field,
-      caption: apiDefinition?.caption || `DIM ${index + 1}`,
-      values: apiDefinition?.values?.length > 0 ? apiDefinition.values : fallbackValues,
-    };
-  }), [apiDimensions, budgetData, engineData]);
+  const dimensionDefinitions = useMemo(
+    () =>
+      Array.from({ length: 10 }, (_, index) => `dim${index + 1}`).map(
+        (field, index) => {
+          const apiDefinition = apiDimensions.definitions?.find(
+            (definition) => definition.key === field,
+          );
+          const fallbackValues = [
+            ...new Set(
+              [...engineData, ...budgetData]
+                .map((row) =>
+                  String(
+                    row?.[field] ?? row?.[field.toUpperCase()] ?? "",
+                  ).trim(),
+                )
+                .filter(Boolean),
+            ),
+          ].sort((a, b) =>
+            a.localeCompare(b, undefined, {
+              numeric: true,
+              sensitivity: "base",
+            }),
+          );
+          return {
+            key: field,
+            caption: apiDefinition?.caption || `DIM ${index + 1}`,
+            values:
+              apiDefinition?.values?.length > 0
+                ? apiDefinition.values
+                : fallbackValues,
+          };
+        },
+      ),
+    [apiDimensions, budgetData, engineData],
+  );
   const pageTransitionTimerRef = useRef(null);
   const reportDataFetchSkipRef = useRef(false);
   const latestReportDataRequestRef = useRef(0);
@@ -458,28 +483,8 @@ export default function App({ onLogout = null }) {
   const [isSetupDirty, setIsSetupDirty] = useState(false);
   const [editingRow, setEditingRow] = useState(null);
   const [detailSelecting, setDetailSelecting] = useState(null);
-  const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
   const [modalAccCategory, setModalAccCategory] = useState("ALL");
   const isMobile = useIsMobile();
-  useLayoutEffect(() => {
-    if (isMobile || isSidebarCollapsed) return;
-    const header = workspaceHeaderRef.current;
-    const brand = sidebarBrandRef.current;
-    if (!header || !brand) return;
-
-    const alignBrandBorder = () => {
-      const headerHeight = header.getBoundingClientRect().height;
-      if (headerHeight > 0) brand.style.height = `${Math.ceil(headerHeight)}px`;
-    };
-    alignBrandBorder();
-    if (typeof ResizeObserver === "undefined") return () => { brand.style.height = ""; };
-    const observer = new ResizeObserver(alignBrandBorder);
-    observer.observe(header);
-    return () => {
-      observer.disconnect();
-      brand.style.height = "";
-    };
-  }, [isMobile, isSidebarCollapsed]);
   const canSetupReports = canSetupFinancialReports(currentUser);
   const gettingStartedStorageKey = `${GETTING_STARTED_STORAGE_PREFIX}${currentUser?.id || "anonymous"}`;
   const accessibleReports = useMemo(
@@ -498,18 +503,13 @@ export default function App({ onLogout = null }) {
 
     return latestAccessibleReport?.id || null;
   }, [accessibleReports, currentReportId, latestAccessibleReport]);
-  const reportUsers = useMemo(() => {
-    const users = Array.isArray(masterData.users) ? masterData.users : [];
-    if (!currentUser?.id) return users;
-    if (users.some((user) => String(user.id) === String(currentUser.id)))
-      return users;
-    return [currentUser, ...users];
-  }, [masterData.users, currentUser]);
-
   const activeReport = resolvedCurrentReportId
-    ? accessibleReports.find((report) => report.id === resolvedCurrentReportId) || null
+    ? accessibleReports.find(
+        (report) => report.id === resolvedCurrentReportId,
+      ) || null
     : null;
-  const setupReport = setupDraft?.id === activeReport?.id ? setupDraft : activeReport;
+  const setupReport =
+    setupDraft?.id === activeReport?.id ? setupDraft : activeReport;
 
   useEffect(() => {
     setSetupDraft(activeReport);
@@ -542,13 +542,15 @@ export default function App({ onLogout = null }) {
       })
     );
   }, [activeReport]);
-  const defaultReportDay = activeReportUsesDayFilter ? '1' : '';
-  const currentDayFilter = dayFilterState?.reportId === activeReport?.id && dayFilterState?.reportDay === defaultReportDay
-    ? dayFilterState
-    : null;
+  const defaultReportDay = activeReportUsesDayFilter ? "1" : "";
+  const currentDayFilter =
+    dayFilterState?.reportId === activeReport?.id &&
+    dayFilterState?.reportDay === defaultReportDay
+      ? dayFilterState
+      : null;
   const globalDay = currentDayFilter?.globalDay ?? defaultReportDay;
   const activeReportDay = activeReportUsesDayFilter
-    ? currentDayFilter?.appliedDay ?? defaultReportDay
+    ? (currentDayFilter?.appliedDay ?? defaultReportDay)
     : "";
   const activeReportUsesBudget = useMemo(
     () =>
@@ -623,10 +625,12 @@ export default function App({ onLogout = null }) {
       } catch (error) {
         const message =
           error.message || `Unable to load Carmen ${source} data.`;
-        if (requestId === latestReportDataRequestRef.current) setAlertMsg(message);
+        if (requestId === latestReportDataRequestRef.current)
+          setAlertMsg(message);
         throw error;
       } finally {
-        if (requestId === latestReportDataRequestRef.current) setIsLoading(false);
+        if (requestId === latestReportDataRequestRef.current)
+          setIsLoading(false);
       }
     },
     [apiConfigured, activeReport, activeReportUsesDayFilter, periodOptions],
@@ -822,36 +826,45 @@ export default function App({ onLogout = null }) {
   const persistSetup = async () => {
     setIsSetupSaving(true);
     try {
-      const saveResult = apiConfigured ? await saveCarmenReport(setupReport) : null;
+      const saveResult = apiConfigured
+        ? await saveCarmenReport(setupReport)
+        : null;
       const savedVersion = saveResult?.lastModified || saveResult?.LastModified;
       const savedReport = savedVersion
         ? { ...setupReport, lastModified: savedVersion }
         : setupReport;
-      setReports((currentReports) => currentReports.map((report) =>
-        report.id === savedReport.id ? savedReport : report
-      ));
+      setReports((currentReports) =>
+        currentReports.map((report) =>
+          report.id === savedReport.id ? savedReport : report,
+        ),
+      );
       setSetupDraft(savedReport);
       setIsSetupDirty(false);
       setReportCatalogError(null);
+      applyTabChange("report");
     } catch (error) {
       if (error?.status === 409 && setupReport?.id) {
         try {
           const latestReport = await fetchCarmenReport(setupReport.id);
-          setReports((currentReports) => currentReports.map((report) =>
-            report.id === latestReport.id ? latestReport : report
-          ));
+          setReports((currentReports) =>
+            currentReports.map((report) =>
+              report.id === latestReport.id ? latestReport : report,
+            ),
+          );
           setSetupDraft(latestReport);
           setIsSetupDirty(false);
           clearCarmenApiFailure();
           setReportCatalogError(
-            "This report was updated by another user. The latest version has been reloaded; please review and save again."
+            "This report was updated by another user. The latest version has been reloaded; please review and save again.",
           );
           return;
         } catch {
           // Keep the original conflict message when the refresh also fails.
         }
       }
-      setReportCatalogError(error.message || "Unable to save report definition.");
+      setReportCatalogError(
+        error.message || "Unable to save report definition.",
+      );
     } finally {
       setIsSetupSaving(false);
     }
@@ -906,17 +919,23 @@ export default function App({ onLogout = null }) {
   const handleApplyFilters = async () => {
     const nextDepts = [...globalDepts];
     const nextRevision = activeReportUsesBudget ? globalRevision : "0";
-    const nextDay = activeReportUsesDayFilter ? String(globalDay).trim() : '';
-    const filtersChanged = String(appliedYear) !== String(globalYear)
-      || String(appliedPeriod) !== String(globalPeriod)
-      || String(appliedRevision) !== String(nextRevision)
-      || String(activeReportDay) !== nextDay
-      || nextDepts.join("|") !== appliedDepts.join("|");
+    const nextDay = activeReportUsesDayFilter ? String(globalDay).trim() : "";
+    const filtersChanged =
+      String(appliedYear) !== String(globalYear) ||
+      String(appliedPeriod) !== String(globalPeriod) ||
+      String(appliedRevision) !== String(nextRevision) ||
+      String(activeReportDay) !== nextDay ||
+      nextDepts.join("|") !== appliedDepts.join("|");
     if (apiConfigured && filtersChanged) reportDataFetchSkipRef.current = true;
     setAppliedDepts(nextDepts);
     setAppliedYear(globalYear);
     setAppliedPeriod(globalPeriod);
-    setDayFilterState({ reportId: activeReport?.id, reportDay: defaultReportDay, globalDay: nextDay, appliedDay: nextDay });
+    setDayFilterState({
+      reportId: activeReport?.id,
+      reportDay: defaultReportDay,
+      globalDay: nextDay,
+      appliedDay: nextDay,
+    });
     if (!activeReportUsesBudget && String(globalRevision) !== "0") {
       setAlertMsg(
         "Revision selector is ignored for reports without budget columns.",
@@ -934,8 +953,8 @@ export default function App({ onLogout = null }) {
         deptIds: nextDepts,
         day: nextDay,
       });
-    } catch {
-      // Error already surfaced by loadReportDataFromApi.
+    } catch (error) {
+      setAlertMsg(error.message || "Unable to load Carmen report data.");
     }
   };
 
@@ -950,11 +969,13 @@ export default function App({ onLogout = null }) {
           setCurrentReportId(apiClone.id);
           return;
         }
+        setReportCatalogError("Unable to clone report in Carmen API.");
       } catch (error) {
         setReportCatalogError(
           error.message || "Unable to clone report in Carmen API.",
         );
       }
+      return;
     }
 
     const newId = "rep-" + Date.now();
@@ -971,7 +992,7 @@ export default function App({ onLogout = null }) {
     const newId = "rep-" + Date.now();
     const newReport = createBlankReport(
       masterData.companyProfile.name,
-      reportUsers.map((u) => u.id),
+      [],
       newId,
       currentUser?.id || "",
     );
@@ -1078,7 +1099,11 @@ export default function App({ onLogout = null }) {
 
   const handleAddCol = (type) => {
     const newColId = "C" + (setupReport.columns.length + 1) + "-" + Date.now();
-    const defaultDataType = setupReport?.columns?.some((column) => ['DAC', 'PTD'].includes(String(column.type || '').toUpperCase())) ? "DAC" : "AC";
+    const defaultDataType = setupReport?.columns?.some((column) =>
+      ["DAC", "PTD"].includes(String(column.type || "").toUpperCase()),
+    )
+      ? "DAC"
+      : "AC";
     const newCol = {
       id: newColId,
       label:
@@ -1101,7 +1126,8 @@ export default function App({ onLogout = null }) {
     const descriptionPosition = Number(setupReport.descriptionPosition);
     updateActiveReport({
       columns: [...setupReport.columns, newCol],
-      ...(Number.isInteger(descriptionPosition) && descriptionPosition === setupReport.columns.length
+      ...(Number.isInteger(descriptionPosition) &&
+      descriptionPosition === setupReport.columns.length
         ? { descriptionPosition: descriptionPosition + 1 }
         : {}),
     });
@@ -1140,12 +1166,16 @@ export default function App({ onLogout = null }) {
   };
 
   const handleDeleteCol = (colId) => {
-    const deletedIndex = setupReport.columns.findIndex((column) => column.id === colId);
+    const deletedIndex = setupReport.columns.findIndex(
+      (column) => column.id === colId,
+    );
     const nextReport = deleteColAndRewriteReferences(setupReport, colId);
     const descriptionPosition = Number(setupReport.descriptionPosition);
     updateActiveReport({
       ...nextReport,
-      ...(Number.isInteger(descriptionPosition) && deletedIndex >= 0 && deletedIndex < descriptionPosition
+      ...(Number.isInteger(descriptionPosition) &&
+      deletedIndex >= 0 &&
+      deletedIndex < descriptionPosition
         ? { descriptionPosition: descriptionPosition - 1 }
         : {}),
     });
@@ -1195,11 +1225,12 @@ export default function App({ onLogout = null }) {
     activeReport?.overrideDateDisplay ||
     activeReport?.customDateLabel ||
     autoDateLabel;
-  const autoPeriodLabel = selectedAppliedPeriod?.dateLabel
-    ? `Period : ${appliedYear}-${selectedPeriodCode}${selectedAppliedPeriod.status ? ` (${selectedAppliedPeriod.status})` : ""}`
-    : activeReport?.periodFormat !== "standard"
-      ? formatAutoPeriod(appliedYear, appliedPeriod, activeReport?.periodFormat)
-      : formatAutoPeriod(appliedYear, appliedPeriod, "standard");
+  const autoPeriodLabel =
+    activeReport?.periodFormat && activeReport.periodFormat !== "standard"
+      ? formatAutoPeriod(appliedYear, appliedPeriod, activeReport.periodFormat)
+      : selectedAppliedPeriod?.dateLabel
+        ? `Period : ${appliedYear}-${selectedPeriodCode}${selectedAppliedPeriod.status ? ` (${selectedAppliedPeriod.status})` : ""}`
+        : formatAutoPeriod(appliedYear, appliedPeriod, "standard");
   const displayPeriodLabel =
     activeReport?.overridePeriodDisplay ||
     activeReport?.customPeriodLabel ||
@@ -1211,10 +1242,6 @@ export default function App({ onLogout = null }) {
     () => activeReport?.columns?.filter((c) => c.isActive) || [],
     [activeReport],
   );
-  const userSelectorLabel = hasFinancialReportPermission(currentUser)
-    ? "Signed In As:"
-    : "View As Role:";
-
   // --- Export Excel (HTML-to-XLSX) ---
   const exportToExcel = () => {
     if (!activeReport) return;
@@ -1245,18 +1272,22 @@ export default function App({ onLogout = null }) {
   const currentTheme = THEMES[activeReport?.theme || "blue"];
   const showPageSkeleton = isPageTransitioning;
   const visibleActiveTab = canSetupReports ? activeTab : "report";
-  const contextualGuideLabel = visibleActiveTab === "setup"
-    ? "Open setup guide"
-    : visibleActiveTab === "import"
-      ? "Open import guide"
-      : "Open getting started guide";
+  const contextualGuideLabel =
+    visibleActiveTab === "setup"
+      ? "Open setup guide"
+      : visibleActiveTab === "import"
+        ? "Open import guide"
+        : "Open getting started guide";
   const activeTabMotionClass =
     tabMotionDirection === null
       ? ""
       : visibleActiveTab === "report"
         ? "app-pane-enter-from-left"
         : "app-pane-enter-from-right";
-  const mainContentPaddingClass = visibleActiveTab === "setup" || visibleActiveTab === "import" ? "p-0" : "p-4";
+  const mainContentPaddingClass =
+    visibleActiveTab === "setup" || visibleActiveTab === "import"
+      ? "p-0"
+      : "p-4";
   const mainContentWidthClass =
     visibleActiveTab === "setup" || visibleActiveTab === "import"
       ? "flex h-full w-full min-h-0 flex-col"
@@ -1266,15 +1297,14 @@ export default function App({ onLogout = null }) {
     if (nextTab === "setup" || nextTab === "import") {
       setIsGettingStartedOpen(false);
     }
-    setTabMotionDirection(
-      nextTab === "report" ? "backward" : "forward",
-    );
+    setTabMotionDirection(nextTab === "report" ? "backward" : "forward");
     setActiveTab(nextTab);
   };
 
   const handleTabChange = (nextTab) => {
     if (nextTab === visibleActiveTab) return;
-    if ((nextTab === "setup" || nextTab === "import") && !canSetupReports) return;
+    if ((nextTab === "setup" || nextTab === "import") && !canSetupReports)
+      return;
     if (visibleActiveTab === "setup" && isSetupDirty) {
       confirmActionRef.current = () => {
         discardSetupChanges();
@@ -1346,7 +1376,8 @@ export default function App({ onLogout = null }) {
       setIsGettingStartedOpen(true);
       return;
     }
-    const guideRef = visibleActiveTab === "setup" ? setupGuideRef : importGuideRef;
+    const guideRef =
+      visibleActiveTab === "setup" ? setupGuideRef : importGuideRef;
     guideRef.current?.openGuide();
   };
 
@@ -1403,97 +1434,25 @@ export default function App({ onLogout = null }) {
   // 4. RENDER UI
   // ============================================================================
   const sidebarPanel = (
-    <div className="flex h-full min-w-0 flex-col bg-background">
-      <div ref={sidebarBrandRef} className="flex shrink-0 items-center justify-between border-b px-4 py-2.5">
-        <div className="flex items-center gap-3">
-          <div className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <BarChart3 className="size-5" />
-          </div>
-          <div className="min-w-0">
-            <div className="text-sm font-semibold tracking-tight">BI HUB</div>
-            <div className="text-xs text-muted-foreground">
-              Financial reporting
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="border-b p-4">
-        <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
-          <ShieldCheck className="size-4" />
-          {userSelectorLabel}
-        </div>
-        <Select
-          aria-label="User selector"
-          value={currentUser?.id || ""}
-          onValueChange={(value) => {
-            const selectedUser = reportUsers.find((user) => user.id === value);
-            if (!selectedUser) return;
-            const selectedReports = getAccessibleReports(reports, selectedUser);
-            setCurrentUser(selectedUser);
-            if (
-              !selectedReports.some(
-                (report) => report.id === resolvedCurrentReportId,
-              )
-            ) {
-              setCurrentReportId(getLatestCreatedReport(selectedReports)?.id || null);
-            }
-            if (!canSetupFinancialReports(selectedUser)) {
-              setActiveTab("report");
-            }
-          }}
-        >
-          <SelectTrigger className="h-9 w-full">
-            <SelectValue placeholder="Select user" />
-          </SelectTrigger>
-          <SelectContent position="popper">
-            {reportUsers.map((user) => (
-              <SelectItem key={user.id} value={user.id}>
-                {user.name} ({canSetupFinancialReports(user) ? "Admin" : "User"}
-                )
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+    <div className="flex h-full min-w-0 flex-col bg-muted/30">
+      <div className="flex shrink-0 items-center justify-start py-1 pl-5">
+        <span className="relative block w-56 max-w-full">
+          <img
+            src={`${import.meta.env.BASE_URL}logo.png`}
+            alt="Carmen Finance Intelligence for Hospitality"
+            className="h-auto w-full object-contain dark:brightness-0 dark:invert"
+          />
+          <img
+            src={`${import.meta.env.BASE_URL}logo.png`}
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 hidden h-auto w-full object-contain dark:block [clip-path:inset(0_77%_0_0)]"
+          />
+        </span>
       </div>
 
       <ScrollArea className="min-w-0 flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
         <div className="p-3">
-                    {canSetupReports && (
-            <div className="mb-4 space-y-1.5">
-              <div className="px-1 text-xs font-medium text-muted-foreground">
-                Actions
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="min-w-0 w-full justify-start gap-1.5 px-2 text-xs data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary"
-                  onClick={handleCreateReportFromSidebar}
-                  data-tour="new-report"
-                >
-                  <FilePlus className="size-3.5 shrink-0" />
-                  <span className="min-w-0 truncate">New Report</span>
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="min-w-0 w-full justify-start gap-1.5 px-2 text-xs data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary"
-                  onClick={() => {
-                    handleTabChange("import");
-                    setIsSidebarOpen(false);
-                  }}
-                  data-tour="import-template"
-                >
-                  <FileSpreadsheet className="size-3.5 shrink-0" />
-                  <span className="min-w-0 truncate">Import Excel</span>
-                </Button>
-              </div>
-            </div>
-          )}
-
           <div className="mb-2 flex items-center justify-between gap-2 px-1">
             <div className="text-xs font-medium text-muted-foreground">
               Reports
@@ -1509,14 +1468,19 @@ export default function App({ onLogout = null }) {
                 variant={
                   resolvedCurrentReportId === report.id ? "secondary" : "ghost"
                 }
-                className="min-w-0 w-full justify-start gap-2 overflow-hidden"
+                className={`min-w-0 w-full justify-start gap-2 overflow-hidden ${resolvedCurrentReportId === report.id ? "border-l-2 border-primary bg-primary/10 text-primary hover:bg-primary/15" : ""}`}
                 onClick={() => handleReportChange(report.id)}
                 aria-current={
                   resolvedCurrentReportId === report.id ? "page" : undefined
                 }
               >
                 <FileText className="size-4 shrink-0" />
-                <span className="min-w-0 flex-1 truncate text-left" title={report.name}>{report.name}</span>
+                <span
+                  className="min-w-0 flex-1 truncate text-left"
+                  title={report.name}
+                >
+                  {report.name}
+                </span>
               </Button>
             ))}
           </div>
@@ -1608,7 +1572,8 @@ export default function App({ onLogout = null }) {
               Loading report data
             </DialogTitle>
             <DialogDescription>
-              Please wait while Carmen prepares the report. Other actions are temporarily unavailable.
+              Please wait while Carmen prepares the report. Other actions are
+              temporarily unavailable.
             </DialogDescription>
           </DialogHeader>
         </DialogContent>
@@ -1691,15 +1656,13 @@ export default function App({ onLogout = null }) {
           <SheetContent side="left" className="w-72 p-0">
             <SheetHeader className="sr-only">
               <SheetTitle>Reports</SheetTitle>
-              <SheetDescription>
-                Report navigation and user switching.
-              </SheetDescription>
+              <SheetDescription>Report navigation.</SheetDescription>
             </SheetHeader>
             {sidebarPanel}
           </SheetContent>
         </Sheet>
       ) : !isSidebarCollapsed ? (
-        <aside className="hidden w-80 flex-col border-r bg-background/95 lg:flex print:hidden">
+        <aside className="hidden w-72 flex-col border-r bg-muted/30 lg:flex print:hidden">
           {sidebarPanel}
         </aside>
       ) : null}
@@ -1707,7 +1670,7 @@ export default function App({ onLogout = null }) {
       <main
         className={`flex min-w-0 flex-1 flex-col ${visibleActiveTab === "setup" ? "overflow-visible" : "overflow-hidden"}`}
       >
-        <header ref={workspaceHeaderRef} className="w-full border-b border-border bg-card/95 backdrop-blur print:hidden">
+        <header className="w-full border-b border-border bg-card/95 backdrop-blur print:hidden">
           <div className="flex flex-col gap-3 px-4 py-2.5 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
               {isMobile ? (
@@ -1725,60 +1688,34 @@ export default function App({ onLogout = null }) {
                   variant="outline"
                   size="icon-sm"
                   className="size-8 rounded-lg border-primary/30 text-primary hover:bg-primary/5"
-                  onClick={() => setIsSidebarCollapsed((collapsed) => !collapsed)}
-                  aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-                  title={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                  onClick={() =>
+                    setIsSidebarCollapsed((collapsed) => !collapsed)
+                  }
+                  aria-label={
+                    isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
+                  }
+                  title={
+                    isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
+                  }
                 >
-                  {isSidebarCollapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+                  {isSidebarCollapsed ? (
+                    <PanelLeftOpen className="size-4" />
+                  ) : (
+                    <PanelLeftClose className="size-4" />
+                  )}
                 </Button>
               )}
 
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">Financial BI</span>
-                <span>›</span>
-                <span className="truncate max-w-48 text-foreground/80">{activeReport?.name || "Report"}</span>
-              </div>
-
-              <div
-                className={`${MODE_SWITCH_CLASS} data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary`}
-                data-tour="mode-switch"
-              >
+              {visibleActiveTab !== "report" && (
                 <Button
                   type="button"
                   variant="ghost"
-                  className={`h-8 px-4 ${visibleActiveTab === "report" ? ACTIVE_MODE_CLASS : INACTIVE_MODE_CLASS}`}
+                  className="max-w-64 truncate font-semibold text-foreground"
                   onClick={() => handleTabChange("report")}
-                  aria-current={
-                    visibleActiveTab === "report" ? "page" : undefined
-                  }
                 >
-                  VIEW
+                  {activeReport?.name || "Reports"}
                 </Button>
-                {canSetupReports && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className={`h-8 px-4 ${visibleActiveTab === "setup" ? ACTIVE_MODE_CLASS : INACTIVE_MODE_CLASS}`}
-                    onClick={() => handleTabChange("setup")}
-                    aria-current={
-                      visibleActiveTab === "setup" ? "page" : undefined
-                    }
-                  >
-                    SETUP
-                  </Button>
-                )}
-              </div>
-
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                onClick={openContextualGuide}
-                aria-label={contextualGuideLabel}
-                title={contextualGuideLabel.replace("Open ", "")}
-              >
-                <CircleHelp className="size-4" />
-              </Button>
+              )}
 
               <div className="hidden flex-wrap items-center gap-2 sm:flex">
                 {visibleActiveTab === "setup" && (
@@ -1814,76 +1751,106 @@ export default function App({ onLogout = null }) {
               </div>
             </div>
 
-            <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:justify-end xl:w-auto">
-              {visibleActiveTab === "report" && reportViewMode !== "dashboard" && (
-                <div className="flex items-center gap-1 rounded-lg border border-border bg-card/80 px-2 py-1 shadow-sm">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    className="shrink-0 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-                    onClick={() =>
-                      setTableZoom((current) => Math.max(50, current - 10))
-                    }
-                    aria-label="Zoom out"
-                    title="Zoom out"
-                  >
-                    <ZoomOut className="size-3.5" />
-                  </Button>
-                  <Slider
-                    value={[tableZoom]}
-                    min={50}
-                    max={150}
-                    step={10}
-                    onValueChange={(value) => setTableZoom(value[0] || 100)}
-                    className="w-20 min-w-20"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    className="shrink-0 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-                    onClick={() =>
-                      setTableZoom((current) => Math.min(150, current + 10))
-                    }
-                    aria-label="Zoom in"
-                    title="Zoom in"
-                  >
-                    <ZoomIn className="size-3.5" />
-                  </Button>
-                  <span className="w-10 text-right text-xs font-medium tabular-nums text-foreground/70">
-                    {tableZoom}%
-                  </span>
-                </div>
-              )}
+            <div className="flex w-full flex-wrap items-center justify-end gap-2 xl:w-auto">
+              {visibleActiveTab === "report" &&
+                reportViewMode !== "dashboard" && (
+                  <div className="mr-auto flex items-center gap-1 rounded-lg border border-border bg-card/80 px-2 py-1 shadow-sm xl:mr-0">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      className="shrink-0 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                      onClick={() =>
+                        setTableZoom((current) => Math.max(50, current - 10))
+                      }
+                      aria-label="Zoom out"
+                      title="Zoom out"
+                    >
+                      <ZoomOut className="size-3.5" />
+                    </Button>
+                    <Slider
+                      value={[tableZoom]}
+                      min={50}
+                      max={150}
+                      step={10}
+                      onValueChange={(value) => setTableZoom(value[0] || 100)}
+                      className="w-20 min-w-20"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      className="shrink-0 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                      onClick={() =>
+                        setTableZoom((current) => Math.min(150, current + 10))
+                      }
+                      aria-label="Zoom in"
+                      title="Zoom in"
+                    >
+                      <ZoomIn className="size-3.5" />
+                    </Button>
+                    <span className="w-10 text-right text-xs font-medium tabular-nums text-foreground/70">
+                      {tableZoom}%
+                    </span>
+                  </div>
+                )}
 
               {/* BU badge as in image */}
               <div className="hidden items-center gap-1.5 rounded-full border border-border bg-muted/40 py-1 pr-2.5 pl-1.5 text-xs font-medium text-foreground md:flex">
                 <span className="flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
                   <Building2 className="size-3.5" />
                 </span>
-                <span className="truncate max-w-32">{storedCarmenSession?.businessUnit?.tenant || currentUser?.tenant || "CARMEN-FIFO"}</span>
+                <span className="truncate max-w-32">
+                  {storedCarmenSession?.businessUnit?.tenant ||
+                    currentUser?.tenant ||
+                    "CARMEN-FIFO"}
+                </span>
               </div>
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={openContextualGuide}
+                aria-label={contextualGuideLabel}
+                title={contextualGuideLabel.replace("Open ", "")}
+              >
+                <CircleHelp className="size-4" />
+              </Button>
 
               {/* User profile dropdown button with Avatar as in image */}
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button type="button" variant="outline" className="h-10 gap-2.5 rounded-xl border-border bg-background px-3 hover:bg-muted">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 gap-2.5 rounded-xl border-border bg-background px-3 hover:bg-muted"
+                  >
                     <div className="hidden flex-col text-right sm:flex">
                       <span className="text-xs font-semibold leading-tight text-foreground max-w-36 truncate">
                         {currentUser?.name || currentUser?.id || "User"}
                       </span>
                       <span className="text-[10px] leading-tight text-muted-foreground max-w-36 truncate">
-                        {currentUser?.role ? `${currentUser.role} Account` : "Rooms General Account"}
+                        {currentUser?.role
+                          ? `${currentUser.role} Account`
+                          : "Rooms General Account"}
                       </span>
                     </div>
                     <span className="relative flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                      {(currentUser?.avatarUrl || currentUser?.avatar || currentUser?.photoUrl) && (
+                      {(currentUser?.avatarUrl ||
+                        currentUser?.avatar ||
+                        currentUser?.photoUrl) && (
                         <img
-                          src={currentUser.avatarUrl || currentUser.avatar || currentUser.photoUrl}
+                          src={
+                            currentUser.avatarUrl ||
+                            currentUser.avatar ||
+                            currentUser.photoUrl
+                          }
                           alt=""
                           className="absolute inset-0 size-full object-cover"
-                          onError={(event) => { event.currentTarget.hidden = true; }}
+                          onError={(event) => {
+                            event.currentTarget.hidden = true;
+                          }}
                         />
                       )}
                       {String(currentUser?.name || currentUser?.id || "TX")
@@ -1896,7 +1863,10 @@ export default function App({ onLogout = null }) {
                     <ChevronDown className="size-3.5 text-muted-foreground" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent align="end" className="w-68 gap-1 p-2 shadow-lg">
+                <PopoverContent
+                  align="end"
+                  className="w-68 gap-1 p-2 shadow-lg"
+                >
                   <div className="flex items-center gap-3 border-b px-3 py-2.5">
                     <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
                       {String(currentUser?.name || currentUser?.id || "TX")
@@ -1907,9 +1877,18 @@ export default function App({ onLogout = null }) {
                         .toUpperCase()}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-foreground">{currentUser?.name || currentUser?.id || "User"}</p>
-                      <p className="truncate text-xs text-muted-foreground">{currentUser?.userName || currentUser?.id || "user"}@carmen.financial</p>
-                      <p className="truncate text-[11px] text-muted-foreground">{currentUser?.role ? `${currentUser.role} Account` : "Rooms General Account"}</p>
+                      <p className="truncate text-sm font-semibold text-foreground">
+                        {currentUser?.name || currentUser?.id || "User"}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {currentUser?.userName || currentUser?.id || "user"}
+                        @carmen.financial
+                      </p>
+                      <p className="truncate text-[11px] text-muted-foreground">
+                        {currentUser?.role
+                          ? `${currentUser.role} Account`
+                          : "Rooms General Account"}
+                      </p>
                     </div>
                   </div>
 
@@ -1919,13 +1898,27 @@ export default function App({ onLogout = null }) {
 
                   <Popover>
                     <PopoverTrigger asChild>
-                      <Button type="button" variant="ghost" className="w-full justify-start text-xs font-normal">
-                        {themeMode === "dark" ? <MoonStar className="size-4" /> : themeMode === "system" ? <Monitor className="size-4" /> : <SunMedium className="size-4" />}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="w-full justify-start text-xs font-normal"
+                      >
+                        {themeMode === "dark" ? (
+                          <MoonStar className="size-4" />
+                        ) : themeMode === "system" ? (
+                          <Monitor className="size-4" />
+                        ) : (
+                          <SunMedium className="size-4" />
+                        )}
                         Theme
                         <ChevronRight className="ml-auto size-4" />
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent side="left" align="start" className="w-44 gap-1 p-2">
+                    <PopoverContent
+                      side="left"
+                      align="start"
+                      className="w-44 gap-1 p-2"
+                    >
                       {[
                         ["light", "Light", SunMedium],
                         ["dark", "Dark", MoonStar],
@@ -1940,7 +1933,9 @@ export default function App({ onLogout = null }) {
                         >
                           <Icon className="size-4" />
                           {label}
-                          {themeMode === value && <Check className="ml-auto size-4" />}
+                          {themeMode === value && (
+                            <Check className="ml-auto size-4" />
+                          )}
                         </Button>
                       ))}
                     </PopoverContent>
@@ -1969,151 +1964,244 @@ export default function App({ onLogout = null }) {
         {/* Filter bar: separated below topbar, shown in VIEW mode */}
         {visibleActiveTab === "report" && (
           <div className="px-4 pt-4 print:hidden">
-            <Card className="border border-border bg-card/95 shadow-none ring-0">
-                <CardContent className="p-3">
-                  <div className="flex flex-col gap-2 2xl:flex-row 2xl:items-end 2xl:justify-between">
-                    <div className={`grid gap-2 sm:grid-cols-2 sm:items-end md:grid-cols-3 lg:grid-cols-4 2xl:flex-none ${activeReportUsesDayFilter ? "2xl:grid-cols-[180px_110px_180px_120px_88px_88px]" : "2xl:grid-cols-[180px_110px_180px_88px_88px]"}`}>
-                      <div className="min-w-0">
-                        <MultiSelectDropdown
-                          testIdPrefix="dept"
-                          label="DEPT"
-                          options={masterData.depts}
-                          selected={globalDepts}
-                          onChange={setGlobalDepts}
-                        />
-                      </div>
+            <section
+              className="mb-3 flex min-w-0 flex-wrap items-center justify-between gap-3"
+              aria-label="Report title and actions"
+            >
+              <h1 className="min-w-0 flex-1 text-balance text-xl font-semibold text-foreground">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-auto max-w-full justify-start px-0 py-1 text-left text-xl font-semibold hover:bg-transparent"
+                  onClick={() => handleTabChange("report")}
+                  title={activeReport?.name || "Reports"}
+                >
+                  <span className="truncate">
+                    {activeReport?.name || "Reports"}
+                  </span>
+                </Button>
+              </h1>
+              {canSetupReports && (
+                <div data-tour="report-actions" className="flex flex-wrap items-center justify-end gap-2 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-lg data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleCreateReportFromSidebar}
+                  >
+                    <FilePlus />
+                    New Report
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleTabChange("import")}
+                  >
+                    <FileSpreadsheet />
+                    Import Excel
+                  </Button>
+                  {activeReport && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleTabChange("setup")}
+                      >
+                        <Pencil />
+                        Edit
+                      </Button>
 
-                      <div className="space-y-1">
-                        <span className="block text-xs font-medium text-muted-foreground">
-                          Year
-                        </span>
-                        <Input
-                          type="number"
-                          value={globalYear}
-                          onChange={(event) =>
-                            setGlobalYear(event.target.value)
-                          }
-                          className="h-9 text-sm"
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleDeleteReport}
+                      >
+                        <Trash2 />
+                        Delete
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleCloneReport}
+                      >
+                        <Copy />
+                        Duplicate
+                      </Button>
+                      {apiConfigured && (
+                        <ReportHistory
+                          key={activeReport.id}
+                          report={activeReport}
+                          isDirty={false}
+                          onRestored={(restored) => {
+                            setReports((currentReports) =>
+                              currentReports.map((report) =>
+                                report.id === restored.id ? restored : report,
+                              ),
+                            );
+                            setSetupDraft(restored);
+                            setIsSetupDirty(false);
+                            setReportCatalogError(null);
+                          }}
                         />
-                      </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+            </section>
+            <Card data-tour="report-filters" className="border border-border bg-card/95 shadow-none ring-0 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary">
+              <CardContent className="p-3">
+                <div className="flex flex-col gap-2 2xl:flex-row 2xl:items-end 2xl:justify-between">
+                  <div
+                    className={`grid gap-2 sm:grid-cols-2 sm:items-end md:grid-cols-3 lg:grid-cols-4 2xl:flex-none ${activeReportUsesDayFilter ? "2xl:grid-cols-[180px_110px_180px_120px_88px_88px]" : "2xl:grid-cols-[180px_110px_180px_88px_88px]"}`}
+                  >
+                    <div className="min-w-0">
+                      <MultiSelectDropdown
+                        testIdPrefix="dept"
+                        label="DEPT"
+                        options={masterData.depts}
+                        selected={globalDepts}
+                        onChange={setGlobalDepts}
+                      />
+                    </div>
 
-                      <div className="space-y-1">
-                        <span className="block text-xs font-medium text-muted-foreground">
-                          Period
-                        </span>
-                        <Select
-                          value={globalPeriod}
-                          onValueChange={setGlobalPeriod}
+                    <div className="space-y-1">
+                      <span className="block text-xs font-medium text-muted-foreground">
+                        Year
+                      </span>
+                      <Input
+                        type="number"
+                        value={globalYear}
+                        onChange={(event) => setGlobalYear(event.target.value)}
+                        className="h-9 text-sm"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className="block text-xs font-medium text-muted-foreground">
+                        Period
+                      </span>
+                      <Select
+                        value={globalPeriod}
+                        onValueChange={setGlobalPeriod}
+                      >
+                        <SelectTrigger
+                          className={`h-9 min-w-0 text-sm ${NEUTRAL_FILTER_TRIGGER_CLASS}`}
                         >
-                          <SelectTrigger
-                            className={`h-9 min-w-0 text-sm ${NEUTRAL_FILTER_TRIGGER_CLASS}`}
-                          >
-                            <SelectValue placeholder="Period" />
-                          </SelectTrigger>
-                          <SelectContent position="popper">
-                            {periodSelectOptions.map((option) => (
-                              <SelectItem
-                                key={option.id}
-                                value={String(option.id)}
-                              >
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                          <SelectValue placeholder="Period" />
+                        </SelectTrigger>
+                        <SelectContent position="popper">
+                          {periodSelectOptions.map((option) => (
+                            <SelectItem
+                              key={option.id}
+                              value={String(option.id)}
+                            >
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                      {activeReportUsesDayFilter && (
-                        <div className="space-y-1">
-                          <label htmlFor="view-day" className="block text-xs font-medium text-muted-foreground">Day</label>
-                          <Input
-                            id="view-day"
-                            type="number"
-                            min="1"
-                            max="31"
-                            value={globalDay}
-                            onChange={(event) => setDayFilterState({
+                    {activeReportUsesDayFilter && (
+                      <div className="space-y-1">
+                        <label
+                          htmlFor="view-day"
+                          className="block text-xs font-medium text-muted-foreground"
+                        >
+                          Day
+                        </label>
+                        <Input
+                          id="view-day"
+                          type="number"
+                          min="1"
+                          max="31"
+                          value={globalDay}
+                          onChange={(event) =>
+                            setDayFilterState({
                               reportId: activeReport?.id,
                               reportDay: defaultReportDay,
                               globalDay: event.target.value,
                               appliedDay: activeReportDay,
-                            })}
-                            className="h-9 text-sm"
-                          />
-                        </div>
-                      )}
-
-                      <div className="space-y-1">
-                        <span className="block text-xs font-medium text-muted-foreground">
-                          Budget revision
-                        </span>
-                        <Select
-                          value={globalRevision}
-                          onValueChange={(nextValue) => {
-                            if (!activeReportUsesBudget && nextValue !== "0") {
-                              setGlobalRevision("0");
-                              setAppliedRevision("0");
-                              setAlertMsg(
-                                "Revision selector is ignored for reports without budget columns.",
-                              );
-                              return;
-                            }
-                            setGlobalRevision(nextValue);
-                          }}
-                        >
-                          <SelectTrigger
-                            className={`h-9 w-full min-w-0 text-sm ${NEUTRAL_FILTER_TRIGGER_CLASS}`}
-                          >
-                            <SelectValue placeholder="Revision" />
-                          </SelectTrigger>
-                          <SelectContent position="popper">
-                            {revisionSelectOptions.map((option) => (
-                              <SelectItem
-                                key={option.id}
-                                value={String(option.id)}
-                              >
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                            })
+                          }
+                          className="h-9 text-sm"
+                        />
                       </div>
+                    )}
 
-                      <Button
-                        size="sm"
-                        className="h-9 w-full self-end px-3 text-sm"
-                        onClick={handleApplyFilters}
-                        disabled={isLoading}
+                    <div className="space-y-1">
+                      <span className="block text-xs font-medium text-muted-foreground">
+                        Budget revision
+                      </span>
+                      <Select
+                        value={globalRevision}
+                        onValueChange={(nextValue) => {
+                          if (!activeReportUsesBudget && nextValue !== "0") {
+                            setGlobalRevision("0");
+                            setAppliedRevision("0");
+                            setAlertMsg(
+                              "Revision selector is ignored for reports without budget columns.",
+                            );
+                            return;
+                          }
+                          setGlobalRevision(nextValue);
+                        }}
                       >
-                        {isLoading ? <LoaderCircle className="animate-spin motion-reduce:animate-none" /> : null}
-                        {isLoading ? "Loading..." : "Apply"}
-                      </Button>
+                        <SelectTrigger
+                          className={`h-9 w-full min-w-0 text-sm ${NEUTRAL_FILTER_TRIGGER_CLASS}`}
+                        >
+                          <SelectValue placeholder="Revision" />
+                        </SelectTrigger>
+                        <SelectContent position="popper">
+                          {revisionSelectOptions.map((option) => (
+                            <SelectItem
+                              key={option.id}
+                              value={String(option.id)}
+                            >
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
 
-                    <div className="flex flex-wrap gap-2 2xl:ml-4 2xl:flex-nowrap 2xl:self-end 2xl:justify-end">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className={`h-9 w-full px-3 text-sm sm:w-auto ${NEUTRAL_BUTTON_CLASS}`}
-                        onClick={exportToExcel}
-                        title="Export to Excel"
-                      >
-                        <Download />
-                        Excel
-                      </Button>
-                      <Button
-                        className={`h-9 w-full px-3 text-sm sm:w-auto ${NEUTRAL_BUTTON_CLASS}`}
-                        size="sm"
-                        variant="outline"
-                        onClick={() => window.print()}
-                        title="Print"
-                      >
-                        <Printer />
-                      </Button>
-                    </div>
+                    <Button
+                      size="sm"
+                      className="h-9 w-full self-end px-3 text-sm"
+                      onClick={handleApplyFilters}
+                      disabled={isLoading}
+                    >
+                      {isLoading ? (
+                        <LoaderCircle className="animate-spin motion-reduce:animate-none" />
+                      ) : null}
+                      {isLoading ? "Loading..." : "Apply"}
+                    </Button>
                   </div>
-                </CardContent>
-              </Card>
+
+                  <div className="flex flex-wrap gap-2 2xl:ml-4 2xl:flex-nowrap 2xl:self-end 2xl:justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={`h-9 w-full px-3 text-sm sm:w-auto ${NEUTRAL_BUTTON_CLASS}`}
+                      onClick={exportToExcel}
+                      title="Export to Excel"
+                    >
+                      <Download />
+                      Excel
+                    </Button>
+                    <Button
+                      className={`h-9 w-full px-3 text-sm sm:w-auto ${NEUTRAL_BUTTON_CLASS}`}
+                      size="sm"
+                      variant="outline"
+                      onClick={() => window.print()}
+                      title="Print"
+                    >
+                      <Printer />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         )}
 
@@ -2163,11 +2251,15 @@ export default function App({ onLogout = null }) {
                         displayCompanyLabel={displayCompanyLabel}
                         displayDateLabel={displayDateLabel}
                         displayPeriodLabel={displayPeriodLabel}
+                        remark={activeReport.remark}
                         departmentContext={
                           appliedDepts.length === 0
                             ? "All departments"
                             : appliedDepts.length === 1
-                              ? masterData.depts.find((dept) => String(dept.id) === String(appliedDepts[0]))?.name || appliedDepts[0]
+                              ? masterData.depts.find(
+                                  (dept) =>
+                                    String(dept.id) === String(appliedDepts[0]),
+                                )?.name || appliedDepts[0]
                               : `${appliedDepts.length} departments`
                         }
                         reportData={reportData}
@@ -2189,6 +2281,7 @@ export default function App({ onLogout = null }) {
                         displayCompanyLabel={displayCompanyLabel}
                         displayDateLabel={displayDateLabel}
                         displayPeriodLabel={displayPeriodLabel}
+                        remark={activeReport.remark}
                         reportData={reportData}
                         activeCols={activeCols}
                         currentTheme={currentTheme}
@@ -2205,15 +2298,18 @@ export default function App({ onLogout = null }) {
                   <Card className="flex h-full items-center justify-center border border-border shadow-none ring-0">
                     <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
                       <h3 className="text-lg font-semibold text-foreground">
-                        {canSetupReports ? "No reports yet" : "No reports assigned"}
+                        No reports yet
                       </h3>
                       <p className="max-w-md text-sm text-muted-foreground">
                         {canSetupReports
                           ? "Create a blank report or import an Excel workbook to get started."
-                          : "Ask an administrator to grant you access to a financial report."}
+                          : "No financial reports are available."}
                       </p>
                       {canSetupReports && (
-                        <Button size="sm" onClick={handleCreateReportFromSidebar}>
+                        <Button
+                          size="sm"
+                          onClick={handleCreateReportFromSidebar}
+                        >
                           New report
                         </Button>
                       )}
@@ -2247,9 +2343,11 @@ export default function App({ onLogout = null }) {
                         isSaving={isSetupSaving}
                         apiConfigured={apiConfigured}
                         onHistoryRestored={(restored) => {
-                          setReports((currentReports) => currentReports.map((report) =>
-                            report.id === restored.id ? restored : report
-                          ));
+                          setReports((currentReports) =>
+                            currentReports.map((report) =>
+                              report.id === restored.id ? restored : report,
+                            ),
+                          );
                           setSetupDraft(restored);
                           setIsSetupDirty(false);
                           setReportCatalogError(null);
@@ -2261,7 +2359,6 @@ export default function App({ onLogout = null }) {
                         handleCloneReport={handleCloneReport}
                         handleCreateBlankReport={handleCreateBlankReport}
                         handleDeleteReport={handleDeleteReport}
-                        setIsAccessModalOpen={setIsAccessModalOpen}
                         handleAddCol={handleAddCol}
                         handleUpdateCol={handleUpdateCol}
                         moveCol={moveCol}
@@ -2295,7 +2392,6 @@ export default function App({ onLogout = null }) {
                         activeReport?.companyName ||
                         "Carmen Hotel & Resorts"
                       }
-                      userIds={reportUsers.map((user) => user.id)}
                       owner={currentUser?.id || ""}
                       departments={masterData.depts}
                       accountCodes={masterData.accCodes}
@@ -2336,18 +2432,6 @@ export default function App({ onLogout = null }) {
       </React.Suspense>
 
       <React.Suspense fallback={null}>
-        <AccessModal
-          isOpen={isAccessModalOpen}
-          masterData={masterData}
-          activeReport={setupReport}
-          onClose={() => setIsAccessModalOpen(false)}
-          onUpdateUsers={(newUsers) =>
-            updateActiveReport({ assignedUsers: newUsers })
-          }
-        />
-      </React.Suspense>
-
-      <React.Suspense fallback={null}>
         <EditMappingModal
           isOpen={!!editingRow}
           editingRow={editingRow}
@@ -2368,7 +2452,9 @@ export default function App({ onLogout = null }) {
               accCodes: editingRow.accCodes,
               groupLevel: editingRow.groupLevel,
               groups: editingRow.groups,
-              ...Object.fromEntries(dimensionDefinitions.map(({ key }) => [key, editingRow[key]])),
+              ...Object.fromEntries(
+                dimensionDefinitions.map(({ key }) => [key, editingRow[key]]),
+              ),
             });
             setEditingRow(null);
           }}

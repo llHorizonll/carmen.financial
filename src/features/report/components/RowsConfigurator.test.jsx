@@ -63,15 +63,15 @@ describe('RowsConfigurator', () => {
     expect(screen.getByRole('columnheader', { name: 'Type' }).className).toMatch(/w-32/);
     expect(screen.getByRole('columnheader', { name: 'Description' }).className).toMatch(/w-48/);
 
-    fireEvent.click(screen.getByRole('combobox', { name: 'Add row' }));
+    fireEvent.click(screen.getByRole('combobox', { name: '+ Add row' }));
     fireEvent.click(await screen.findByRole('option', { name: 'Data' }));
     expect(handleAddRow).toHaveBeenCalledWith('data');
 
-    fireEvent.click(screen.getByRole('combobox', { name: 'Add row' }));
+    fireEvent.click(screen.getByRole('combobox', { name: '+ Add row' }));
     fireEvent.click(await screen.findByRole('option', { name: 'Header' }));
     expect(handleAddRow).toHaveBeenCalledWith('header');
 
-    fireEvent.click(screen.getByRole('combobox', { name: 'Add row' }));
+    fireEvent.click(screen.getByRole('combobox', { name: '+ Add row' }));
     fireEvent.click(await screen.findByRole('option', { name: 'Formula' }));
     expect(handleAddRow).toHaveBeenCalledWith('formula');
 

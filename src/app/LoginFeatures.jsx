@@ -10,7 +10,7 @@ const featureRows = [
 
 export default function LoginFeatures() {
   return (
-    <section aria-label="Carmen Financial BI capabilities" className="grid max-w-2xl gap-0 overflow-hidden rounded-xl border bg-card">
+    <section aria-label="Carmen Blue Financial Report" className="grid max-w-2xl gap-0 overflow-hidden rounded-xl border bg-card">
       {featureRows.map((item, index) => {
         const Icon = item.icon;
         return (

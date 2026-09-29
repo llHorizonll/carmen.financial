@@ -26,6 +26,15 @@ describe('EditMappingModal', () => {
       />
     );
 
+    expect(screen.getByRole('button', { name: /^Department/ })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: /^Account/ })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: /^Dimensions/ })).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(screen.getByRole('button', { name: /^Department/ }));
+    expect(screen.getByRole('button', { name: /^Department/ })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('button', { name: 'Select departments' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Department/ }));
+    expect(screen.getByRole('button', { name: 'Select departments' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Dimensions/ }));
     expect(screen.getByRole('button', { name: /Dimension 10/i })).toBeInTheDocument();
     expect(screen.getByTestId('selected-value-mapping-dim1')).toHaveTextContent('Not selected');
   });
@@ -78,6 +87,7 @@ describe('EditMappingModal', () => {
     fireEvent.click(await screen.findByText('Balance Sheet'));
     expect(setModalAccCategory).toHaveBeenCalledWith('B');
 
+    fireEvent.click(screen.getByRole('button', { name: /^Dimensions/ }));
     fireEvent.click(screen.getByRole('button', { name: /Market Segment/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Corporate' }));
     expect(setEditingRow).toHaveBeenCalledWith(expect.objectContaining({ dim1: 'OTA, Corporate' }));

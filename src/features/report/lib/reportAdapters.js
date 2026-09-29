@@ -414,6 +414,7 @@ export const adaptCarmenReportDefinition = (report) => {
     customPeriodLabel: report.customPeriodLabel || report.CustomPeriodLabel || '',
     overrideDateDisplay: report.overrideDateDisplay || report.OverrideDateDisplay || '',
     overridePeriodDisplay: report.overridePeriodDisplay || report.OverridePeriodDisplay || '',
+    remark: report.remark || report.Remark || '',
     owner: report.owner || report.Owner || report.createdBy || report.CreatedBy || '',
     reportType: report.reportType || report.ReportType || 'Monthly',
     day: report.day || report.Day || '',

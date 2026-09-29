@@ -137,6 +137,7 @@ describe('reportApi helpers', () => {
       customPeriodLabel: 'Period : 2026-P02',
       overrideDateDisplay: 'As of February 28, 2026',
       overridePeriodDisplay: 'Period : 2026-P02',
+      remark: '',
       owner: 'admin',
       reportType: 'Daily',
       day: '28',
@@ -170,6 +171,7 @@ describe('reportApi helpers', () => {
       overrideDateDisplay: 'As of February 28, 2026',
       overridePeriodDisplay: 'Period : 2026-P02',
       owner: 'admin',
+      remark: '',
       reportType: 'Daily',
       day: '28',
       theme: 'blue',
@@ -260,7 +262,7 @@ describe('reportApi helpers', () => {
     }));
   });
 
-  it('rejects report detail loads for unauthorized users', async () => {
+  it('trusts Carmen API permission checks for report detail loads', async () => {
     createSessionStorageMock({
       accessToken: 'token',
       username: 'viewer',
@@ -278,7 +280,9 @@ describe('reportApi helpers', () => {
       }),
     }));
 
-    await expect(fetchCarmenReport('rep-unauthorized')).rejects.toThrow(/do not have access to this report/i);
+    await expect(fetchCarmenReport('rep-unauthorized')).resolves.toEqual(expect.objectContaining({
+      id: 'rep-unauthorized',
+    }));
   });
 
   it('allows report detail loads for the owning user', async () => {
@@ -431,7 +435,7 @@ describe('reportApi helpers', () => {
     }));
   });
 
-  it('allows report detail loads when the API returns UserName access fields', async () => {
+  it('loads report details without checking report-level access fields', async () => {
     createSessionStorageMock({
       accessToken: 'token',
       username: 'viewer',
@@ -443,7 +447,7 @@ describe('reportApi helpers', () => {
       ok: true,
       json: async () => ({
         id: 'rep-access-shape',
-        Access: [{ UserName: 'VIEWER', CanView: true }],
+        Access: [{ UserName: 'VIEWER', CanView: false }],
         rows: [],
         columns: [],
       }),

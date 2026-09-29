@@ -21,25 +21,20 @@ import { useIsMobile } from "@/hooks/use-mobile.js";
 const TOUR_STEPS = [
   {
     target: "reports",
+    desktopOnly: true,
     title: "Choose a report",
-    description: "Select any report in the left navigation to open its latest financial data.",
+    description: "Select a report in the left navigation. Select its name above the report to return to View.",
   },
   {
-    target: "new-report",
+    target: "report-actions",
     adminOnly: true,
-    title: "Create a new report",
-    description: "New Report creates a blank report, then opens SETUP so you can define rows, columns, and access.",
+    title: "Manage reports",
+    description: "Create or import reports here. For the selected report, Edit opens its setup; Delete, Duplicate, and Activity are beside it.",
   },
   {
-    target: "import-template",
-    adminOnly: true,
-    title: "Import an Excel template",
-    description: "Import Excel reads a workbook and guides you through sheet selection, mapping, preview, and creation.",
-  },
-  {
-    target: "mode-switch",
-    title: "View or configure",
-    description: "Use VIEW for analysis. Admins can use SETUP to change report definitions and mappings.",
+    target: "report-filters",
+    title: "Filter and export",
+    description: "Choose a department, year, period, and budget revision, then select Apply. Export or print from the same bar.",
   },
 ];
 
@@ -51,13 +46,13 @@ export default function GettingStartedTour({
   onStepChange,
   onClose,
 }) {
+  const isMobile = useIsMobile();
   const steps = useMemo(
-    () => (customSteps || TOUR_STEPS).filter((step) => canSetup || !step.adminOnly),
-    [canSetup, customSteps],
+    () => (customSteps || TOUR_STEPS).filter((step) => (canSetup || !step.adminOnly) && (!isMobile || !step.desktopOnly)),
+    [canSetup, customSteps, isMobile],
   );
   const safeStepIndex = Math.min(stepIndex, steps.length - 1);
   const step = steps[safeStepIndex];
-  const isMobile = useIsMobile();
   const nextButtonRef = useRef(null);
   const closeRef = useRef(onClose);
   useEffect(() => { closeRef.current = onClose; }, [onClose]);

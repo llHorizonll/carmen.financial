@@ -9,7 +9,7 @@ describe("GettingStartedTour", () => {
     Object.defineProperty(window, "innerWidth", { value: 1024, configurable: true });
   });
 
-  it("guides admins through report creation and template import", () => {
+  it("guides admins through the current report actions and filters", () => {
     const onStepChange = vi.fn();
     document.body.innerHTML = '<button data-tour="reports">Reports</button>';
 
@@ -43,7 +43,7 @@ describe("GettingStartedTour", () => {
     expect(onStepChange).toHaveBeenCalledWith(1);
     document.body.insertAdjacentHTML(
       "afterbegin",
-      '<button data-tour="new-report">New Report</button>',
+      '<div data-tour="report-actions">New Report · Import Excel · Edit</div>',
     );
     rerender(
       <GettingStartedTour
@@ -54,9 +54,11 @@ describe("GettingStartedTour", () => {
         onClose={vi.fn()}
       />,
     );
-    expect(screen.getByText("Create a new report")).toBeInTheDocument();
+    expect(screen.getByText("Manage reports")).toBeInTheDocument();
+    expect(document.querySelector('[data-tour="report-actions"]')).toHaveAttribute("data-tour-active", "true");
 
-    document.querySelector('[data-tour="new-report"]').remove();
+    document.querySelector('[data-tour="report-actions"]').remove();
+    document.body.insertAdjacentHTML("afterbegin", '<div data-tour="report-filters">Filters</div>');
     rerender(
       <GettingStartedTour
         canSetup
@@ -66,12 +68,13 @@ describe("GettingStartedTour", () => {
         onClose={vi.fn()}
       />,
     );
-    expect(screen.getByText("Import an Excel template")).toBeInTheDocument();
+    expect(screen.getByText("Filter and export")).toBeInTheDocument();
+    expect(document.querySelector('[data-tour="report-filters"]')).toHaveAttribute("data-tour-active", "true");
   });
 
   it("renders an accessible dialog title on mobile", () => {
     Object.defineProperty(window, "innerWidth", { value: 390, configurable: true });
-    document.body.innerHTML = '<button data-tour="reports">Reports</button>';
+    document.body.innerHTML = '<div data-tour="report-actions">Actions</div><div data-tour="report-filters">Filters</div>';
 
     render(
       <GettingStartedTour
@@ -84,8 +87,9 @@ describe("GettingStartedTour", () => {
     );
 
     expect(
-      screen.getByRole("dialog", { name: "Choose a report" }),
+      screen.getByRole("dialog", { name: "Manage reports" }),
     ).toBeInTheDocument();
+    expect(screen.getByText("Getting started · 1 of 2")).toBeInTheDocument();
   });
 
   it("anchors the desktop guide to the viewport from inside an animated pane", () => {

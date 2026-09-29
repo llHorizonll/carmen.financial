@@ -58,7 +58,7 @@ const SHELL_TEMPLATE_PRESETS = {
       '--secondary': 'oklch(0.27 0 0)',
       '--secondary-foreground': 'oklch(0.92 0 0)',
       '--muted': 'oklch(0.25 0 0)',
-      '--muted-foreground': 'oklch(0.64 0 0)',
+      '--muted-foreground': 'oklch(0.72 0 0)',
       '--accent': 'oklch(0.29 0 0)',
       '--accent-foreground': 'oklch(0.93 0 0)',
       '--destructive': 'oklch(0.666 0.2013 24.11)',

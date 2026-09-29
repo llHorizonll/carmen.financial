@@ -241,6 +241,7 @@ export default function ReportDashboard({
   displayCompanyLabel,
   displayDateLabel,
   displayPeriodLabel,
+  remark,
   departmentContext = 'All departments',
   reportData = EMPTY_ROWS,
   activeCols = EMPTY_COLUMNS,
@@ -275,6 +276,7 @@ export default function ReportDashboard({
         <CardDescription className="text-center text-sm text-muted-foreground">
           {displayDateLabel}
         </CardDescription>
+        {remark && <CardDescription className="whitespace-pre-line text-center text-sm text-muted-foreground">{remark}</CardDescription>}
         <CardDescription className="text-center text-sm text-muted-foreground">
           {displayPeriodLabel}
         </CardDescription>

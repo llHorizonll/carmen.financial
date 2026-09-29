@@ -1,30 +1,21 @@
 import React, { forwardRef, useImperativeHandle, useState } from 'react';
 import { LoaderCircle, Save, Undo2 } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
-import usePersistentState from '@/hooks/usePersistentState.js';
 import { Button } from '@/components/ui/button.jsx';
 import ReportDetailsPanel from './ReportDetailsPanel.jsx';
 import ColumnsConfigurator from './ColumnsConfigurator.jsx';
 import RowsConfigurator from './RowsConfigurator.jsx';
-import SetupSectionTabs from './SetupSectionTabs.jsx';
 import GettingStartedTour from './GettingStartedTour.jsx';
-import ReportHistory from './ReportHistory.jsx';
 
-const SETUP_SECTION_STORAGE_KEY = 'carmen.report-setup.active-section.v1';
 const SETUP_TOUR_STEPS = [
   {
     target: 'setup-details',
     title: 'Define the report',
-    description: 'Set the report name, category, period format, ownership, and access before configuring its structure.',
-  },
-  {
-    target: 'setup-sections',
-    title: 'Build columns and rows',
-    description: 'Columns define periods, formulas, and percentages. Rows define headings, account mappings, formulas, and totals.',
+    description: 'Set the report name, period format, and remark before configuring its structure.',
   },
   {
     target: 'setup-configurator',
-    title: 'Configure the active section',
+    title: 'Configure columns and rows',
     description: 'Add, reorder, map, or remove items here. Formula references are renumbered when rows or columns move.',
   },
   {
@@ -33,10 +24,6 @@ const SETUP_TOUR_STEPS = [
     description: 'Changes stay as a draft until Save changes is selected. Cancel changes restores the last saved definition.',
   },
 ];
-
-const hasConfigurationChanged = (draftItems, savedItems) => (
-  JSON.stringify(draftItems || []) !== JSON.stringify(savedItems || [])
-);
 
 const ReportSetup = forwardRef(function ReportSetup(props, ref) {
   const setupTourStorageKey = `${props.guideStoragePrefix || 'carmen_bi'}:setup`;
@@ -50,41 +37,8 @@ const ReportSetup = forwardRef(function ReportSetup(props, ref) {
       setIsSetupTourOpen(true);
     },
   }), []);
-  const [storedSetupSection, setStoredSetupSection] = usePersistentState(
-    SETUP_SECTION_STORAGE_KEY,
-    'columns',
-  );
-  const activeSetupSection = storedSetupSection === 'rows' ? 'rows' : 'columns';
-  const configuredColumns = props.activeReport?.columns?.length || 0;
-  const configuredRows = props.activeReport?.rows?.length || 0;
-  const savedReport = props.savedReport || props.activeReport;
-  const sectionDirtyState = {
-    columns: hasConfigurationChanged(props.activeReport?.columns, savedReport?.columns),
-    rows: hasConfigurationChanged(props.activeReport?.rows, savedReport?.rows),
-  };
-  const setupTabs = [
-    {
-      key: 'columns',
-      label: 'Columns',
-      count: configuredColumns,
-      isDirty: sectionDirtyState.columns,
-      tabId: 'report-setup-tab-columns',
-      panelId: 'report-setup-panel-columns',
-    },
-    {
-      key: 'rows',
-      label: 'Rows',
-      count: configuredRows,
-      isDirty: sectionDirtyState.rows,
-      tabId: 'report-setup-tab-rows',
-      panelId: 'report-setup-panel-rows',
-    },
-  ];
-  const activeSetupSummary = activeSetupSection === 'columns'
-    ? `${configuredColumns} Columns configured`
-    : `${configuredRows} Rows configured`;
 
-    return (
+  return (
     <div className="flex min-h-0 flex-col gap-4">
       <section aria-label="Report setup controls" className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-2 border-b border-border bg-background/95 px-4 py-2.5 backdrop-blur-sm">
         <p className="flex items-center gap-2 text-sm" aria-live="polite">
@@ -94,12 +48,11 @@ const ReportSetup = forwardRef(function ReportSetup(props, ref) {
           </span>
         </p>
         <nav data-tour="setup-save" aria-label="Save or cancel report settings" className="flex w-full items-center gap-2 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-lg data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary lg:w-auto lg:justify-self-end">
-          {props.apiConfigured && <ReportHistory key={savedReport.id} report={savedReport} isDirty={props.isDirty} onRestored={props.onHistoryRestored} />}
-          <Button className="flex-1 lg:flex-none" type="button" variant="outline" onClick={props.onCancel} disabled={!props.isDirty || props.isSaving}>
+          <Button className="flex-1 lg:flex-none" size="sm" type="button" variant="outline" onClick={props.onCancel} disabled={!props.isDirty || props.isSaving}>
             <Undo2 />
             Cancel changes
           </Button>
-          <Button className="flex-1 lg:flex-none" type="button" onClick={props.onSave} disabled={!props.isDirty || props.isSaving}>
+          <Button className="flex-1 lg:flex-none" size="sm" type="button" onClick={props.onSave} disabled={!props.isDirty || props.isSaving}>
             {props.isSaving ? <LoaderCircle className="animate-spin motion-reduce:animate-none" /> : <Save />}
             {props.isSaving ? 'Saving...' : 'Save changes'}
           </Button>
@@ -110,30 +63,9 @@ const ReportSetup = forwardRef(function ReportSetup(props, ref) {
         <section data-tour="setup-details" className="data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-xl data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary">
           <ReportDetailsPanel {...props} />
         </section>
-        <section data-tour="setup-sections" className="grid gap-1 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-xl data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary">
-          <SetupSectionTabs items={setupTabs} activeKey={activeSetupSection} onChange={setStoredSetupSection} />
-          <p className="text-xs tabular-nums text-muted-foreground" aria-live="polite">{activeSetupSummary}</p>
-        </section>
         <section data-tour="setup-configurator" className="grid gap-5 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-xl data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary">
-          {activeSetupSection === 'columns' ? (
-            <section
-              id="report-setup-panel-columns"
-              role="tabpanel"
-              aria-labelledby="report-setup-tab-columns"
-              className="w-full min-w-0 overflow-hidden"
-            >
-              <ColumnsConfigurator {...props} />
-            </section>
-          ) : (
-            <section
-              id="report-setup-panel-rows"
-              role="tabpanel"
-              aria-labelledby="report-setup-tab-rows"
-              className="w-full min-w-0 overflow-hidden"
-            >
-              <RowsConfigurator {...props} />
-            </section>
-          )}
+          <section className="w-full min-w-0 overflow-hidden"><ColumnsConfigurator {...props} /></section>
+          <section className="w-full min-w-0 overflow-hidden"><RowsConfigurator {...props} /></section>
         </section>
       </div>
       <GettingStartedTour

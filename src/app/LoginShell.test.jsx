@@ -30,8 +30,8 @@ describe('LoginShell', () => {
   it('renders the login hero and form content', async () => {
     render(<LoginShell />);
 
-    expect(screen.getByText('Carmen Financial BI')).toBeInTheDocument();
-    expect(await screen.findByText('Carmen BI Login')).toBeInTheDocument();
+    expect(screen.getByText('Carmen Blue Financial Report')).toBeInTheDocument();
+    expect(await screen.findByText('Carmen Blue Financial Report Login')).toBeInTheDocument();
     expect(await screen.findByText('Report viewing')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
   });

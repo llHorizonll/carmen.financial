@@ -20,7 +20,7 @@ describe('ReportSetup', () => {
     window.localStorage.clear();
   });
 
-  it('shows columns by default and switches to rows on tab click', () => {
+  it('shows columns and rows together with save and cancel actions', () => {
     const onSave = vi.fn();
     const onCancel = vi.fn();
     render(
@@ -45,15 +45,11 @@ describe('ReportSetup', () => {
     expect(onCancel).toHaveBeenCalledOnce();
 
     expect(screen.getByText('Columns Configurator Content')).toBeInTheDocument();
-    expect(screen.queryByText('Rows Configurator Content')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('tab', { name: /Rows/i }));
-
     expect(screen.getByText('Rows Configurator Content')).toBeInTheDocument();
-    expect(screen.queryByText('Columns Configurator Content')).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
   });
 
-  it('shows configured totals, marks dirty sections, and restores the last setup tab', () => {
+  it('keeps both configurators visible for a draft report', () => {
     const savedReport = {
       id: 'room',
       theme: 'blue',
@@ -82,22 +78,13 @@ describe('ReportSetup', () => {
       onCancel: vi.fn(),
     };
 
-    const firstRender = render(<ReportSetup {...commonProps} />);
-
-    expect(screen.getByText('2 Columns configured')).toBeInTheDocument();
-    expect(screen.getByLabelText('Unsaved changes in Columns')).toBeInTheDocument();
-    expect(screen.getByLabelText('Report setup controls')).toHaveClass('sticky', 'top-0');
-
-    fireEvent.click(screen.getByRole('tab', { name: /Rows/i }));
-
-    expect(screen.getByText('2 Rows configured')).toBeInTheDocument();
-    expect(window.localStorage.getItem('carmen.report-setup.active-section.v1')).toBe('"rows"');
-    firstRender.unmount();
-
     render(<ReportSetup {...commonProps} />);
 
+    expect(screen.getByText('Columns Configurator Content')).toBeInTheDocument();
     expect(screen.getByText('Rows Configurator Content')).toBeInTheDocument();
-    expect(screen.queryByText('Columns Configurator Content')).not.toBeInTheDocument();
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+    expect(screen.getByLabelText('Report setup controls')).toHaveClass('sticky', 'top-0');
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
   });
 
   it('opens its guide from the single shell help request', () => {
@@ -118,6 +105,13 @@ describe('ReportSetup', () => {
 
     act(() => guideRef.current.openGuide());
     expect(screen.getByRole('dialog', { name: 'Define the report' })).toBeInTheDocument();
+    expect(document.querySelector('[data-tour="setup-details"]')).toHaveAttribute('data-tour-active', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByRole('dialog', { name: 'Configure columns and rows' })).toBeInTheDocument();
+    expect(document.querySelector('[data-tour="setup-configurator"]')).toHaveAttribute('data-tour-active', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByRole('dialog', { name: 'Save the draft' })).toBeInTheDocument();
+    expect(document.querySelector('[data-tour="setup-save"]')).toHaveAttribute('data-tour-active', 'true');
     expect(screen.queryByRole('button', { name: 'Open setup guide' })).not.toBeInTheDocument();
   });
 });

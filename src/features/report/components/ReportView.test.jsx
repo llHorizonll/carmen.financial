@@ -16,7 +16,7 @@ describe('ReportView', () => {
         reportData={[
           { id: 'r1', desc: 'Revenue', indent: 0, results: { C1: 123.45 }, isHeader: false, isTotal: false },
         ]}
-        activeCols={[{ id: 'C1', label: 'Actual', width: '' }]}
+        activeCols={[{ id: 'C1', label: 'Actual\nThis Month', width: '' }]}
         currentTheme={THEMES.blue}
         tableZoom={100}
         getIndentClass={getIndentClass}
@@ -29,6 +29,9 @@ describe('ReportView', () => {
     expect(screen.getByText('P&L')).toBeInTheDocument();
     expect(screen.getByText('Revenue')).toBeInTheDocument();
     expect(screen.getByText('123.45')).toBeInTheDocument();
+    const columnLabel = screen.getAllByRole('columnheader')[1].firstElementChild;
+    expect(columnLabel).toHaveTextContent('Actual\nThis Month', { normalizeWhitespace: false });
+    expect(columnLabel).toHaveClass('whitespace-pre-line');
     const tableButton = screen.getByRole('button', { name: 'Show table view' });
     const dashboardButton = screen.getByRole('button', { name: 'Show dashboard view' });
     expect(tableButton).toHaveAttribute('aria-pressed', 'true');

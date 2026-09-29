@@ -1009,7 +1009,7 @@ export const buildExcelHtml = ({ activeReport, activeCols, displayCompanyLabel, 
   displayColumns.forEach(col => {
     tableHtml += col.isDescription
       ? `<th style="background-color: ${themeColors.hexHeader}; color: white; text-align: left; padding: 8px;">Description</th>`
-      : `<th style="background-color: ${themeColors.hexHeader}; color: white; padding: 8px; width: ${col.width || 100}px;">${col.label}</th>`;
+      : `<th style="background-color: ${themeColors.hexHeader}; color: white; padding: 8px; width: ${col.width || 100}px;">${String(col.label ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\r\n?|\n/g, '<br>')}</th>`;
   });
   tableHtml += `</tr>`;
 

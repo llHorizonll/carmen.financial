@@ -22,7 +22,7 @@ const reportApiMocks = vi.hoisted(() => ({
   deleteCarmenReport: vi.fn(),
 }));
 
-describe('report access filtering', () => {
+describe('report visibility', () => {
   const reports = [
     { id: 'owned-inactive', owner: 'owner', assignedUsers: [], isActive: false },
     { id: 'assigned-inactive', owner: 'other', assignedUsers: ['viewer'], isActive: false },
@@ -30,12 +30,12 @@ describe('report access filtering', () => {
     { id: 'hidden-active', owner: 'other', assignedUsers: [], isActive: true },
   ];
 
-  it('keeps inactive reports visible to their owner and hides them from access-list viewers', () => {
+  it('shows every report to users with Carmen view permission', () => {
     const owner = { id: 'owner', permissions: { financialReport: { view: true } } };
     const viewer = { id: 'viewer', permissions: { financialReport: { view: true } } };
 
-    expect(getAccessibleReports(reports, owner).map((report) => report.id)).toEqual(['owned-inactive']);
-    expect(getAccessibleReports(reports, viewer).map((report) => report.id)).toEqual(['assigned-active']);
+    expect(getAccessibleReports(reports, owner)).toEqual(reports);
+    expect(getAccessibleReports(reports, viewer)).toEqual(reports);
   });
 
   it('keeps every report visible to report administrators', () => {
@@ -43,15 +43,10 @@ describe('report access filtering', () => {
     expect(getAccessibleReports(reports, admin)).toEqual(reports);
   });
 
-  it('does not restore revoked report access through assignedUsers', () => {
-    const viewer = { id: 'viewer', permissions: { financialReport: { view: true } } };
-    const report = {
-      id: 'revoked', isActive: true, assignedUsers: ['viewer'],
-      access: [{ userId: 'viewer', canView: false }],
-    };
-
-    expect(getAccessibleReports([report], viewer)).toEqual([]);
-    expect(getAccessibleReports([{ ...report, access: [{ userId: 'viewer', canView: true }] }], viewer)).toHaveLength(1);
+  it('uses Carmen permission rather than report access entries', () => {
+    const report = { id: 'report', access: [{ userId: 'viewer', canView: false }] };
+    expect(getAccessibleReports([report], { permissions: { financialReport: { view: true } } })).toEqual([report]);
+    expect(getAccessibleReports([report], { permissions: { financialReport: { view: false } } })).toEqual([]);
   });
 });
 
@@ -149,18 +144,18 @@ describe('App shell', () => {
     expect(document.documentElement.dataset.shellTemplate).toBe('classic-calm');
     expect(screen.queryByText('Compare')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
     expect(screen.queryByText('Compare')).not.toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument(), { timeout: 5000 });
   });
 
-  it('switches from VIEW to SETUP for the admin user', async () => {
+  it('opens report setup from Edit for the admin user', async () => {
     render(<App />);
 
-    expect(screen.getByRole('button', { name: 'VIEW' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'SETUP' })).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Report title and actions' })).getByRole('button', { name: 'Profit and Loss' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
 
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument(), { timeout: 5000 });
   });
@@ -180,6 +175,19 @@ describe('App shell', () => {
     expect(screen.queryByRole('dialog', { name: 'Choose a report' })).not.toBeInTheDocument();
   });
 
+  it('highlights the report actions and filter bar in the current View layout', async () => {
+    render(<App />);
+    await screen.findByRole('dialog', { name: 'Choose a report' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByRole('dialog', { name: 'Manage reports' })).toBeInTheDocument();
+    expect(document.querySelector('[data-tour="report-actions"]')).toHaveAttribute('data-tour-active', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByRole('dialog', { name: 'Filter and export' })).toBeInTheDocument();
+    expect(document.querySelector('[data-tour="report-filters"]')).toHaveAttribute('data-tour-active', 'true');
+  });
+
   it('keeps the getting started guide interactive on mobile after login', async () => {
     Object.defineProperty(window, 'innerWidth', { value: 390, configurable: true });
     const originalMatchMedia = window.matchMedia;
@@ -191,14 +199,14 @@ describe('App shell', () => {
     }) });
     try {
       render(<App />);
-      await screen.findAllByText('Choose a report');
+      await screen.findAllByText('Manage reports');
       await waitFor(() => {
         expect(document.querySelectorAll('[data-slot="sheet-content"]')).toHaveLength(1);
         expect(screen.getByRole('button', { name: 'Close getting started guide' })).toBeInTheDocument();
       });
       fireEvent.click(screen.getByRole('button', { name: 'Close getting started guide' }));
       await waitFor(() => {
-        expect(screen.queryAllByText('Choose a report')).toHaveLength(0);
+        expect(screen.queryAllByText('Manage reports')).toHaveLength(0);
       });
     } finally {
       Object.defineProperty(window, 'innerWidth', { value: 1024, configurable: true });
@@ -208,7 +216,7 @@ describe('App shell', () => {
 
   it('keeps setup edits as a draft and restores them on Cancel changes', async () => {
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
 
     const reportName = await screen.findByDisplayValue('Profit and Loss');
     fireEvent.change(reportName, { target: { value: 'Draft report name' } });
@@ -252,10 +260,7 @@ describe('App shell', () => {
     expect(
       await screen.findByDisplayValue('New Custom Report', {}, { timeout: 5000 }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'SETUP' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    );
+    expect(screen.getByText('Report Details')).toBeInTheDocument();
   });
 
   it('creates an API-backed blank report with a client-generated id', async () => {
@@ -322,9 +327,6 @@ describe('App shell', () => {
     ]);
 
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
-    await screen.findByText('Report Details', {}, { timeout: 5000 });
-
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Delete report' }));
 
@@ -338,31 +340,16 @@ describe('App shell', () => {
   it('does not show report color theme controls in setup', async () => {
     render(<App />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
 
     await screen.findByText('Report Details', {}, { timeout: 5000 });
     expect(screen.queryByText('Report Theme')).not.toBeInTheDocument();
   });
 
-  it('hides the setup tab when the role changes to a non-admin user', () => {
-    const originalUsers = [...INITIAL_MASTER_DATA.users];
-    INITIAL_MASTER_DATA.users = [
-      { id: 'admin', name: 'admin', role: 'Admin' },
-      { id: 'u2', name: 'General Manager', role: 'User' },
-    ];
-    try {
-      const { container } = render(<App />);
-
-      const roleSelector = screen.getAllByRole('combobox')[0];
-      fireEvent.click(roleSelector);
-      fireEvent.click(screen.getByRole('option', { name: /General Manager \(User\)/i }));
-
-      expect(screen.getByRole('button', { name: 'VIEW' })).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'SETUP' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'New Report' })).not.toBeInTheDocument();
-    } finally {
-      INITIAL_MASTER_DATA.users = originalUsers;
-    }
+  it('does not offer role simulation or report-level access management', () => {
+    render(<App />);
+    expect(screen.queryByRole('combobox', { name: 'User selector' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Access' })).not.toBeInTheDocument();
   });
 
   it('uses Apply as the only report data refresh action', async () => {
@@ -579,8 +566,9 @@ describe('App shell', () => {
 
     const { container } = render(<App />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
-    fireEvent.click(await screen.findByRole('tab', { name: /Rows/i }));
+    await waitFor(() => expect(screen.getAllByText('Broken Report').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    await screen.findByText('Rows Configurator');
 
     await waitFor(() => expect(screen.getByText(/Broken row references found/i)).toBeInTheDocument());
     const formulaInput = await screen.findByDisplayValue('R99');
@@ -828,7 +816,7 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Daily Invalid').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
 
     await waitFor(() => expect(screen.getByText('Columns Configurator')).toBeInTheDocument());
     expect(screen.queryByText(/unsupported column types/i)).not.toBeInTheDocument();
@@ -904,7 +892,7 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Duplicate Mapping').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
     const reportName = await screen.findByDisplayValue('Duplicate Mapping');
     fireEvent.change(reportName, { target: { value: 'Duplicate Mapping Edit' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
@@ -982,8 +970,8 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Invalid Master Data Mapping').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
-    fireEvent.click(await screen.findByRole('tab', { name: /Rows/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    await screen.findByText('Rows Configurator');
 
     await waitFor(() => expect(screen.getByText(/Unknown department code\(s\): 999/i)).toBeInTheDocument());
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -1186,9 +1174,10 @@ describe('App shell', () => {
 
     const { container } = render(<App />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
+    await waitFor(() => expect(screen.getAllByText('Edit Modal Report').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('tab', { name: /Rows/i }));
+    await screen.findByText('Rows Configurator');
 
     const rowInput = screen.getByDisplayValue('Rooms');
     const row = rowInput.closest('tr');
@@ -1207,7 +1196,7 @@ describe('App shell', () => {
     })));
   });
 
-  it('saves setup category and access edits through the API payload', async () => {
+  it('saves consecutive setup edits through the API payload', async () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.saveCarmenReport.mockResolvedValueOnce({ lastModified: '2026-09-23T10:01:00' });
     reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
@@ -1292,40 +1281,23 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Setup Edits').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument());
 
-    const categorySelect = screen.getAllByRole('combobox').find((select) =>
-      select.textContent?.includes('+ Add Category')
-    );
-    expect(categorySelect).toBeTruthy();
-    fireEvent.click(categorySelect);
-    fireEvent.click(screen.getByRole('option', { name: /Balance Sheet/i }));
-
-    fireEvent.click(screen.getByRole('button', { name: 'Access' }));
-    const generalManagerLabel = screen.getByRole('button', {
-      name: /general manager/i,
-    });
-    expect(generalManagerLabel).toBeTruthy();
-    fireEvent.click(generalManagerLabel);
-
-    await waitFor(() => expect(screen.getByText('Balance Sheet')).toBeInTheDocument());
-    expect(generalManagerLabel).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.change(screen.getByDisplayValue('Setup Edits'), { target: { value: 'Setup Edits Updated' } });
     expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Manage Report Access' })).not.toBeInTheDocument());
     const saveChanges = screen.getByRole('button', { name: 'Save changes' });
     expect(saveChanges).toBeEnabled();
     fireEvent.click(saveChanges);
     await waitFor(() => expect(reportApiMocks.saveCarmenReport).toHaveBeenCalledTimes(1));
     expect(reportApiMocks.saveCarmenReport).toHaveBeenCalledWith(expect.objectContaining({
       id: 'rep-setup-edits',
-      category: ['B'],
-      assignedUsers: ['admin', 'u2'],
+      name: 'Setup Edits Updated',
     }));
-    await waitFor(() => expect(saveChanges).toBeDisabled());
-    fireEvent.change(screen.getByDisplayValue('Setup Edits'), { target: { value: 'Setup Edits Again' } });
-    fireEvent.click(saveChanges);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(await screen.findByDisplayValue('Setup Edits Updated'), { target: { value: 'Setup Edits Again' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(reportApiMocks.saveCarmenReport).toHaveBeenCalledTimes(2));
     expect(reportApiMocks.saveCarmenReport).toHaveBeenLastCalledWith(expect.objectContaining({
       id: 'rep-setup-edits',
@@ -1334,7 +1306,7 @@ describe('App shell', () => {
     }));
   });
 
-  it('renders API-backed users in the role selector and access modal', async () => {
+  it('does not show API-backed users as a report selector', async () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
       currentUser: {
@@ -1416,18 +1388,9 @@ describe('App shell', () => {
 
     const { container } = render(<App />);
 
-    await waitFor(() => expect(screen.getAllByRole('combobox')[0]).toHaveTextContent('Finance Owner (Admin)'));
-    const roleSelector = screen.getAllByRole('combobox')[0];
-    fireEvent.click(roleSelector);
-    expect(await screen.findByRole('option', { name: 'Finance Owner (Admin)' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Regional Viewer (User)' })).toBeInTheDocument();
-    fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' });
-
-    fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Access' }));
-
-    await waitFor(() => expect(screen.getByText('Regional Viewer')).toBeInTheDocument());
-    expect(screen.getAllByText('Finance Owner').length).toBeGreaterThan(1);
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'API Users' }).length).toBeGreaterThan(0));
+    expect(screen.queryByRole('combobox', { name: 'User selector' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Access' })).not.toBeInTheDocument();
   });
 
   it('does not render separate GL and BUD refresh buttons', async () => {
@@ -1604,7 +1567,7 @@ describe('App shell', () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Options Report').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument());
 
     expect(screen.queryByText('Report Theme')).not.toBeInTheDocument();
@@ -1612,7 +1575,7 @@ describe('App shell', () => {
     expect(screen.getByText('Columns Configurator')).toBeInTheDocument();
   });
 
-  it('renders API-loaded period and revision selector options in the report header', async () => {
+  it('renders API-loaded period options and applies the saved period format', async () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.getStoredCarmenSession.mockReturnValue({
       user: {
@@ -1672,7 +1635,7 @@ describe('App shell', () => {
         category: ['ALL'],
         assignedUsers: ['finance-owner'],
         isActive: true,
-        periodFormat: 'standard',
+        periodFormat: 'short',
         reportType: 'Monthly',
         owner: 'finance-owner',
         overrideDateDisplay: '',
@@ -1692,6 +1655,7 @@ describe('App shell', () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Period Selector Report').length).toBeGreaterThan(0));
+    expect(await screen.findByText(/^[A-Z][a-z]{2} 20\d{2}$/)).toBeInTheDocument();
 
     const periodSelect = screen.getAllByRole('combobox').find((select) =>
       select.textContent?.includes('P2 - February 28, 2025')
@@ -1783,7 +1747,7 @@ describe('App shell', () => {
 
     await waitFor(() => expect(reportApiMocks.fetchCarmenReportData).toHaveBeenCalled());
     expect(reportApiMocks.fetchCarmenReportData).toHaveBeenLastCalledWith(
-      expect.objectContaining({ day: '28' })
+      expect.objectContaining({ day: '1' })
     );
   });
 
@@ -1823,9 +1787,9 @@ describe('App shell', () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByText('Carmen Hotel & Resorts')).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: 'VIEW' }).className).toMatch(/bg-stone|border-stone|text-stone|ring-stone|bg-primary|ring-primary/);
+    expect(screen.getByRole('button', { name: 'New Report' })).toHaveAttribute('data-variant', 'outline');
     expect(screen.getByRole('button', { name: /DEPT/i }).className).toMatch(/bg-stone|border-stone|text-stone|bg-muted|border-border|text-muted/);
-    expect(screen.getByRole('button', { name: 'Apply' }).className).toMatch(/bg-stone|border-stone|text-stone|bg-muted|border-border|text-muted/);
+    expect(screen.getByRole('button', { name: 'Apply' })).toHaveAttribute('data-variant', 'default');
     expect(screen.getByTitle('Export to Excel').className).toMatch(/bg-stone|border-stone|text-stone|bg-muted|border-border|text-muted/);
   });
 
@@ -1900,8 +1864,12 @@ describe('App shell', () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('PTD Invalid Day').length).toBeGreaterThan(0));
+    await waitFor(() => expect(reportApiMocks.fetchCarmenReportData).toHaveBeenCalled());
+    const callsBeforeInvalidApply = reportApiMocks.fetchCarmenReportData.mock.calls.length;
+    fireEvent.change(screen.getByLabelText('Day'), { target: { value: '31' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
     await waitFor(() => expect(screen.getByText(/Day must be between 1 and 28/i)).toBeInTheDocument());
-    expect(reportApiMocks.fetchCarmenReportData).not.toHaveBeenCalled();
+    expect(reportApiMocks.fetchCarmenReportData).toHaveBeenCalledTimes(callsBeforeInvalidApply);
     fireEvent.change(screen.getByLabelText('Day'), { target: { value: '2' } });
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
     await waitFor(() => expect(reportApiMocks.fetchCarmenReportData).toHaveBeenCalledWith(expect.objectContaining({ day: '2' })));
