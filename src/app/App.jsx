@@ -130,6 +130,7 @@ import {
   getLatestCreatedReport,
 } from "../features/report/lib/reportLogic.js";
 import { mergeCarmenMasterData } from "../features/report/lib/reportAdapters.js";
+import { normalizeAccLookupCode } from "../features/report/lib/normalizeCode.js";
 import {
   canSetupFinancialReports,
   canViewFinancialReports,
@@ -2446,16 +2447,53 @@ export default function App({ onLogout = null }) {
             setDetailSelecting({ field, title, subTitle, items })
           }
           onApply={() => {
-            handleUpdateRowMulti(editingRow.id, {
+            const nextAccCodes = String(editingRow.accCodes || "")
+              .split(/[;,\n]/)
+              .map((code) => code.trim())
+              .filter(Boolean);
+            const selectedCodes = new Set(nextAccCodes.map(normalizeAccLookupCode));
+            const conflictingRows = setupReport.rows.filter((row) =>
+              row.id !== editingRow.id &&
+              String(row.accCodes || "")
+                .split(/[;,\n]/)
+                .some((code) => selectedCodes.has(normalizeAccLookupCode(code.trim()))),
+            );
+            const conflictingCodes = [...new Set(conflictingRows.flatMap((row) =>
+              String(row.accCodes || "")
+                .split(/[;,\n]/)
+                .map((code) => code.trim())
+                .filter((code) => selectedCodes.has(normalizeAccLookupCode(code))),
+            ))];
+            if (conflictingCodes.length && !window.confirm(
+              `Account code ${conflictingCodes.join(", ")} is already used in another row. Replace its current mapping?`,
+            )) return;
+
+            const updates = {
               desc: editingRow.desc,
               dept: editingRow.dept,
               deptGroup: editingRow.deptGroup,
-              accCodes: editingRow.accCodes,
+              accCodes: nextAccCodes.join(", "),
               groupLevel: editingRow.groupLevel,
               groups: editingRow.groups,
               ...Object.fromEntries(
                 dimensionDefinitions.map(({ key }) => [key, editingRow[key]]),
               ),
+            };
+            updateActiveReport({
+              rows: setupReport.rows.map((row) => row.id === editingRow.id
+                ? { ...row, ...updates }
+                : conflictingCodes.length
+                  ? {
+                      ...row,
+                      accCodes: String(row.accCodes || "")
+                        .split(/[;,\n]/)
+                        .map((code) => code.trim())
+                        .filter((code) => !conflictingCodes.some((conflict) =>
+                          normalizeAccLookupCode(conflict) === normalizeAccLookupCode(code),
+                        ))
+                        .join(", "),
+                    }
+                  : row),
             });
             setEditingRow(null);
           }}

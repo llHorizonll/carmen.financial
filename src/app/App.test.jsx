@@ -1172,6 +1172,7 @@ describe('App shell', () => {
         ],
         rows: [
           { id: 'r1', desc: 'Rooms', isActive: true, isHeader: false, isTotal: false, dept: '', groupLevel: 'L4', groups: '', accCodes: '', percentBase: '', formula: '', indent: 0 },
+          { id: 'r2', desc: 'Duplicate mapping', isActive: true, isHeader: false, isTotal: false, dept: '', groupLevel: 'L4', groups: '', accCodes: '4001', percentBase: '', formula: '', indent: 0 },
         ],
       },
     ]);
@@ -1189,15 +1190,21 @@ describe('App shell', () => {
 
     const accTextarea = screen.getByPlaceholderText('e.g. 4001, 4002');
     fireEvent.change(accTextarea, { target: { value: '4001' } });
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     fireEvent.click(screen.getByRole('button', { name: 'Apply Mapping' }));
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('4001'));
 
     expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(reportApiMocks.saveCarmenReport).toHaveBeenCalledWith(expect.objectContaining({
       id: 'rep-edit-modal',
-      rows: [expect.objectContaining({ accCodes: '4001' })],
+      rows: [
+        expect.objectContaining({ id: 'r1', accCodes: '4001' }),
+        expect.objectContaining({ id: 'r2', accCodes: '' }),
+      ],
     })));
+    confirmSpy.mockRestore();
   });
 
   it('saves consecutive setup edits through the API payload', async () => {

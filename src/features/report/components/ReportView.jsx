@@ -84,7 +84,6 @@ export default function ReportView({
           <div className="w-max min-w-full">
             <Table
               className="min-w-full border-collapse whitespace-nowrap print:table-auto"
-              style={{ zoom: tableZoom / 100 }}
               data-testid="report-print-header"
             >
               <TableHeader className={`sticky top-0 z-20 ${currentTheme.header}`}>
@@ -107,7 +106,7 @@ export default function ReportView({
                   ))}
                 </TableRow>
               </TableHeader>
-              <TableBody className="bg-background text-sm font-medium">
+              <TableBody data-testid="report-table-body" className="bg-background text-sm font-medium" style={{ zoom: tableZoom / 100 }}>
                 {reportData.filter((row) => row.isActive !== false).map((row) => {
                   const isHeader = row.isHeader || false;
                   const isTotal = row.isTotal || false;
@@ -142,7 +141,7 @@ export default function ReportView({
                         return (
                           <TableCell
                             key={col.id}
-                            className={`border-r px-2 py-2.5 text-right tabular-nums sm:px-3 ${currentTheme.cellBorder} ${isNegativeVar || val < 0 ? 'font-bold text-destructive' : ''}`}
+                            className={`border-r px-2 py-2.5 text-right tabular-nums sm:px-3 ${currentTheme.cellBorder} ${col.isFormula ? 'bg-muted/70' : ''} ${isNegativeVar || val < 0 ? 'font-bold text-destructive' : ''}`}
                           >
                             {['AC', 'BC'].includes(String(col.type || '').toUpperCase()) && !row.isTotal && !col.isFormula && !col.isPercent ? (
                               <button type="button" className="w-full cursor-pointer text-right underline-offset-2 hover:underline focus-visible:underline" aria-label={`View ${row.desc} ${col.label} breakdown`} onClick={() => setSelectedCell({ row, col, value: val })}>

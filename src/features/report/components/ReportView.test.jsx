@@ -41,6 +41,44 @@ describe('ReportView', () => {
     expect(onViewModeChange).toHaveBeenCalledWith('dashboard');
   });
 
+  it('keeps the column header outside the zoomed, scrollable report rows', () => {
+    render(
+      <ReportView
+        activeReport={{ name: 'P&L' }}
+        displayCompanyLabel="Carmen Hotel"
+        displayDateLabel="As of 2025-02-28"
+        displayPeriodLabel="P2"
+        reportData={[{ id: 'r1', desc: 'Revenue', results: { C1: 123.45 } }]}
+        activeCols={[{ id: 'C1', label: 'Actual', width: '' }]}
+        currentTheme={THEMES.blue}
+        tableZoom={120}
+        getIndentClass={getIndentClass}
+      />
+    );
+
+    expect(screen.getByTestId('report-print-header')).not.toHaveStyle({ zoom: '1.2' });
+    expect(screen.getByTestId('report-table-body')).toHaveStyle({ zoom: '1.2' });
+    expect(screen.getByTestId('report-print-header').querySelector('thead')).toHaveClass('sticky', 'top-0');
+  });
+
+  it('distinguishes formula cells from the column header', () => {
+    render(
+      <ReportView
+        activeReport={{ name: 'P&L' }}
+        displayCompanyLabel="Carmen Hotel"
+        displayDateLabel="As of 2025-02-28"
+        displayPeriodLabel="P2"
+        reportData={[{ id: 'r1', desc: 'Revenue', results: { C1: 123.45 } }]}
+        activeCols={[{ id: 'C1', label: 'Formula', isFormula: true, width: '' }]}
+        currentTheme={THEMES.blue}
+        tableZoom={100}
+        getIndentClass={getIndentClass}
+      />
+    );
+
+    expect(screen.getByText('123.45').closest('td')).toHaveClass('bg-muted/70');
+  });
+
   it('renders Description at the configured position', () => {
     render(
       <ReportView
