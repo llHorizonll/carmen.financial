@@ -122,7 +122,7 @@ export default function LoginForm({ onAuthenticated }) {
     <Card className="login-enter-from-left order-1 w-full max-w-md justify-self-center self-center border border-border bg-card shadow-lg ring-0 lg:justify-self-start">
       <CardHeader className="space-y-2">
         <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">Secure sign-in</Badge>
-        <CardTitle className="text-xl tracking-tight sm:text-2xl">Carmen BI Login</CardTitle>
+        <CardTitle className="text-xl tracking-tight sm:text-2xl">Carmen Blue Financial Report Login</CardTitle>
         <CardDescription>Use your Carmen credentials to continue.</CardDescription>
       </CardHeader>
       <form onSubmit={handleLogin}>
