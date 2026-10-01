@@ -69,6 +69,7 @@ describe('ColumnsConfigurator', () => {
 
   it('adds, updates, moves, and deletes columns', async () => {
     const handleAddCol = vi.fn();
+    const handleDuplicateCol = vi.fn();
     const handleUpdateCol = vi.fn();
     const handleDeleteCol = vi.fn();
     const setConfirmAction = vi.fn();
@@ -83,12 +84,19 @@ describe('ColumnsConfigurator', () => {
           ],
         }}
         handleAddCol={handleAddCol}
+        handleDuplicateCol={handleDuplicateCol}
         handleUpdateCol={handleUpdateCol}
         updateActiveReport={vi.fn()}
         handleDeleteCol={handleDeleteCol}
         setConfirmAction={setConfirmAction}
       />
     );
+
+    fireEvent.change(screen.getByRole('searchbox', { name: /Search columns/i }), { target: { value: 'Budget' } });
+    expect(screen.getByText('1 match')).toBeInTheDocument();
+    expect(screen.getAllByTestId('column-card')).toHaveLength(2);
+    expect(screen.getAllByTestId('column-card')[1]).toHaveClass('ring-2');
+    fireEvent.change(screen.getByRole('searchbox', { name: /Search columns/i }), { target: { value: '' } });
 
     fireEvent.click(screen.getByRole('combobox', { name: '+ Add column' }));
     fireEvent.click(await screen.findByRole('option', { name: 'Data' }));
@@ -97,6 +105,9 @@ describe('ColumnsConfigurator', () => {
     fireEvent.click(screen.getByRole('combobox', { name: '+ Add column' }));
     fireEvent.click(await screen.findByRole('option', { name: 'Formula' }));
     expect(handleAddCol).toHaveBeenCalledWith('formula');
+
+    fireEvent.click(within(screen.getAllByTestId('column-card')[0]).getByRole('button', { name: 'Duplicate column C1' }));
+    expect(handleDuplicateCol).toHaveBeenCalledWith('C1');
 
     fireEvent.click(screen.getByRole('combobox', { name: '+ Add column' }));
     fireEvent.click(await screen.findByRole('option', { name: 'Mix %' }));

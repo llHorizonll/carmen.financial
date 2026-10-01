@@ -1,5 +1,5 @@
 import React from "react";
-import { Eye, EyeOff, GripVertical, Trash2 } from "lucide-react";
+import { Copy, Eye, EyeOff, GripVertical, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils.js";
 import { Button } from "@/components/ui/button.jsx";
 import {
@@ -99,11 +99,14 @@ export default function ColumnsConfigurator({
   activeReport,
   reportOptions = EMPTY_REPORT_OPTIONS,
   handleAddCol,
+  handleDuplicateCol,
   handleUpdateCol,
   updateActiveReport,
   handleDeleteCol,
   setConfirmAction,
 }) {
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const columnElementsRef = React.useRef(new Map());
   const columnsCountRef = React.useRef(activeReport.columns.length);
 
   React.useEffect(() => {
@@ -212,6 +215,31 @@ export default function ColumnsConfigurator({
       new Map(activeReport.columns.map((column, index) => [column.id, index])),
     [activeReport.columns],
   );
+  const normalizedSearch = searchQuery.trim().toLocaleLowerCase();
+  const matchingColumns = normalizedSearch
+    ? displayColumns.filter((column) => {
+        if (column.isDescription) {
+          return "description row description".includes(normalizedSearch);
+        }
+        const index = columnIndexById.get(column.id) ?? -1;
+        const logicType = getColumnLogicType(column);
+        return [
+          `c${index + 1}`,
+          column.id,
+          column.label,
+          logicType,
+          logicTypeLabels.get(logicType),
+          column.type,
+          column.formula,
+          column.targetCol,
+        ].join(" ").toLocaleLowerCase().includes(normalizedSearch);
+      })
+    : [];
+  const matchingColumnIds = React.useMemo(
+    () => new Set(matchingColumns.map((column) => column.id)),
+    [matchingColumns],
+  );
+  const firstMatchingColumnId = matchingColumns[0]?.id;
   const displayColumnIds = displayColumns.map((column) => column.id);
   const hiddenColumnCount = activeReport.columns.filter(
     (column) => column.isActive === false,
@@ -252,6 +280,14 @@ export default function ColumnsConfigurator({
       itemLabel: (id) =>
         id === "__description__" ? "Description column" : `column ${id}`,
     });
+  React.useEffect(() => {
+    if (!normalizedSearch || !firstMatchingColumnId) return;
+    columnElementsRef.current.get(firstMatchingColumnId)?.scrollIntoView?.({
+      behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? "auto" : "smooth",
+      block: "nearest",
+      inline: "center",
+    });
+  }, [normalizedSearch, firstMatchingColumnId]);
   return (
     <Card className="w-full max-w-full min-h-0 overflow-hidden border border-border bg-card/95 shadow-none ring-0 pt-0">
       <CardHeader className="border-b bg-card/95 px-4 py-4 sm:px-5">
@@ -273,16 +309,34 @@ export default function ColumnsConfigurator({
               moves.
             </CardDescription>
           </div>
-          <Select value="" onValueChange={(value) => handleAddCol(value)}>
-            <SelectTrigger className="w-full sm:w-44" aria-label="+ Add column">
-              <SelectValue placeholder="+ Add Column" />
-            </SelectTrigger>
-            <SelectContent position="popper">
-              <SelectItem value="data">{logicTypeLabels.get("DATA") || "Data"}</SelectItem>
-              <SelectItem value="formula">{logicTypeLabels.get("FORMULA") || "Formula"}</SelectItem>
-              <SelectItem value="percent">{logicTypeLabels.get("MIX") || "Mix %"}</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+            <div className="w-full sm:w-56">
+              <Input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search columns…"
+                aria-label="Search columns by reference, name, type, or formula"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              {normalizedSearch ? (
+                <span className="whitespace-nowrap text-xs text-muted-foreground" aria-live="polite">
+                  {matchingColumns.length} {matchingColumns.length === 1 ? "match" : "matches"}
+                </span>
+              ) : null}
+              <Select value="" onValueChange={(value) => handleAddCol(value)}>
+                <SelectTrigger className="w-full sm:w-44" aria-label="+ Add column">
+                  <SelectValue placeholder="+ Add Column" />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  <SelectItem value="data">{logicTypeLabels.get("DATA") || "Data"}</SelectItem>
+                  <SelectItem value="formula">{logicTypeLabels.get("FORMULA") || "Formula"}</SelectItem>
+                  <SelectItem value="percent">{logicTypeLabels.get("MIX") || "Mix %"}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </div>
       </CardHeader>
 
@@ -313,9 +367,13 @@ export default function ColumnsConfigurator({
                 return (
                   <section
                     key={col.id}
+                    ref={(element) => {
+                      if (element) columnElementsRef.current.set(col.id, element);
+                      else columnElementsRef.current.delete(col.id);
+                    }}
                     {...getItemProps(col.id)}
                     data-testid="description-column-card"
-                    className="column-card flex min-h-0 w-[310px] shrink-0 flex-col rounded-xl border border-border bg-card transition-[opacity,box-shadow,transform] duration-200 ease-out data-[dragging=true]:opacity-40 data-[drag-over=true]:ring-2 data-[drag-over=true]:ring-primary/40 motion-reduce:transition-none"
+                    className={cn("column-card flex min-h-0 w-[310px] shrink-0 flex-col rounded-xl border border-border bg-card transition-[opacity,box-shadow,transform] duration-200 ease-out data-[dragging=true]:opacity-40 data-[drag-over=true]:ring-2 data-[drag-over=true]:ring-primary/40 motion-reduce:transition-none", normalizedSearch && matchingColumnIds.has(col.id) && "ring-2 ring-primary/40")}
                   >
                     <header className="flex w-full flex-row items-center justify-between gap-2 overflow-hidden rounded-t-xl border-b border-border bg-muted/30 px-3 py-2.5">
                       <h3 className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -373,12 +431,17 @@ export default function ColumnsConfigurator({
               return (
                 <section
                   key={col.id}
+                  ref={(element) => {
+                    if (element) columnElementsRef.current.set(col.id, element);
+                    else columnElementsRef.current.delete(col.id);
+                  }}
                   {...getItemProps(col.id)}
                   data-testid="column-card"
                   className={cn(
                     "column-card flex min-h-0 w-[310px] shrink-0 flex-col rounded-xl border border-border bg-card transition-[opacity,box-shadow,transform] duration-200 ease-out data-[dragging=true]:opacity-40 data-[drag-over=true]:ring-2 data-[drag-over=true]:ring-primary/40 motion-reduce:transition-none",
                     col.isActive === false && "border-dashed opacity-60",
                     columnIssues.length > 0 && "border-destructive/60",
+                    normalizedSearch && matchingColumnIds.has(col.id) && "ring-2 ring-primary/40",
                   )}
                 >
                   {/* Card Header: identify, reorder, and control the column */}
@@ -446,6 +509,16 @@ export default function ColumnsConfigurator({
                         }
                       >
                         <Trash2 className="size-3.5 text-destructive" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon-sm"
+                        className="h-7 w-7"
+                        aria-label={`Duplicate column ${col.id}`}
+                        title={`Duplicate column ${col.id}`}
+                        onClick={() => handleDuplicateCol(col.id)}
+                      >
+                        <Copy className="size-3.5" />
                       </Button>
                       <Button
                         variant="ghost"

@@ -1,5 +1,5 @@
 import React, { forwardRef, useImperativeHandle, useState } from 'react';
-import { LoaderCircle, Save, Undo2 } from 'lucide-react';
+import { LoaderCircle, RotateCcw, Save, Undo2 } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import { Button } from '@/components/ui/button.jsx';
 import ReportDetailsPanel from './ReportDetailsPanel.jsx';
@@ -47,9 +47,13 @@ const ReportSetup = forwardRef(function ReportSetup(props, ref) {
             {props.isDirty ? 'Unsaved changes' : 'All changes saved'}
           </span>
         </p>
-        <nav data-tour="setup-save" aria-label="Save or cancel report settings" className="flex w-full items-center gap-2 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-lg data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary lg:w-auto lg:justify-self-end">
-          <Button className="flex-1 lg:flex-none" size="sm" type="button" variant="outline" onClick={props.onCancel} disabled={!props.isDirty || props.isSaving}>
+        <nav data-tour="setup-save" aria-label="Save or cancel report settings" className="flex w-full flex-wrap items-center gap-2 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-lg data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary lg:w-auto lg:justify-self-end">
+          <Button className="flex-1 lg:flex-none" size="sm" type="button" variant="outline" onClick={props.onUndo} disabled={!props.canUndo || props.isSaving} title="Undo the last setup change">
             <Undo2 />
+            Undo
+          </Button>
+          <Button className="flex-1 lg:flex-none" size="sm" type="button" variant="outline" onClick={props.onCancel} disabled={!props.isDirty || props.isSaving}>
+            <RotateCcw />
             Cancel changes
           </Button>
           <Button className="flex-1 lg:flex-none" size="sm" type="button" onClick={props.onSave} disabled={!props.isDirty || props.isSaving}>

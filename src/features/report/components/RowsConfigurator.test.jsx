@@ -10,6 +10,7 @@ describe('RowsConfigurator', () => {
 
   it('adds and edits rows, and queues row deletion confirmation', async () => {
     const handleAddRow = vi.fn();
+    const handleDuplicateRow = vi.fn();
     const handleUpdateRow = vi.fn();
     const handleUpdateRowMulti = vi.fn();
     const moveRow = vi.fn();
@@ -50,6 +51,7 @@ describe('RowsConfigurator', () => {
           ],
         }}
         handleAddRow={handleAddRow}
+        handleDuplicateRow={handleDuplicateRow}
         handleUpdateRow={handleUpdateRow}
         handleUpdateRowMulti={handleUpdateRowMulti}
         moveRow={moveRow}
@@ -64,6 +66,12 @@ describe('RowsConfigurator', () => {
     expect(screen.getByRole('columnheader', { name: 'Type' }).className).toMatch(/w-32/);
     expect(screen.getByRole('columnheader', { name: 'Description' }).className).toMatch(/w-48/);
 
+    fireEvent.change(screen.getByRole('searchbox', { name: /Search rows/i }), { target: { value: 'Total Revenue' } });
+    expect(screen.getByText('1 match')).toBeInTheDocument();
+    expect(screen.getAllByRole('row')).toHaveLength(3);
+    expect(screen.getAllByRole('row')[2]).toHaveClass('ring-2');
+    fireEvent.change(screen.getByRole('searchbox', { name: /Search rows/i }), { target: { value: '' } });
+
     fireEvent.click(screen.getByRole('combobox', { name: '+ Add row' }));
     fireEvent.click(await screen.findByRole('option', { name: 'Data' }));
     expect(handleAddRow).toHaveBeenCalledWith('data');
@@ -75,6 +83,9 @@ describe('RowsConfigurator', () => {
     fireEvent.click(screen.getByRole('combobox', { name: '+ Add row' }));
     fireEvent.click(await screen.findByRole('option', { name: 'Formula' }));
     expect(handleAddRow).toHaveBeenCalledWith('formula');
+
+    fireEvent.click(within(screen.getByDisplayValue('Revenue').closest('tr')).getByRole('button', { name: 'Duplicate row r1' }));
+    expect(handleDuplicateRow).toHaveBeenCalledWith('r1');
 
     const revenueInput = screen.getByDisplayValue('Revenue');
     fireEvent.change(revenueInput, { target: { value: 'Room Revenue' } });
@@ -183,11 +194,11 @@ describe('RowsConfigurator', () => {
     expect(warning.className).toMatch(/break-words/);
     expect(actions).toHaveClass('whitespace-nowrap');
     expect(actions).toContainElement(editButton);
-    expect(actions.querySelectorAll('button')).toHaveLength(3);
+    expect(actions.querySelectorAll('button')).toHaveLength(4);
     expect(editButton).toHaveClass('size-8');
     expect(editButton).not.toHaveTextContent('Edit');
-    expect(editButton.closest('td')).toHaveClass('sticky', 'right-0', 'w-32', 'min-w-32', 'max-w-32');
-    expect(screen.getByRole('columnheader', { name: 'Action' })).toHaveClass('sticky', 'right-0', 'w-32', 'min-w-32', 'max-w-32');
+    expect(editButton.closest('td')).toHaveClass('sticky', 'right-0', 'w-40', 'min-w-40', 'max-w-40');
+    expect(screen.getByRole('columnheader', { name: 'Action' })).toHaveClass('sticky', 'right-0', 'w-40', 'min-w-40', 'max-w-40');
   });
 
   it('summarizes and visually distinguishes hidden rows', () => {

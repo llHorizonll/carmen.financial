@@ -1,6 +1,7 @@
 import React from "react";
 import {
   Calculator,
+  Copy,
   Edit3,
   Eye,
   EyeOff,
@@ -46,6 +47,7 @@ export default function RowsConfigurator({
   activeReport,
   masterData,
   handleAddRow,
+  handleDuplicateRow,
   handleUpdateRow,
   handleUpdateRowMulti,
   moveRow,
@@ -53,6 +55,8 @@ export default function RowsConfigurator({
   setEditingRow,
   setConfirmAction,
 }) {
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const rowElementsRef = React.useRef(new Map());
   const brokenRowReferences = React.useMemo(
     () =>
       findBrokenReferences(activeReport).filter(
@@ -91,6 +95,31 @@ export default function RowsConfigurator({
     row,
     originalIndex,
   }));
+  const normalizedSearch = searchQuery.trim().toLocaleLowerCase();
+  const matchingRows = normalizedSearch
+    ? rowEntries.filter(({ row, originalIndex }) => {
+        const rowType = row.isTotal ? "formula total" : row.isHeader ? "header" : "data";
+        const searchableText = [
+          `r${originalIndex + 1}`,
+          row.id,
+          row.desc,
+          rowType,
+          row.formula,
+          row.percentBase,
+          row.dept,
+          row.deptGroup,
+          row.groups,
+          row.accCodes,
+          ...Array.from({ length: 10 }, (_, index) => row[`dim${index + 1}`]),
+        ].join(" ").toLocaleLowerCase();
+        return searchableText.includes(normalizedSearch);
+      })
+    : [];
+  const matchingRowIds = React.useMemo(
+    () => new Set(matchingRows.map(({ row }) => row.id)),
+    [matchingRows],
+  );
+  const firstMatchingRowId = matchingRows[0]?.row.id;
   const hiddenRowCount = activeReport.rows.filter(
     (row) => row.isActive === false,
   ).length;
@@ -107,6 +136,15 @@ export default function RowsConfigurator({
       axis: "vertical",
       itemLabel: (id) => `row ${id}`,
     });
+
+  React.useEffect(() => {
+    if (!normalizedSearch || matchingRows.length === 0) return;
+    const firstMatch = rowElementsRef.current.get(firstMatchingRowId);
+    firstMatch?.scrollIntoView?.({
+      behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? "auto" : "smooth",
+      block: "center",
+    });
+  }, [normalizedSearch, firstMatchingRowId]);
 
   React.useEffect(() => {
     let scrollTimer;
@@ -150,7 +188,22 @@ export default function RowsConfigurator({
               moves.
             </CardDescription>
           </div>
-          <div className="w-full sm:w-auto">
+          <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+            <div className="w-full sm:w-56">
+              <Input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search rows…"
+                aria-label="Search rows by reference, name, type, or mapping"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              {normalizedSearch ? (
+                <span className="whitespace-nowrap text-xs text-muted-foreground" aria-live="polite">
+                  {matchingRows.length} {matchingRows.length === 1 ? "match" : "matches"}
+                </span>
+              ) : null}
             <Select value="" onValueChange={handleAddRow}>
               <SelectTrigger className="w-full sm:w-44" aria-label="+ Add row">
                 <SelectValue placeholder="+ Add Row" />
@@ -161,6 +214,7 @@ export default function RowsConfigurator({
                 <SelectItem value="formula">Formula</SelectItem>
               </SelectContent>
             </Select>
+            </div>
           </div>
         </div>
       </CardHeader>
@@ -196,7 +250,7 @@ export default function RowsConfigurator({
                 <TableHead className="w-96 min-w-96 max-w-96 whitespace-normal text-xs font-semibold uppercase tracking-wide text-foreground">
                   Row mapping rules
                 </TableHead>
-                <TableHead className="sticky right-0 z-20 w-32 min-w-32 max-w-32 border-l bg-muted text-center align-middle text-xs font-semibold uppercase tracking-wide text-foreground">
+                <TableHead className="sticky right-0 z-20 w-40 min-w-40 max-w-40 border-l bg-muted text-center align-middle text-xs font-semibold uppercase tracking-wide text-foreground">
                   Action
                 </TableHead>
               </TableRow>
@@ -226,6 +280,10 @@ export default function RowsConfigurator({
                 return (
                   <TableRow
                     key={row.id}
+                    ref={(element) => {
+                      if (element) rowElementsRef.current.set(row.id, element);
+                      else rowElementsRef.current.delete(row.id);
+                    }}
                     {...getItemProps(row.id)}
                     className={cn(
                       "row-configurator-row border-b border-border/60 even:bg-muted/20 hover:bg-muted/40 transition-[opacity,box-shadow,transform,background-color] duration-200 ease-out data-[dragging=true]:opacity-40 data-[drag-over=true]:bg-primary/5 data-[drag-over=true]:ring-2 data-[drag-over=true]:ring-inset data-[drag-over=true]:ring-primary/35 motion-reduce:transition-none",
@@ -233,6 +291,7 @@ export default function RowsConfigurator({
                       isHeader && "bg-muted/10",
                       (isPctBroken || isFormulaBroken || rowWarnings.length > 0) && "border-l-2 border-l-destructive/70",
                       row.isActive === false && "opacity-60",
+                      normalizedSearch && matchingRowIds.has(row.id) && "ring-2 ring-inset ring-primary/40",
                     )}
                   >
                     <TableCell className="px-2 py-2 align-middle">
@@ -429,7 +488,7 @@ export default function RowsConfigurator({
                         </section>
                       )}
                     </TableCell>
-                    <TableCell className="sticky right-0 z-10 w-32 min-w-32 max-w-32 border-l bg-background px-2 py-2 text-center align-middle">
+                    <TableCell className="sticky right-0 z-10 w-40 min-w-40 max-w-40 border-l bg-background px-2 py-2 text-center align-middle">
                       <section
                         className="flex items-center justify-center gap-1.5 whitespace-nowrap"
                         aria-label={`Actions for row ${row.id}`}
@@ -488,6 +547,15 @@ export default function RowsConfigurator({
                           }
                         >
                           <Trash2 className="size-3.5 text-destructive" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon-sm"
+                          aria-label={`Duplicate row ${row.id}`}
+                          title={`Duplicate row ${row.id}`}
+                          onClick={() => handleDuplicateRow(row.id)}
+                        >
+                          <Copy className="size-3.5" />
                         </Button>
                       </section>
                     </TableCell>

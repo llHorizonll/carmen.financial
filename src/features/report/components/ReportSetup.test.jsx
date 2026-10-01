@@ -23,6 +23,7 @@ describe('ReportSetup', () => {
   it('shows columns and rows together with save and cancel actions', () => {
     const onSave = vi.fn();
     const onCancel = vi.fn();
+    const onUndo = vi.fn();
     render(
       <ReportSetup
         activeReport={{
@@ -35,14 +36,18 @@ describe('ReportSetup', () => {
         isDirty
         onSave={onSave}
         onCancel={onCancel}
+        onUndo={onUndo}
+        canUndo
       />
     );
 
     expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel changes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     expect(onSave).toHaveBeenCalledOnce();
     expect(onCancel).toHaveBeenCalledOnce();
+    expect(onUndo).toHaveBeenCalledOnce();
 
     expect(screen.getByText('Columns Configurator Content')).toBeInTheDocument();
     expect(screen.getByText('Rows Configurator Content')).toBeInTheDocument();

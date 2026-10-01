@@ -482,6 +482,8 @@ export default function App({ onLogout = null }) {
   const [currentReportId, setCurrentReportId] = useState(null);
   const [setupDraft, setSetupDraft] = useState(null);
   const [isSetupDirty, setIsSetupDirty] = useState(false);
+  const [setupUndoHistory, setSetupUndoHistory] = useState([]);
+  const lastSetupUndoGroupRef = useRef(null);
   const [editingRow, setEditingRow] = useState(null);
   const [detailSelecting, setDetailSelecting] = useState(null);
   const [modalAccCategory, setModalAccCategory] = useState("ALL");
@@ -515,6 +517,8 @@ export default function App({ onLogout = null }) {
   useEffect(() => {
     setSetupDraft(activeReport);
     setIsSetupDirty(false);
+    setSetupUndoHistory([]);
+    lastSetupUndoGroupRef.current = null;
   }, [activeReport?.id]);
   useEffect(() => {
     if (!currentUser?.id || !reportsLoaded) return;
@@ -820,6 +824,16 @@ export default function App({ onLogout = null }) {
 
   const updateActiveReport = (updates) => {
     if (!activeReport) return;
+    const now = Date.now();
+    const groupKey = Object.keys(updates).sort().join(",");
+    const lastGroup = lastSetupUndoGroupRef.current;
+    if (lastGroup?.key !== groupKey || now - lastGroup.time > 700) {
+      setSetupUndoHistory((history) => [...history.slice(-49), {
+        report: structuredClone(setupReport),
+        isDirty: isSetupDirty,
+      }]);
+    }
+    lastSetupUndoGroupRef.current = { key: groupKey, time: now };
     setSetupDraft((currentDraft) => ({
       ...(currentDraft?.id === activeReport.id ? currentDraft : activeReport),
       ...updates,
@@ -845,6 +859,8 @@ export default function App({ onLogout = null }) {
       );
       setSetupDraft(savedReport);
       setIsSetupDirty(false);
+      setSetupUndoHistory([]);
+      lastSetupUndoGroupRef.current = null;
       setReportCatalogError(null);
       applyTabChange("report");
     } catch (error) {
@@ -858,6 +874,8 @@ export default function App({ onLogout = null }) {
           );
           setSetupDraft(latestReport);
           setIsSetupDirty(false);
+          setSetupUndoHistory([]);
+          lastSetupUndoGroupRef.current = null;
           clearCarmenApiFailure();
           setReportCatalogError(
             "This report was updated by another user. The latest version has been reloaded; please review and save again.",
@@ -888,6 +906,18 @@ export default function App({ onLogout = null }) {
   const discardSetupChanges = () => {
     setSetupDraft(activeReport);
     setIsSetupDirty(false);
+    setSetupUndoHistory([]);
+    lastSetupUndoGroupRef.current = null;
+    setReportCatalogError(null);
+  };
+
+  const handleUndoSetup = () => {
+    const previous = setupUndoHistory[setupUndoHistory.length - 1];
+    if (!previous || isSetupSaving) return;
+    setSetupDraft(previous.report);
+    setIsSetupDirty(previous.isDirty);
+    setSetupUndoHistory((history) => history.slice(0, -1));
+    lastSetupUndoGroupRef.current = null;
     setReportCatalogError(null);
   };
 
@@ -1138,6 +1168,27 @@ export default function App({ onLogout = null }) {
     });
   };
 
+  const handleDuplicateCol = (columnId) => {
+    const source = setupReport.columns.find((column) => column.id === columnId);
+    if (!source) return;
+    const descriptionPosition = Number(setupReport.descriptionPosition);
+    updateActiveReport({
+      columns: [
+        ...setupReport.columns,
+        {
+          ...source,
+          id: `${source.id}-copy-${Date.now()}`,
+          label: `Copy of ${source.label || source.id}`,
+          isActive: true,
+        },
+      ],
+      ...(Number.isInteger(descriptionPosition) &&
+      descriptionPosition === setupReport.columns.length
+        ? { descriptionPosition: descriptionPosition + 1 }
+        : {}),
+    });
+  };
+
   const handleAddRow = (type) => {
     const lastRow =
       setupReport.rows.length > 0
@@ -1164,6 +1215,22 @@ export default function App({ onLogout = null }) {
       indent: lastRow ? lastRow.indent : 0,
     };
     updateActiveReport({ rows: [...setupReport.rows, newRow] });
+  };
+
+  const handleDuplicateRow = (rowId) => {
+    const source = setupReport.rows.find((row) => row.id === rowId);
+    if (!source) return;
+    updateActiveReport({
+      rows: [
+        ...setupReport.rows,
+        {
+          ...source,
+          id: `r-${Date.now()}`,
+          desc: `Copy of ${source.desc || source.id}`,
+          isActive: true,
+        },
+      ],
+    });
   };
 
   const handleDeleteRow = (rowId) => {
@@ -2045,6 +2112,8 @@ export default function App({ onLogout = null }) {
                             );
                             setSetupDraft(restored);
                             setIsSetupDirty(false);
+                            setSetupUndoHistory([]);
+                            lastSetupUndoGroupRef.current = null;
                             setReportCatalogError(null);
                           }}
                         />
@@ -2356,10 +2425,14 @@ export default function App({ onLogout = null }) {
                           );
                           setSetupDraft(restored);
                           setIsSetupDirty(false);
+                          setSetupUndoHistory([]);
+                          lastSetupUndoGroupRef.current = null;
                           setReportCatalogError(null);
                         }}
                         onSave={handleSaveSetup}
                         onCancel={handleCancelSetup}
+                        onUndo={handleUndoSetup}
+                        canUndo={setupUndoHistory.length > 0}
                         onBusyTransition={triggerPageTransition}
                         onOpenImport={() => handleTabChange("import")}
                         handleCloneReport={handleCloneReport}
@@ -2370,6 +2443,8 @@ export default function App({ onLogout = null }) {
                         moveCol={moveCol}
                         handleDeleteCol={handleDeleteCol}
                         handleAddRow={handleAddRow}
+                        handleDuplicateRow={handleDuplicateRow}
+                        handleDuplicateCol={handleDuplicateCol}
                         handleUpdateRow={handleUpdateRow}
                         handleUpdateRowMulti={handleUpdateRowMulti}
                         moveRow={moveRow}
