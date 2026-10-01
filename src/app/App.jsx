@@ -624,6 +624,10 @@ export default function App({ onLogout = null }) {
         }
         return apiData;
       } catch (error) {
+        if (requestId === latestReportDataRequestRef.current && isSessionExpiredError(error) && typeof onLogout === "function") {
+          onLogout();
+          return null;
+        }
         const message =
           error.message || `Unable to load Carmen ${source} data.`;
         if (requestId === latestReportDataRequestRef.current)
@@ -634,7 +638,7 @@ export default function App({ onLogout = null }) {
           setIsLoading(false);
       }
     },
-    [apiConfigured, activeReport, activeReportUsesDayFilter, periodOptions],
+    [apiConfigured, activeReport, activeReportUsesDayFilter, periodOptions, onLogout],
   );
 
   useEffect(() => {

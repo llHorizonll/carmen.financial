@@ -357,6 +357,7 @@ describe('App shell', () => {
   });
 
   it('uses Apply as the only report data refresh action', async () => {
+    const onLogout = vi.fn();
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.getStoredCarmenSession.mockReturnValue({
       user: {
@@ -435,7 +436,7 @@ describe('App shell', () => {
       },
     ]);
 
-    render(<App />);
+    render(<App onLogout={onLogout} />);
     await waitFor(() => expect(screen.getAllByText('API Sync Report').length).toBeGreaterThan(0));
     await waitFor(() => expect(reportApiMocks.fetchCarmenReportData).toHaveBeenCalled());
     expect(await screen.findByRole('dialog', { name: 'Loading report data' })).toBeInTheDocument();
@@ -472,6 +473,13 @@ describe('App shell', () => {
 
     expect(screen.queryByRole('button', { name: /^GL$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^BUD$/i })).not.toBeInTheDocument();
+
+    reportApiMocks.fetchCarmenReportData.mockRejectedValue(Object.assign(
+      new Error('Your Carmen session expired. Please sign in again.'),
+      { kind: 'session', status: 401 },
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    await waitFor(() => expect(onLogout).toHaveBeenCalledOnce());
   });
 
   it('keeps the newest report data when an older request finishes later', async () => {

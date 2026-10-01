@@ -1,6 +1,6 @@
 import React from 'react';
 import { Settings2 } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card.jsx';
+import { CardDescription } from '@/components/ui/card.jsx';
 import { Input } from '@/components/ui/input.jsx';
 import { Textarea } from '@/components/ui/textarea.jsx';
 import { Label } from '@/components/ui/label.jsx';
@@ -51,15 +51,15 @@ export default function ReportDetailsPanel({
       }));
 
   return (
-    <Card className="border border-border shadow-none ring-0">
-      <CardHeader className="flex flex-col gap-3 border-b pb-5 lg:flex-row lg:items-start lg:justify-between">
+    <section className="space-y-5">
+      <header className="flex flex-col gap-3 border-b border-border pb-5 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <CardTitle className="flex items-center gap-2 text-xl font-semibold text-balance text-foreground"><Settings2 className="size-5 text-muted-foreground" />{activeReport.name}</CardTitle>
+          <h2 className="flex items-center gap-2 text-xl font-semibold text-balance text-foreground"><Settings2 className="size-5 text-muted-foreground" />{activeReport.name}</h2>
           <CardDescription className="mt-1 text-sm text-pretty text-muted-foreground"><span className="font-medium text-foreground">Report Details</span> and display labels.</CardDescription>
         </div>
-      </CardHeader>
+      </header>
 
-      <CardContent className="space-y-5 pt-0">
+      <div className="space-y-5">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <div className="space-y-2">
             <Label className="text-foreground">Report Name</Label>
@@ -114,7 +114,7 @@ export default function ReportDetailsPanel({
           <Textarea id="report-remark" value={activeReport.remark || ''} onChange={(e) => updateActiveReport({ remark: e.target.value })} />
         </div>
 
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }

@@ -65,7 +65,7 @@ const ReportSetup = forwardRef(function ReportSetup(props, ref) {
         </section>
         <section data-tour="setup-configurator" className="grid gap-5 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-xl data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary">
           <section className="w-full min-w-0 overflow-hidden"><ColumnsConfigurator {...props} /></section>
-          <section className="w-full min-w-0 overflow-hidden"><RowsConfigurator {...props} /></section>
+          <section className="w-full min-w-0"><RowsConfigurator {...props} /></section>
         </section>
       </div>
       <GettingStartedTour
