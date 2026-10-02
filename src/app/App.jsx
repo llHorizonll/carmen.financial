@@ -17,6 +17,7 @@ import {
   ChevronRight,
   Check,
   Monitor,
+  Type,
   Building2,
   ZoomIn,
   ZoomOut,
@@ -372,12 +373,26 @@ const writeStoredReports = (reports) => {
 // ============================================================================
 // 1. MAIN APPLICATION
 // ============================================================================
+const FONT_SIZE_OPTIONS = [
+  ["small", "Small", 14, "size-3"],
+  ["normal", "Normal", 16, "size-3.5"],
+  ["big", "Big", 18, "size-4"],
+  ["bigger", "Bigger", 20, "size-4.5"],
+  ["biggest", "Biggest", 22, "size-5"],
+];
+
 export default function App({ onLogout = null }) {
   const [activeTab, setActiveTab] = useState("report");
   const [tabMotionDirection, setTabMotionDirection] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [themeMode, setThemeMode] = useState(() => getStoredTheme());
+  const [fontSize, setFontSize] = usePersistentState(
+    "carmen_font_size_v1",
+    "normal",
+  );
+  const activeFontSize =
+    FONT_SIZE_OPTIONS.find(([value]) => value === fontSize)?.[2] || 16;
   const [isPageTransitioning, setIsPageTransitioning] = useState(false);
   const [isSetupSaving, setIsSetupSaving] = useState(false);
   const [isGettingStartedOpen, setIsGettingStartedOpen] = useState(false);
@@ -1482,6 +1497,13 @@ export default function App({ onLogout = null }) {
     applyShellTemplate(DEFAULT_SHELL_TEMPLATE, themeMode);
   }, [themeMode]);
 
+  useLayoutEffect(() => {
+    document.documentElement.style.fontSize = `${activeFontSize}px`;
+    return () => {
+      document.documentElement.style.fontSize = "";
+    };
+  }, [activeFontSize]);
+
   useEffect(() => {
     if (themeMode !== "system") return undefined;
     const media = window.matchMedia("(prefers-color-scheme: dark)");
@@ -2009,6 +2031,40 @@ export default function App({ onLogout = null }) {
                           {themeMode === value && (
                             <Check className="ml-auto size-4" />
                           )}
+                        </Button>
+                      ))}
+                    </PopoverContent>
+                  </Popover>
+
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="w-full justify-start text-xs font-normal"
+                      >
+                        <Type className="size-4" />
+                        Font size
+                        <ChevronRight className="ml-auto size-4" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      side="left"
+                      align="start"
+                      className="w-44 gap-1 p-2"
+                    >
+                      {FONT_SIZE_OPTIONS.map(([value, label, , iconSize]) => (
+                        <Button
+                          key={value}
+                          type="button"
+                          variant="ghost"
+                          className="w-full justify-start text-xs"
+                          aria-pressed={fontSize === value}
+                          onClick={() => setFontSize(value)}
+                        >
+                          <Type className={iconSize} />
+                          <span className="flex-1 text-left">{label}</span>
+                          {fontSize === value && <Check className="size-4" />}
                         </Button>
                       ))}
                     </PopoverContent>
