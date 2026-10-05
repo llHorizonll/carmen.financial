@@ -51,6 +51,15 @@ This repository now uses a small Vite React scaffold with the main application i
 - Confirm Excel export and browser print still produce usable output.
 - Confirm `localStorage` persistence survives a reload.
 
+## Excel Import Guardrails (confirmed with Ohm, 2026-10-05)
+- Preserve Excel import behavior during unrelated UI changes. Do not reset imported row types, formulas, mappings, or multiline column labels.
+- In the Daily Revenue workbook's `DRR REVENUE` sheet, `Total Room Revenue` is a Formula/Total row (`isTotal: true`, `isHeader: false`), not Data. Convert `SUM(C6:C8)` to `R2+R3+R4` in the default imported order. Resolve worksheet references against the actual imported row positions, including after import range changes. Preserve subtotal and Grand Total formulas as well.
+- Formula/Total rows use the report theme's Total styling. Preserve this classification through setup, save, reload, and view.
+- Imported column labels use real newline characters, never ` · ` separators. The first revenue label is `TODAY\nActual`; preserve corresponding `M-T-D` and `Y-T-D` labels.
+- Currency, exchange-rate, and date metadata above the table must not enter column labels (`EXCHANGE RATE`, `DATE:`, and the report date are not header levels). Preserve genuine merged period groups above a Description heading in other templates.
+- Keep regression coverage in `src/features/report/lib/excelTemplateImport.test.js` and `excelTemplateImport.fixtures.test.js`. When changing import, column-label rendering, row-type handling, or shared setup/view behavior, run those tests plus `src/features/report/lib/reportLogic.test.js` and `src/features/report/components/ReportView.test.jsx`.
+- Do not weaken or remove these expectations to accommodate a UI redesign; a requested change in import behavior must be explicit.
+
 <!-- ASTRYX:START -->
 Astryx v0.1.9 · 153 components
 CLI: run every command as `bunx astryx <cmd>` (shown below as `astryx ...`).
