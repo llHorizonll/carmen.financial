@@ -10,6 +10,26 @@ import {
 } from "./excelTemplateImport.js";
 
 describe("Excel template import", () => {
+  it("starts column labels at the table heading instead of currency and date metadata", () => {
+    const matrix = [
+      ['CURRENCY', 'THB', 'EXCHANGE RATE', 1, '', '', 'DATE:', '01-Sep-26'],
+      ['Description', '', 'TODAY', '', '', '', 'Y-T-D', ''],
+      ['Room Revenue', '', 'Actual', 'forecast', 'Variance', 'Last Year', 'Actual', 'forecast'],
+      ['Rooms', '', 100, 90, 10, 80, 200, 180],
+      ['Other Rooms', '', 20, 10, 10, 10, 30, 20],
+    ];
+    const cells = [];
+    cells['!merges'] = [
+      { s: { r: 1, c: 2 }, e: { r: 1, c: 5 } },
+      { s: { r: 1, c: 6 }, e: { r: 1, c: 7 } },
+    ];
+    const sheet = analyzeExcelSheet('DRR REVENUE', matrix, cells, new Map(), { descriptionColumn: 'A' });
+    expect(sheet.detectedColumns.map(c => c.label)).toEqual([
+      'TODAY\nActual', 'TODAY\nforecast', 'TODAY\nVariance', 'TODAY\nLast Year',
+      'Y-T-D\nActual', 'Y-T-D\nforecast',
+    ]);
+  });
+
   it("imports revenue totals using imported row positions and Total styling", () => {
     const matrix = [
       ['Description', 'Actual', 'Budget', 'Variance'],

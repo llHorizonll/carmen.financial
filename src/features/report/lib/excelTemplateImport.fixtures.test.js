@@ -73,22 +73,22 @@ describe("Excel template import fixtures", () => {
         .find((sheet) => sheet.name === "Sum Room")
         .detectedColumns.map((column) => column.label),
     ).toEqual([
-      "CURRENT MONTH · LAST YEAR · BHT",
-      "CURRENT MONTH · LAST YEAR · %",
-      "CURRENT MONTH · VARIANCE · BHT",
-      "CURRENT MONTH · VARIANCE · %",
-      "CURRENT MONTH · BUDGET · BHT",
-      "CURRENT MONTH · BUDGET · %",
-      "CURRENT MONTH · ACTUAL · BHT",
-      "CURRENT MONTH · ACTUAL · %",
-      "YEAR TO DATE · ACTUAL · BHT",
-      "YEAR TO DATE · ACTUAL · %",
-      "YEAR TO DATE · BUDGET · BHT",
-      "YEAR TO DATE · BUDGET · %",
-      "YEAR TO DATE · VARIANCE · BHT",
-      "YEAR TO DATE · VARIANCE · %",
-      "YEAR TO DATE · LAST YEAR · BHT",
-      "YEAR TO DATE · LAST YEAR · %",
+      "CURRENT MONTH\nLAST YEAR\nBHT",
+      "CURRENT MONTH\nLAST YEAR\n%",
+      "CURRENT MONTH\nVARIANCE\nBHT",
+      "CURRENT MONTH\nVARIANCE\n%",
+      "CURRENT MONTH\nBUDGET\nBHT",
+      "CURRENT MONTH\nBUDGET\n%",
+      "CURRENT MONTH\nACTUAL\nBHT",
+      "CURRENT MONTH\nACTUAL\n%",
+      "YEAR TO DATE\nACTUAL\nBHT",
+      "YEAR TO DATE\nACTUAL\n%",
+      "YEAR TO DATE\nBUDGET\nBHT",
+      "YEAR TO DATE\nBUDGET\n%",
+      "YEAR TO DATE\nVARIANCE\nBHT",
+      "YEAR TO DATE\nVARIANCE\n%",
+      "YEAR TO DATE\nLAST YEAR\nBHT",
+      "YEAR TO DATE\nLAST YEAR\n%",
     ]);
     expectValidIndents(workbook);
   });
@@ -114,13 +114,13 @@ describe("Excel template import fixtures", () => {
     ).toEqual([
       "NET REVENUE",
       "COST",
-      "COST · %",
+      "COST\n%",
       "PAYROLL",
-      "PAYROLL · %",
+      "PAYROLL\n%",
       "OTHER EXPENSE",
-      "OTHER EXPENSE · %",
+      "OTHER EXPENSE\n%",
       "INCOME (LOSS)",
-      "INCOME (LOSS) · %",
+      "INCOME (LOSS)\n%",
     ]);
     expectValidIndents(workbook);
   });

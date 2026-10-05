@@ -402,7 +402,27 @@ const detectColumns = (
   );
   const headerEnd =
     firstDataRow >= 0 ? firstDataRow : Math.min(12, matrix.length);
-  const headerStart = Math.max(0, headerEnd - 8);
+  // A description heading marks the start of the table; currency/date metadata
+  // above it must not become part of the report's column labels.
+  const descriptionHeaderRow = matrix.slice(0, headerEnd).findLastIndex(
+    (row) => DESCRIPTION_HEADER.test(cleanText(row[descriptionColumn])),
+  );
+  let tableHeaderStart = descriptionHeaderRow;
+  // Some templates put merged period groups one level above Description.
+  // Keep those groups only when every populated report cell belongs to a
+  // multi-column group that does not cross the description column.
+  while (tableHeaderStart > 0) {
+    const previousRow = tableHeaderStart - 1;
+    const populated = reportCandidates.filter(
+      ({ columnIndex }) => cleanText(matrix[previousRow]?.[columnIndex]) !== '',
+    );
+    if (populated.length < 2 || !populated.every(({ columnIndex }) => merges.some(
+      ({ s, e }) => s.r === previousRow && e.r === previousRow && s.c === columnIndex && e.c > s.c &&
+        (e.c < descriptionColumn || s.c > descriptionColumn),
+    ))) break;
+    tableHeaderStart = previousRow;
+  }
+  const headerStart = Math.max(0, headerEnd - 8, tableHeaderStart);
   const qualifyingHeaderRows = Array.from(
     { length: headerEnd - headerStart },
     (_, index) => headerStart + index,
@@ -465,9 +485,9 @@ const detectColumns = (
       .filter((value, index, items) => items.indexOf(value) === index);
     if (headerRows.length > 0 && headerParts.length === 0) return;
     let label =
-      headerParts.join(" · ") || `Excel column ${candidate.columnIndex + 1}`;
+      headerParts.join("\n") || `Excel column ${candidate.columnIndex + 1}`;
     if (/^(?:%|percent)$/i.test(label) && columns.length > 0) {
-      label = `${columns.at(-1).label.replace(/ · %$/, "")} · %`;
+      label = `${columns.at(-1).label.replace(/\n%$/, "")}\n%`;
     }
     const lowerLabel = label.toLowerCase();
     const isPercent = /%|percent/.test(lowerLabel) && columns.length > 0;
