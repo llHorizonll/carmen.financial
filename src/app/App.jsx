@@ -2486,6 +2486,7 @@ export default function App({ onLogout = null }) {
                           setReportCatalogError(null);
                         }}
                         onSave={handleSaveSetup}
+                        onBack={() => handleTabChange("report")}
                         onCancel={handleCancelSetup}
                         onUndo={handleUndoSetup}
                         canUndo={setupUndoHistory.length > 0}

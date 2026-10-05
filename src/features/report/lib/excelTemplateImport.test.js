@@ -10,6 +10,41 @@ import {
 } from "./excelTemplateImport.js";
 
 describe("Excel template import", () => {
+  it("imports revenue totals using imported row positions and Total styling", () => {
+    const matrix = [
+      ['Description', 'Actual', 'Budget', 'Variance'],
+      ['Room Revenue', '', '', ''],
+      ['Revenue rooms', 100, 90, 10],
+      ['Revenue Other Rooms', 20, 10, 10],
+      ['Discount Other Rooms', -5, -2, -3],
+      ['', '', '', ''],
+      ['Total Room Revenue', 115, 98, 17],
+      ['Grand Total Revenue', 115, 98, 17],
+    ];
+    const cells = matrix.map(() => []);
+    cells[2][1] = { f: '_xll.DAC(DB)' };
+    cells[2][3] = { f: 'B3-C3' };
+    cells[6][1] = { f: 'SUM($B$3:$B$5)' };
+    cells[6][2] = { f: 'SUM(C3:C5)' };
+    cells[7][1] = { f: '+B7' };
+    const sheet = analyzeExcelSheet('DRR REVENUE', matrix, cells, new Map(), { descriptionColumn: 'A' });
+    expect(sheet.detectedRows.find(r => r.desc === 'Total Room Revenue')).toMatchObject({
+      isTotal: true, isHeader: false, formula: 'R2+R3+R4', indent: 0,
+    });
+    expect(sheet.detectedRows.find(r => r.desc === 'Grand Total Revenue').formula).toBe('+R5');
+    expect(sheet.detectedRows.find(r => r.desc === 'Revenue rooms').isTotal).toBe(false);
+    const configured = configureExcelSheetImport({ ...sheet, source: { matrix, cellMatrix: cells, cellStyles: new Map() } }, { ...sheet.importConfig, dataStartRow: 3 });
+    expect(configured.detectedRows.find(r => r.desc === 'Total Room Revenue').formula).toBe('R1+R2+R3');
+  });
+
+  it("flags excluded row references and leaves unsupported Excel formulas as data", () => {
+    const matrix = [['Description', 'Actual', 'Budget'], ['Rooms', 10, 5], ['Total', 10, 5], ['Unsupported', 0, 0]];
+    const cells = [[], [], [, { f: 'SUM(B2:B2)' }], [, { f: 'IF(B2>0,B2,0)' }]];
+    const sheet = analyzeExcelSheet('Revenue', matrix, cells, new Map(), { descriptionColumn: 'A', dataStartRow: 3 });
+    expect(sheet.detectedRows[0]).toMatchObject({ isTotal: true, formula: '!REF!' });
+    expect(sheet.detectedRows[1]).toMatchObject({ isTotal: false, formula: '' });
+  });
+
   it("classifies imported reports from data column types", () => {
     const columnSets = [
       [{ type: "DAC" }, { type: "DACBG" }, { type: "PTDBG" }, { type: "YTDBG" }],

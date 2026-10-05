@@ -646,6 +646,42 @@ const getExcelIndent = (cell, style, original) => {
     : Math.min(7, Math.max(1, Math.round(leadingSpaces / 5)));
 };
 
+// Translate worksheet references only after the imported row order is known.
+const importRowFormulas = (rows, sourceRowNumbers, cellMatrix, columns, sourceColumnIndexes) => {
+  const rowRefs = new Map(sourceRowNumbers.map((number, index) => [number, `R${index + 1}`]));
+  rows.forEach((row, index) => {
+    for (let colIndex = 0; colIndex < columns.length; colIndex += 1) {
+      if (columns[colIndex].isFormula || columns[colIndex].isPercent) continue;
+      const sourceColumn = sourceColumnIndexes[colIndex];
+      const sourceFormula = cellMatrix[sourceRowNumbers[index] - 1]?.[sourceColumn]?.f;
+      if (!sourceFormula) continue;
+      let formula = sourceFormula.replace(/^=/, '').replace(/\s/g, '').toUpperCase();
+      let valid = true;
+      let hasReference = false;
+      formula = formula.replace(/SUM\(([^()]*)\)/g, (_, args) => {
+        const terms = args.split(',').map((arg) => {
+          const range = arg.match(/^\$?([A-Z]+)\$?(\d+):\$?([A-Z]+)\$?(\d+)$/);
+          if (!range) return arg;
+          if (range[1] !== range[3] || Number(range[2]) > Number(range[4])) { valid = false; return ''; }
+          return Array.from({ length: Number(range[4]) - Number(range[2]) + 1 }, (_, offset) => `${range[1]}${Number(range[2]) + offset}`).join('+');
+        });
+        return `(${terms.join('+')})`;
+      });
+      formula = formula.replace(/\$?([A-Z]+)\$?(\d+)/g, (_, column, number) => {
+        hasReference = true;
+        if (excelColumnToIndex(column) !== sourceColumn || Number(number) === sourceRowNumbers[index]) valid = false;
+        return rowRefs.get(Number(number)) || '!REF!';
+      });
+      if (!valid || !hasReference || !/^(?:R\d+|!REF!|[\d.+\-*/()])+$/.test(formula)) continue;
+      row.formula = /^SUM\([^()]*\)$/i.test(sourceFormula.replace(/^=/, '')) ? formula.slice(1, -1) : formula;
+      row.isTotal = true;
+      row.isHeader = false;
+      row.indent = 0;
+      break;
+    }
+  });
+};
+
 const detectRows = (
   sheetName,
   matrix,
@@ -993,6 +1029,7 @@ export const analyzeExcelSheet = (
     excludedMappingColumns,
     options,
   );
+  importRowFormulas(rows, sourceRowNumbers, cellMatrix, columns, sourceColumnIndexes);
   const populatedRows = new Set();
   const populatedColumns = new Set();
   const reportColumnIndexes = new Set(sourceColumnIndexes);
