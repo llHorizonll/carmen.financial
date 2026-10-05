@@ -5,7 +5,7 @@ import { fileURLToPath, URL } from 'node:url';
 
 export default defineConfig({
   plugins: [tailwindcss(), react()],
-  base: '/financial2/',
+  base: '/financial/',
   server: {
     proxy: {
       '/Carmen.Api2': {
