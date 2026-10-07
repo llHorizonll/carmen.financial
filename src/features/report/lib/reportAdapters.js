@@ -351,6 +351,10 @@ const normalizeReportRow = (row) => {
   const dimensions = normalizeReportRowDimensions(row);
   const rowTypeValue = row.Type ?? row.type ?? '';
   const rowTypeFlags = normalizeRowTypeFlags(rowTypeValue, row);
+  const requestedNumberFormat = row.numberFormat ?? row.NumberFormat;
+  const numberFormat = requestedNumberFormat === 'percent' && rowTypeFlags.isTotal
+      ? 'percent'
+      : 'column';
   const normalizedRow = {
     ...row,
     desc: row.desc || row.Description || row.Desc || row.description || row.name || '',
@@ -360,7 +364,7 @@ const normalizeReportRow = (row) => {
     groupLevel: String(row.groupLevel || row.GroupLevel || 'L4').trim().toUpperCase() || 'L4',
     groups: normalizeRowStringList(row.groups || row.Groups || row.Group || row.group),
     percentBase: String(row.percentBase || row.PercentBase || '').trim().toUpperCase(),
-    numberFormat: ['number', 'percent'].includes(row.numberFormat ?? row.NumberFormat) ? (row.numberFormat ?? row.NumberFormat) : 'column',
+    numberFormat,
     formula: String(row.formula || row.Formula || '').trim().toUpperCase(),
     indent: Number.isFinite(Number(row.indent ?? row.Indent)) ? Number(row.indent ?? row.Indent) : 0,
     isActive: row.isActive !== false && row.IsActive !== false,

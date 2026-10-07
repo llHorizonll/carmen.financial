@@ -93,8 +93,13 @@ describe('RowsConfigurator', () => {
 
     const revenueRow = revenueInput.closest('tr');
     fireEvent.click(screen.getByRole('combobox', { name: 'Number format R1' }));
+    expect(screen.queryByRole('option', { name: 'Percent (%)' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Number' })).not.toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Number format R2' }));
     fireEvent.click(await screen.findByRole('option', { name: 'Percent (%)' }));
-    expect(handleUpdateRow).toHaveBeenCalledWith('r1', 'numberFormat', 'percent');
+    expect(handleUpdateRow).toHaveBeenCalledWith('r2', 'numberFormat', 'percent');
 
     fireEvent.click(within(revenueRow).getByRole('button', { name: 'Move row R1 to position' }));
     fireEvent.change(screen.getByLabelText('New position'), { target: { value: '2' } });

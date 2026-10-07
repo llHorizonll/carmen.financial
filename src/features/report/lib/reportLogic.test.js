@@ -64,7 +64,7 @@ describe('reportLogic helpers', () => {
     expect(formatReportCell(row, { id: 'C2', isPercent: true })).toBe('(46.25%)');
     expect(formatReportCell(row, { id: 'C2', formatAsPercent: true })).toBe('(46.25%)');
     expect(formatReportCell(row, { id: 'C3' })).toBe('—');
-    expect(formatReportCell({ ...row, numberFormat: 'number' }, { id: 'C1' })).toBe('0.50');
+    expect(formatReportCell({ ...row, numberFormat: 'column' }, { id: 'C1' })).toBe('0.50');
   });
 
   it('keeps occupancy ratios numeric and exports percentage formatting', () => {

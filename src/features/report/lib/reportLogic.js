@@ -1019,7 +1019,7 @@ export const formatReportCell = (row, col) => {
   const raw = row.results?.[col.id];
   if (raw === null) return '—';
   const columnPercent = Boolean(col.isPercent || col.formatAsPercent);
-  const percent = col.isPercent || row.numberFormat === 'percent' || (row.numberFormat !== 'number' && columnPercent);
+  const percent = row.numberFormat === 'percent' || columnPercent;
   const value = (Number(raw) || 0) * (!columnPercent && row.numberFormat === 'percent' ? 100 : 1);
   const text = percent
     ? `${Math.abs(value).toFixed(2)}%`

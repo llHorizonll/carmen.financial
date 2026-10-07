@@ -246,8 +246,17 @@ const normalizeReportRowDimensions = (row) => {
 const normalizeReportRowForPayload = (row) => {
   if (!row || typeof row !== 'object') return row;
   const dimensions = normalizeReportRowDimensions(row);
+  const normalizedType = String(row.type ?? row.Type ?? '').trim().toUpperCase();
+  const isFormulaRow = row.isTotal === true || ['F', 'FORMULA', 'TOTAL'].includes(normalizedType);
+  const requestedNumberFormat = row.numberFormat ?? row.NumberFormat;
+  const numberFormat = requestedNumberFormat == null || requestedNumberFormat === ''
+    ? null
+    : requestedNumberFormat === 'percent' && isFormulaRow
+        ? 'percent'
+        : 'column';
   return {
     ...row,
+    ...(numberFormat ? { numberFormat } : {}),
     ...(dimensions.length > 0 ? { dimensions } : {}),
   };
 };

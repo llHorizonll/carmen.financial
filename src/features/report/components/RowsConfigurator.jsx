@@ -303,6 +303,7 @@ export default function RowsConfigurator({
                             handleUpdateRowMulti(row.id, {
                               isTotal: false,
                               isHeader: false,
+                              numberFormat: "column",
                             });
                           else if (value === "H")
                             handleUpdateRowMulti(row.id, {
@@ -310,6 +311,7 @@ export default function RowsConfigurator({
                               isHeader: true,
                               formula: "",
                               percentBase: "",
+                              numberFormat: "column",
                               dept: "",
                               deptGroup: "",
                               accCodes: "",
@@ -402,12 +404,11 @@ export default function RowsConfigurator({
                       ) : null}
                     </TableCell>
                     <TableCell>
-                      {!isHeader && <Select value={row.numberFormat || "column"} onValueChange={(value) => handleUpdateRow(row.id, "numberFormat", value)}>
+                      {!isHeader && <Select value={isTotal && row.numberFormat === "percent" ? "percent" : "column"} onValueChange={(value) => handleUpdateRow(row.id, "numberFormat", value)}>
                         <SelectTrigger aria-label={`Number format R${idx + 1}`}><SelectValue /></SelectTrigger>
                         <SelectContent position="popper">
                           <SelectItem value="column">ตาม Column</SelectItem>
-                          <SelectItem value="number">Number</SelectItem>
-                          <SelectItem value="percent">Percent (%)</SelectItem>
+                          {isTotal && <SelectItem value="percent">Percent (%)</SelectItem>}
                         </SelectContent>
                       </Select>}
                     </TableCell>
