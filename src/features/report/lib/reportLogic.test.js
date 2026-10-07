@@ -20,9 +20,72 @@ import {
   moveDisplayColumnsAndRewriteReferences,
   moveRowsAndRewriteReferences,
   buildExcelHtml,
+  formatReportCell,
 } from './reportLogic.js';
 
 describe('reportLogic helpers', () => {
+  it('resolves REVPAR from a later total and nested forward references in each period column', () => {
+    const rows = Array.from({ length: 26 }, (_, index) => ({ id: `r${index + 1}`, isHeader: true }));
+    rows[1] = { id: 'r2', accCodes: '4001' };
+    rows[11] = { id: 'r12', isTotal: true, formula: 'R26/R2' };
+    rows[15] = { id: 'r16', isTotal: true, formula: 'R18+R19' };
+    rows[17] = { id: 'r18', accCodes: '4002' };
+    rows[18] = { id: 'r19', accCodes: '4003' };
+    rows[25] = { id: 'r26', isTotal: true, formula: 'R16' };
+    const result = buildReportData({
+      activeReport: { rows, columns: [{ id: 'C1', type: 'AC' }, { id: 'C2', type: 'ACC' }] },
+      engineData: [
+        { year: '2025', acccode: '4001', bfamt2: 20, amt2: 80 },
+        { year: '2025', acccode: '4002', bfamt2: 3000, amt2: 8000 },
+        { year: '2025', acccode: '4003', bfamt2: 2000, amt2: 2000 },
+      ], budgetData: [], appliedDepts: [], appliedYear: '2025', appliedPeriod: '2', masterData: INITIAL_MASTER_DATA,
+    });
+    expect(result[25].results).toEqual({ C1: 10000, C2: 15000 });
+    expect(result[11].results).toEqual({ C1: 125, C2: 150 });
+  });
+
+  it('marks circular row formulas and dependent cells unavailable without affecting other rows', () => {
+    const result = buildReportData({
+      activeReport: { rows: [
+        { id: 'r1', isTotal: true, formula: 'R2+1' },
+        { id: 'r2', isTotal: true, formula: 'R1+1' },
+        { id: 'r3', isTotal: true, formula: 'R1/2' },
+        { id: 'r4', isTotal: true, formula: '10/2' },
+        { id: 'r5', isTotal: true, formula: 'R5' },
+      ], columns: [{ id: 'C1', type: 'AC' }, { id: 'C2', isFormula: true, formula: 'C1*2' }] },
+      engineData: [], budgetData: [], appliedDepts: [], appliedYear: '2025', appliedPeriod: '2', masterData: INITIAL_MASTER_DATA,
+    });
+    for (const index of [0, 1, 2, 4]) expect(result[index].results).toEqual({ C1: null, C2: null });
+    expect(result[3].results).toEqual({ C1: 5, C2: 10 });
+  });
+  it('formats row ratios without scaling percentage columns twice', () => {
+    const row = { numberFormat: 'percent', results: { C1: 0.5, C2: -46.25, C3: null } };
+    expect(formatReportCell(row, { id: 'C1' })).toBe('50.00%');
+    expect(formatReportCell(row, { id: 'C2', isPercent: true })).toBe('(46.25%)');
+    expect(formatReportCell(row, { id: 'C2', formatAsPercent: true })).toBe('(46.25%)');
+    expect(formatReportCell(row, { id: 'C3' })).toBe('—');
+    expect(formatReportCell({ ...row, numberFormat: 'number' }, { id: 'C1' })).toBe('0.50');
+  });
+
+  it('keeps occupancy ratios numeric and exports percentage formatting', () => {
+    const columns = [{ id: 'C1', label: 'Actual', type: 'AC' }, { id: 'C2', label: 'Variance', isFormula: true, formula: 'C1' }];
+    const activeReport = { name: 'Occupancy', rows: [
+      { id: 'available', accCodes: '4001' },
+      { id: 'occupied', accCodes: '4002' },
+      { id: 'ratio', desc: 'Occupancy', isTotal: true, formula: 'R2/R1', numberFormat: 'percent' },
+    ], columns };
+    const inputs = { activeReport, engineData: [
+      { year: '2025', acccode: '4001', amt2: 80 },
+      { year: '2025', acccode: '4002', amt2: 40 },
+    ], budgetData: [], appliedDepts: [], appliedYear: '2025', appliedPeriod: '2', masterData: INITIAL_MASTER_DATA };
+    const reportData = buildReportData(inputs);
+    expect(reportData[2].results.C1).toBe(0.5);
+    expect(reportData[2].results.C2).toBe(0.5);
+    expect(buildExcelHtml({ activeReport, activeCols: columns, reportData, themeColors: THEMES.blue })).toContain('50.00%');
+    const empty = buildReportData({ ...inputs, engineData: [] });
+    expect(empty[2].results.C1).toBeNull();
+    expect(empty[2].results.C2).toBeNull();
+  });
   it('reconciles actual and budget account detail to direct report cells', () => {
     const row = { id: 'r1', desc: 'Revenue', dept: '101', accCodes: '4001,4002', groups: '', isHeader: false, isTotal: false };
     const actual = { id: 'C1', label: 'Actual', type: 'AC', yearMode: 'current', periodMode: 'current' };

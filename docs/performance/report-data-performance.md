@@ -4,7 +4,50 @@ Status: frontend and backend source changes implemented; backend deployment and 
 Measured: 2026-08-17, authenticated local browser session  
 Scope: View-mode report loading through `GET /api/report-data`
 
-## Outcome
+## Follow-up investigation — 2026-10-07 (Asia/Bangkok)
+
+Prepared implementation and test evidence are recorded in [2026-10-07 source/build verification](report-data-performance-2026-10-07.md). No new backend deployment or completed live latency gate is claimed.
+
+This section records current evidence separately from the historical 2026-08-17 baseline below. Earlier implementation and verification statements are historical, not proof that the current IIS deployment contains those changes. This documentation task does not change application code, deploy builds, or modify database objects.
+
+### Environment and evidence
+
+| Layer | Target |
+| --- | --- |
+| Frontend | `C:\source\carmen.financial`; browser `http://localhost:5173/financial/` |
+| Backend source | `C:\dotnet\Carmen4\Carmen.WebApi`; endpoint `http://localhost/Carmen.WebApi/api/report-data` |
+| Database | `a_804f0906ceaf4862e87270c99071a747_paresa`, DBX connection `dev` |
+| Daily report | UI name `Daily Revenue - John CAT`, ID observed in requests: `rep-1791277247566` |
+| Financial statement | User calls it `Financial Statement - John CAT`; sidebar previously displayed `Finnacial Statement - John CAT`. Confirm exact stored name and ID before measurement. |
+
+The user reports approximately 10 seconds in Network for Daily Revenue and a longer wait for Financial Statement. These are reports of individual waits, not measured p95 or a stage-level diagnosis. Source inspection, local backend SQL logs, and browser observations confirm:
+
+- Daily requests for P2/P9 read journal transactions from `2025-01-01` inclusive to `2027-01-01` exclusive and Budget for years 2025/2026, revision 0. The selected Day does not narrow this journal query. Scope depends on the report's required years; do not generalize this interval to every report.
+- One P9/Day30 log interval from journal-query logging to budget-query logging was about 2.5 seconds. It is not an isolated database execution measurement or total response time.
+- Frontend now reuses the last successfully loaded source dataset for a Day change within identical report definition, report ID, year, period, revision and department scope. Applying the same Day explicitly refreshes the API. Changed scope or an in-flight/failed refresh does not reuse that dataset. The Apply-triggered effect no longer makes a duplicate request.
+- Browser P9 Day1 → Day30 reuse showed no Loading dialog; the header read `As of September 30, 2026`. Hotel/Resort Today Actual was 0 and Actual MTD was 10,000. This proves the observed workflow, not API latency improvement.
+- DBX inspection found `JvhDate_Status_I`, `Status_JvhDate_I`, `JvhSeq_I`, `Anniversary_AccCode_DeptCode_I`, `Year_Revision_AccCode_DeptCode_I` and `Year_Revision_DeptCode_AccCode_I` already present on the corresponding journal/history/budget tables. Do not add these indexes again.
+- A read-only EXPLAIN of a projected VBudget query with Year IN (2025,2026), Revision IN (0) showed a derived table and `Using temporary`; the budget base-table estimate was 1,314 rows. This projection is a preliminary probe, not the exact production SELECT. An optimizer choosing a scan at this size is not proof of a bottleneck or a missing index.
+
+Backend-stage timings, exact response sizes, Financial Statement's execution path, and correspondence between source and the IIS-serving build remain unverified. Use the [execution checklist](report-data-performance-checklist.md) to collect that evidence.
+
+### Current API contract baseline
+
+Authenticated `GET /api/report-data` accepts `reportId`, `year`, `period`, `revision`, comma-separated `deptIds`, and `day`; tenant selection uses the existing `useTenant` flow. Successful JSON includes `year`, `period`, `revision`, `day`, `years`, `actualRows`, and `budgetRows`. Frontend passes actual/budget source rows into the report engine. Source rows carry the account/department, period/year, amount, group and dimension information used by mappings; daily and monthly source shapes must be captured separately before projection.
+
+This round does not change the response schema or introduce server caching. If a later optimization narrows returned coverage, the frontend Day-reuse policy must be updated together with an explicit coverage contract; never silently reuse an incomplete dataset.
+
+### Ordered implementation gates
+
+1. Verify actual deployed builds and report IDs, then measure authentication/tenant and permission checks, report metadata, Actual query/materialization, Budget query/materialization, normalization, serialization, and total API duration. Record row counts and response bytes without secrets or transaction dumps.
+2. Inspect exact generated queries and EXPLAIN for both reports through DBX. Identify the dominant stage before selecting the optimization.
+3. Reduce projection and apply conservative mapping/time filters. Preserve DAC/PTD/MTD/YTD/Last Year, brought-forward balances, dimensions, fiscal boundaries and all source coverage required for Day reuse. Unresolved mappings retain the safe broad path.
+4. Evaluate SQL aggregation or index changes only with execution-plan and equivalence evidence. Maintain account/department/group/dimension membership, budget revisions and accounting precision. Existing indexes are evidence, not a guarantee of a good plan.
+5. Consider server caching only after the uncached path is measured and improved. A later cache design must specify authorization/tenant isolation, complete keys, freshness, invalidation and explicit refresh behavior before implementation.
+
+Acceptance targets are API p95 ≤ 3 seconds and report-ready p95 ≤ 5 seconds, using at least 20 samples per primary report/filter scenario. Record missed targets and the remaining dominant stage. Cached Day switches are a separate metric and cannot satisfy the uncached API gate. Prepare baseline artifacts, deployment checks and rollback verification before changing code or database objects.
+
+## Historical outcome — 2026-08-17
 
 Report loading is materially slower than an interactive BI workflow should be. For the measured report, the API is the primary bottleneck and the browser-side calculation is a secondary bottleneck. The work should optimize both layers, while keeping the FRD v5.23 four-pass calculation result exactly unchanged.
 

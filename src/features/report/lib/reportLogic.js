@@ -264,7 +264,7 @@ const evaluateArithmeticExpression = (expression) => {
   const value = parseExpression();
   skipWhitespace();
   if (index !== sanitized.length) throw new Error('Unexpected token');
-  return Number.isFinite(value) ? value : 0;
+  return value;
 };
 
 const INDENT_CLASSES = ['pl-0', 'pl-4', 'pl-8', 'pl-12', 'pl-16', 'pl-20', 'pl-24', 'pl-28'];
@@ -698,20 +698,34 @@ const sumBudget = ({ col, matchedRows, appliedYear, appliedPeriod, appliedDay, a
 };
 
 const applyFormulaRows = (rows, columns, rowRefMap) => {
-  rows.filter(r => r.isTotal).forEach(row => {
-    columns.filter(c => !c.isFormula && !c.isPercent).forEach(col => {
-      let evalStr = row.formula?.toUpperCase() || '';
-      (evalStr.match(/R\d+/g) || []).forEach(v => {
-        const idx = parseInt(v.replace('R', ''), 10) - 1;
-        evalStr = evalStr.replace(new RegExp(`\\b${v}\\b`, 'g'), (rows[idx] && rowRefMap[rows[idx].id][col.id]) || 0);
-      });
+  columns.filter(c => !c.isFormula && !c.isPercent).forEach(col => {
+    const resolving = new Set();
+    const resolved = new Set();
+    // Resolve dependencies in this column before evaluating the caller,
+    // regardless of where the referenced row appears in the report.
+    const resolveRow = (row) => {
+      if (!row) return 0;
+      if (!row.isTotal) return rowRefMap[row.id][col.id] || 0;
+      if (resolved.has(row.id)) return rowRefMap[row.id][col.id];
+      if (resolving.has(row.id)) throw new Error('Circular row formula');
+      resolving.add(row.id);
       try {
+        const evalStr = String(row.formula || '').toUpperCase().replace(/\bR(\d+)\b/g, (_, position) => {
+          const value = resolveRow(rows[Number(position) - 1]);
+          if (value === null) throw new Error('Unavailable row formula');
+          return `(${value})`;
+        });
         const res = evaluateArithmeticExpression(evalStr);
-        rowRefMap[row.id][col.id] = (!isFinite(res) || isNaN(res)) ? 0 : res;
-      } catch {
-        rowRefMap[row.id][col.id] = 0;
+        rowRefMap[row.id][col.id] = Number.isFinite(res) ? res : (row.numberFormat === 'percent' ? null : 0);
+      } catch (error) {
+        rowRefMap[row.id][col.id] = ['Circular row formula', 'Unavailable row formula'].includes(error.message) ? null : 0;
+      } finally {
+        resolving.delete(row.id);
+        resolved.add(row.id);
       }
-    });
+      return rowRefMap[row.id][col.id];
+    };
+    rows.filter(row => row.isTotal).forEach(resolveRow);
   });
 };
 
@@ -817,17 +831,21 @@ export const buildReportData = ({
     const resolved = new Set();
     const resolveColumn = (col) => {
       if (!col) return 0;
+      if (rowRefMap[row.id][col.id] === null) return null;
       if (!col.isFormula) return rowRefMap[row.id][col.id] || 0;
       if (resolved.has(col.id)) return rowRefMap[row.id][col.id] || 0;
       if (resolving.has(col.id)) throw new Error('Circular column formula');
       resolving.add(col.id);
       try {
-        const expression = String(col.formula || '').toUpperCase().replace(/\bC(\d+)\b/g, (_, position) =>
-          String(resolveColumn(columns[Number(position) - 1])));
+        const expression = String(col.formula || '').toUpperCase().replace(/\bC(\d+)\b/g, (_, position) => {
+          const value = resolveColumn(columns[Number(position) - 1]);
+          if (value === null) throw new Error('Unavailable ratio');
+          return String(value);
+        });
         const result = evaluateArithmeticExpression(expression);
-        rowRefMap[row.id][col.id] = Number.isFinite(result) ? result : 0;
-      } catch {
-        rowRefMap[row.id][col.id] = 0;
+        rowRefMap[row.id][col.id] = Number.isFinite(result) ? result : (row.numberFormat === 'percent' ? null : 0);
+      } catch (error) {
+        rowRefMap[row.id][col.id] = error.message === 'Unavailable ratio' || row.numberFormat === 'percent' ? null : 0;
       } finally {
         resolving.delete(col.id);
         resolved.add(col.id);
@@ -996,6 +1014,19 @@ export const getReportDisplayColumns = (activeReport, columns = activeReport?.co
   return displayColumns;
 };
 
+// Row percentages store ratios (0.5); existing percentage columns store points (50).
+export const formatReportCell = (row, col) => {
+  const raw = row.results?.[col.id];
+  if (raw === null) return '—';
+  const columnPercent = Boolean(col.isPercent || col.formatAsPercent);
+  const percent = col.isPercent || row.numberFormat === 'percent' || (row.numberFormat !== 'number' && columnPercent);
+  const value = (Number(raw) || 0) * (!columnPercent && row.numberFormat === 'percent' ? 100 : 1);
+  const text = percent
+    ? `${Math.abs(value).toFixed(2)}%`
+    : Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return value < 0 ? `(${text})` : text;
+};
+
 export const buildExcelHtml = ({ activeReport, activeCols, displayCompanyLabel, displayDateLabel, displayPeriodLabel, reportData, themeColors }) => {
   const displayColumns = getReportDisplayColumns(activeReport, activeCols);
   let tableHtml = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"></head><body>`;
@@ -1029,10 +1060,7 @@ export const buildExcelHtml = ({ activeReport, activeCols, displayCompanyLabel, 
         tableHtml += `<td></td>`;
       } else {
         const val = Number(row.results?.[col.id]) || 0;
-        const isDisplayPercent = col.isPercent || col.formatAsPercent;
-        const displayVal = isDisplayPercent
-          ? (val < 0 ? `(${Math.abs(val).toFixed(2)}%)` : val.toFixed(2) + '%')
-          : (val < 0 ? `(${Math.abs(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})` : val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+        const displayVal = formatReportCell(row, col);
         const colorStyle = val < 0 ? 'color: red;' : '';
         tableHtml += `<td style="text-align: right; ${colorStyle}">${displayVal}</td>`;
       }

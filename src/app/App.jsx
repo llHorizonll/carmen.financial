@@ -485,6 +485,7 @@ export default function App({ onLogout = null }) {
   const pageTransitionTimerRef = useRef(null);
   const reportDataFetchSkipRef = useRef(false);
   const latestReportDataRequestRef = useRef(0);
+  const loadedReportDataRef = useRef(null);
   const masterDataLoadKeysRef = useRef(new Set());
   const reportCatalogLoadRef = useRef(false);
 
@@ -624,7 +625,18 @@ export default function App({ onLogout = null }) {
         }
       }
 
+      const dataScope = JSON.stringify([activeReport, reportId || activeReport.id, year, period, revision, [...(deptIds || [])].sort()]);
+      const loaded = loadedReportDataRef.current;
+      // The API returns the full source period/year, so only a day change
+      // within the same report/filter scope can reuse the loaded dataset.
+      // Applying the same day explicitly still refreshes from the server.
+      if (loaded?.scope === dataScope && loaded.day !== String(day)) {
+        loadedReportDataRef.current = { ...loaded, day: String(day) };
+        setAlertMsg(null);
+        return loaded.data;
+      }
       const requestId = ++latestReportDataRequestRef.current;
+      loadedReportDataRef.current = null;
       setIsLoading(true);
       try {
         const apiData = await fetchCarmenReportData({
@@ -637,6 +649,7 @@ export default function App({ onLogout = null }) {
         });
 
         if (requestId === latestReportDataRequestRef.current) {
+          loadedReportDataRef.current = { scope: dataScope, day: String(day), data: apiData };
           setEngineData(apiData.actualRows || []);
           setBudgetData(apiData.budgetRows || []);
           setAlertMsg(null);
@@ -879,27 +892,6 @@ export default function App({ onLogout = null }) {
       setReportCatalogError(null);
       applyTabChange("report");
     } catch (error) {
-      if (error?.status === 409 && setupReport?.id) {
-        try {
-          const latestReport = await fetchCarmenReport(setupReport.id);
-          setReports((currentReports) =>
-            currentReports.map((report) =>
-              report.id === latestReport.id ? latestReport : report,
-            ),
-          );
-          setSetupDraft(latestReport);
-          setIsSetupDirty(false);
-          setSetupUndoHistory([]);
-          lastSetupUndoGroupRef.current = null;
-          clearCarmenApiFailure();
-          setReportCatalogError(
-            "This report was updated by another user. The latest version has been reloaded; please review and save again.",
-          );
-          return;
-        } catch {
-          // Keep the original conflict message when the refresh also fails.
-        }
-      }
       setReportCatalogError(
         error.message || "Unable to save report definition.",
       );
@@ -970,13 +962,9 @@ export default function App({ onLogout = null }) {
     const nextDepts = [...globalDepts];
     const nextRevision = activeReportUsesBudget ? globalRevision : "0";
     const nextDay = activeReportUsesDayFilter ? String(globalDay).trim() : "";
-    const filtersChanged =
-      String(appliedYear) !== String(globalYear) ||
-      String(appliedPeriod) !== String(globalPeriod) ||
-      String(appliedRevision) !== String(nextRevision) ||
-      String(activeReportDay) !== nextDay ||
-      nextDepts.join("|") !== appliedDepts.join("|");
-    if (apiConfigured && filtersChanged) reportDataFetchSkipRef.current = true;
+    // Apply owns the request; the new department array also triggers the
+    // effect when filter values are unchanged, so skip that duplicate load.
+    if (apiConfigured) reportDataFetchSkipRef.current = true;
     setAppliedDepts(nextDepts);
     setAppliedYear(globalYear);
     setAppliedPeriod(globalPeriod);
@@ -1305,7 +1293,18 @@ export default function App({ onLogout = null }) {
   const selectedPeriodCode = `P${String(appliedPeriod).padStart(2, "0")}`;
   const displayCompanyLabel =
     activeReport?.companyName || masterData.companyProfile.name;
-  const autoDateLabel = selectedAppliedPeriod?.dateLabel
+  const dailyReportDate = activeReportUsesDayFilter && activeReportDay
+    ? new Date(Number(appliedYear), Number(appliedPeriod) - 1, Number(activeReportDay))
+    : null;
+  if (dailyReportDate && selectedAppliedPeriod?.date) {
+    const periodStart = new Date(selectedAppliedPeriod.date);
+    if (!Number.isNaN(periodStart.getTime())) {
+      dailyReportDate.setFullYear(periodStart.getFullYear(), periodStart.getMonth(), Number(activeReportDay));
+    }
+  }
+  const autoDateLabel = dailyReportDate && !Number.isNaN(dailyReportDate.getTime())
+    ? `As of ${dailyReportDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`
+    : selectedAppliedPeriod?.dateLabel
     ? `As of ${selectedAppliedPeriod.dateLabel}`
     : `As of ${formatAutoPeriod(appliedYear, appliedPeriod, "end_of_month")}`;
   const displayDateLabel =

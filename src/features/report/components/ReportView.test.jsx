@@ -5,6 +5,15 @@ import ReportView from './ReportView.jsx';
 import { THEMES, getIndentClass } from '../lib/reportLogic.js';
 
 describe('ReportView', () => {
+  it('renders percentage rows alongside numeric rows and percentage columns', () => {
+    render(<ReportView activeReport={{ name: 'Occupancy' }} reportData={[
+      { id: 'rooms', desc: 'Rooms', results: { C1: 80, C2: 25 } },
+      { id: 'ratio', desc: 'Occupancy', isTotal: true, numberFormat: 'percent', results: { C1: 0.5, C2: 30 } },
+    ]} activeCols={[{ id: 'C1', label: 'Actual', type: 'AC' }, { id: 'C2', label: 'Mix', isPercent: true }]} currentTheme={THEMES.blue} tableZoom={100} getIndentClass={getIndentClass} />);
+    expect(screen.getByText('80.00')).toBeInTheDocument();
+    expect(screen.getByText('50.00%')).toBeInTheDocument();
+    expect(screen.getByText('30.00%')).toBeInTheDocument();
+  });
   it('renders report headers and values', () => {
     const onViewModeChange = vi.fn();
     render(

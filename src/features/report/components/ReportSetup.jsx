@@ -44,7 +44,7 @@ const ReportSetup = forwardRef(function ReportSetup(props, ref) {
         <section aria-label="Report navigation and save status" className="flex flex-wrap items-center gap-3">
           <Button size="sm" type="button" variant="outline" onClick={props.onBack} disabled={props.isSaving}>
             <ArrowLeft />
-            Back to view
+            Back
           </Button>
           <p className="flex items-center gap-2 text-sm" aria-live="polite">
             <span className={cn('size-2 rounded-full', props.isDirty ? 'bg-amber-500' : 'bg-emerald-500')} />

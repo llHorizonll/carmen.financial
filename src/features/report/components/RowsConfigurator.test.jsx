@@ -92,6 +92,9 @@ describe('RowsConfigurator', () => {
     expect(handleUpdateRow).toHaveBeenCalledWith('r1', 'desc', 'Room Revenue');
 
     const revenueRow = revenueInput.closest('tr');
+    fireEvent.click(screen.getByRole('combobox', { name: 'Number format R1' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Percent (%)' }));
+    expect(handleUpdateRow).toHaveBeenCalledWith('r1', 'numberFormat', 'percent');
 
     fireEvent.click(within(revenueRow).getByRole('button', { name: 'Move row R1 to position' }));
     fireEvent.change(screen.getByLabelText('New position'), { target: { value: '2' } });

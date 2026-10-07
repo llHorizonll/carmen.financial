@@ -9,7 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table.jsx';
-import { buildReportDrilldown, getReportDisplayColumns } from '../lib/reportLogic.js';
+import { buildReportDrilldown, getReportDisplayColumns, formatReportCell } from '../lib/reportLogic.js';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet.jsx';
 import ReportViewModeToggle from './ReportViewModeToggle.jsx';
 
@@ -136,7 +136,7 @@ export default function ReportView({
                           return <TableCell key={col.id} className={`border-r ${currentTheme.cellBorder}`} />;
                         }
 
-                        const isDisplayPercent = col.isPercent || col.formatAsPercent;
+                        const displayValue = formatReportCell(row, col);
 
                         return (
                           <TableCell
@@ -145,11 +145,9 @@ export default function ReportView({
                           >
                             {['AC', 'BC'].includes(String(col.type || '').toUpperCase()) && !row.isTotal && !col.isFormula && !col.isPercent ? (
                               <button type="button" className="w-full cursor-pointer text-right underline-offset-2 hover:underline focus-visible:underline" aria-label={`View ${row.desc} ${col.label} breakdown`} onClick={() => setSelectedCell({ row, col, value: val })}>
-                                {val < 0 ? `(${Math.abs(val).toLocaleString(undefined, { minimumFractionDigits: 2 })})` : val.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                {displayValue}
                               </button>
-                            ) : isDisplayPercent
-                              ? (val < 0 ? `(${Math.abs(val).toFixed(2)}%)` : `${val.toFixed(2)}%`)
-                              : (val < 0 ? `(${Math.abs(val).toLocaleString(undefined, { minimumFractionDigits: 2 })})` : val.toLocaleString(undefined, { minimumFractionDigits: 2 }))}
+                            ) : displayValue}
                           </TableCell>
                         );
                       })}

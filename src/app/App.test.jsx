@@ -1776,6 +1776,15 @@ describe('App shell', () => {
     expect(reportApiMocks.fetchCarmenReportData).toHaveBeenLastCalledWith(
       expect.objectContaining({ day: '1' })
     );
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Loading report data' })).not.toBeInTheDocument());
+    const initialCalls = reportApiMocks.fetchCarmenReportData.mock.calls.length;
+    fireEvent.change(screen.getByLabelText('Day'), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    await waitFor(() => expect(screen.getByText('As of February 2, 2025')).toBeInTheDocument());
+    expect(reportApiMocks.fetchCarmenReportData).toHaveBeenCalledTimes(initialCalls);
+    // Applying the same date remains an explicit refresh.
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    await waitFor(() => expect(reportApiMocks.fetchCarmenReportData).toHaveBeenCalledTimes(initialCalls + 1));
   });
 
   it('downloads an Excel-compatible report from the toolbar', async () => {
@@ -1900,7 +1909,8 @@ describe('App shell', () => {
     expect(reportApiMocks.fetchCarmenReportData).toHaveBeenCalledTimes(callsBeforeInvalidApply);
     fireEvent.change(screen.getByLabelText('Day'), { target: { value: '2' } });
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
-    await waitFor(() => expect(reportApiMocks.fetchCarmenReportData).toHaveBeenCalledWith(expect.objectContaining({ day: '2' })));
+    await waitFor(() => expect(screen.queryByText(/Day must be between 1 and 28/i)).not.toBeInTheDocument());
+    expect(reportApiMocks.fetchCarmenReportData).toHaveBeenCalledTimes(callsBeforeInvalidApply);
   });
 });
 

@@ -247,6 +247,7 @@ export default function RowsConfigurator({
                 <TableHead className="w-24 text-center align-middle text-xs font-semibold uppercase tracking-wide text-foreground">
                   % Base
                 </TableHead>
+                <TableHead className="w-40">Number format</TableHead>
                 <TableHead className="w-96 min-w-96 max-w-96 whitespace-normal text-xs font-semibold uppercase tracking-wide text-foreground">
                   Row mapping rules
                 </TableHead>
@@ -399,6 +400,16 @@ export default function RowsConfigurator({
                           placeholder="R#"
                         />
                       ) : null}
+                    </TableCell>
+                    <TableCell>
+                      {!isHeader && <Select value={row.numberFormat || "column"} onValueChange={(value) => handleUpdateRow(row.id, "numberFormat", value)}>
+                        <SelectTrigger aria-label={`Number format R${idx + 1}`}><SelectValue /></SelectTrigger>
+                        <SelectContent position="popper">
+                          <SelectItem value="column">ตาม Column</SelectItem>
+                          <SelectItem value="number">Number</SelectItem>
+                          <SelectItem value="percent">Percent (%)</SelectItem>
+                        </SelectContent>
+                      </Select>}
                     </TableCell>
                     <TableCell className="w-96 min-w-96 max-w-96 whitespace-normal px-2 py-2 align-middle">
                       {isHeader ? (
