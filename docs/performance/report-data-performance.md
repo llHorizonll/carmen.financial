@@ -8,6 +8,8 @@ Scope: View-mode report loading through `GET /api/report-data`
 
 Prepared implementation and test evidence are recorded in [2026-10-07 source/build verification](report-data-performance-2026-10-07.md). No new backend deployment or completed live latency gate is claimed.
 
+Continuation completed on 2026-10-07: YTD now derives monthly totals from daily transactions; VGlJv aggregates in SQL after filters; VGlHis projects 30 required fields and Actual normalization omits unused Dr/Cr fields. Targeted backend tests: 30 passed. Current read-only probe: 237,968 → 44,061 daily SQL rows (81.48% reduction), identical signed aggregate. See the implementation record's continuation section for exact scope, compatibility limits, reproduction and rollback. These are source/database-probe results, not deployed API measurements.
+
 This section records current evidence separately from the historical 2026-08-17 baseline below. Earlier implementation and verification statements are historical, not proof that the current IIS deployment contains those changes. This documentation task does not change application code, deploy builds, or modify database objects.
 
 ### Environment and evidence

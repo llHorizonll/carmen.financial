@@ -52,6 +52,32 @@ foreach ($variant in @('normal','negative','null','bad-dimension','case-and-alia
     if ($variant -eq 'duplicate-case') { $row['deptcode']='999' }
     foreach ($budget in @($false,$true)) {
         $normalized = $monthly.Invoke($null, [object[]]@($row,$budget,$definitions,$days))
+        if (-not $budget) {
+            # Actual Dr/Cr fields are intentionally omitted; compare every retained field.
+            for ($i=1; $i -le 12; $i++) {
+                $normalized.Remove('dr'+$i) | Out-Null
+                $normalized.Remove('cr'+$i) | Out-Null
+            }
+            if ($variant -in @('normal','negative','null','bad-dimension')) {
+                $monthlySelected = [Collections.Generic.Dictionary[string,object]]::new()
+                foreach ($field in @('PeriodYear','GlpNo','DeptCode','AccCode','AccNature','AccType')) {
+                    if ($row.ContainsKey($field)) { $monthlySelected[$field]=$row[$field] }
+                }
+                for ($i=1; $i -le 12; $i++) {
+                    foreach ($field in @('Amt','BfAmt')) { $monthlySelected[$field+$i]=$row[$field+$i] }
+                }
+                # VGlHis has no Dim column; test its actual view contract.
+                $historyRow = [Collections.Generic.Dictionary[string,object]]::new($row)
+                $historyRow.Remove('Dim') | Out-Null
+                $historyFull = $monthly.Invoke($null, [object[]]@($historyRow,$false,$definitions,$days))
+                $historyProjected = $monthly.Invoke($null, [object[]]@($monthlySelected,$false,$definitions,$days))
+                for ($i=1; $i -le 12; $i++) {
+                    $historyFull.Remove('dr'+$i) | Out-Null; $historyFull.Remove('cr'+$i) | Out-Null
+                    $historyProjected.Remove('dr'+$i) | Out-Null; $historyProjected.Remove('cr'+$i) | Out-Null
+                }
+                if ($historyFull.ToString() -cne $historyProjected.ToString()) { throw "Monthly projection changed fixture $variant" }
+            }
+        }
         $fixtureResults.Add($normalized.ToString())
     }
     $full = $daily.Invoke($null, [object[]]@($row,$ranges,$definitions))
@@ -73,6 +99,6 @@ for ($sample=0; $sample -lt 5; $sample++) {
 }
 $hash = [Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes(($fixtureResults -join "`n")))
 [pscustomobject]@{
-    fixtureCount=$fixtureResults.Count; projection='pass'; rowsPerSample=$Rows
+    fixtureCount=$fixtureResults.Count; projection='pass'; monthlyProjection='pass'; rowsPerSample=$Rows
     normalizationSamplesMs=$samples; fixtureHash=[BitConverter]::ToString($hash).Replace('-','')
 } | ConvertTo-Json -Compress

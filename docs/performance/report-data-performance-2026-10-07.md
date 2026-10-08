@@ -75,8 +75,59 @@ The previous VS 2022 Community installation lacked WebApplication.targets; VS 18
 
 ## Pending release gates
 
+The sections above record the earlier implementation. The continuation below supersedes its no-aggregation statement, seven-field projection-only implementation, Daily monthly-history query, prepared DLL hash and previous test count. Earlier live timing samples remain historical measurements.
+
 - Confirm IIS physical path and serving assembly; user input requested because configuration access was denied.
 - Capture exact SQL and immutable baseline for both reports, measure ≥20 uncached API/report-ready samples per main filter and record response size and stage timings.
 - Validate live before/after cells and source membership, including dimensions, fiscal boundaries, revisions and tenant isolation. Fixture equivalence is not a substitute.
 - Prepare a deployment manifest against the confirmed target, retain its actual serving build/configuration, and rehearse restore before promotion. Do not copy the entire isolated dependency directory into IIS.
 - Only after those gates may the prepared backend be deployed for comparison. No production deployment, cache, cancellation integration, DB write, migration or completed p95 claim was made in this step.
+
+## Continuation — YTD correctness and both source paths, 2026-10-07
+
+### Implementation
+
+- `IncludeMonthlyTotalsForDailyRows` recognizes YTD as requiring monthly Actual rows even without visible AC/ACC. `GetReportDataAsync` also treats a YTD-only report as transaction-based. The unchanged frontend formula is `ACC - AC + PTD`.
+- Daily reports always derive required monthly totals from their normalized daily transactions; the extra VGlHis query is removed. Daily rows remain alongside monthly rows, retaining Day switches and full required-year coverage. Monthly rows have no day/amount, so the existing engine does not count them as daily transactions; daily rows have no amt/bfamt, so they do not double-count monthly totals.
+- `AggregateDailyFinancialRows` groups VGlJv by JvhDate, DeptCode, AccCode, AccNature, TransDrCr and Dim, and sums JvdBAmt. It runs after date, Prefix/Status and requested/mapped department/account filters, before materialization. Nature and debit/credit direction remain separate until the existing normalizer applies the sign. Dim remains part of the SQL grouping. No truncation to the selected Day and no additional history query is introduced. Monthly dimension-mapped reports reuse this transaction path.
+- Monthly VGlHis uses `SelectMonthlyFinancialRows`: PeriodYear, GlpNo, DeptCode, AccCode, AccNature, AccType plus Amt1–12 and BfAmt1–12 (30 of the target view's 66 columns). There is no GROUP BY, DISTINCT or deduplication in this path. Beginning balances come directly from history, not reconstruction. The target view has no Dim, description, revision or caption fields; their prior normalized defaults remain unchanged.
+- Actual normalization and transaction-derived monthly rows omit the unused dr1–12/cr1–12 fields. Targeted searches of report components, adapters, engine and hooks found no consumers. Budget query, fields and normalization behavior remain unchanged, including its Dr/Cr fields. The retained fields and four-pass calculations are unchanged.
+- Existing uncommitted timing/indexing and other work were preserved. No frontend calculation source, controller, database object, IIS configuration or live build was intentionally changed by this continuation.
+
+### Verification and measured scope
+
+Both the legacy WebApi project and its actual test project built with VS 18 MSBuild using isolated output and `BuildProjectReferences=false`. xUnit ran the four requested classes (planner, SQL filters, access policy, definition contract): **30 passed, 0 failed, 0 skipped**. The previously missing aggregation method now compiles. Added checks preserve SQL filters/bindings and all twelve history amount/beginning-balance pairs. The existing YTD regression verifies January totals carried into February's beginning balance.
+
+The updated `scripts/report-normalization-benchmark.ps1` compares every retained Actual field and every Budget field across 18 real-normalizer fixture outputs. It excludes only the deliberately removed Actual Dr/Cr fields from baseline comparisons. It also checks full/projected daily equivalence (six variants) and target-view monthly projection equivalence (four variants). Before/after retained-output SHA256: `D9FE48BA70786CDDA478DEC6DDC188C14A9992299EB99A947B235036BF130143` in both fresh processes.
+
+Synthetic 5,000-row monthly normalization samples (ms): baseline `[264.58,234.42,237.06,235.18,234.09]`; prepared `[190.60,157.85,159.77,156.89,156.92]`. Median **235.18 → 157.85 ms (~32.88% reduction)**. Reflective invocation and synthetic data are included; this is not API latency or a p95 result. Frontend tests were not rerun because no frontend contract/calculation implementation changed; the actual private normalizer fixtures cover retained response-field compatibility. `git diff --check` passed.
+
+Current DBX read-only probe of the same broad calendar interval `[2025-01-01,2027-01-01)` and Prefix <> YE / Status <> 9 found **237,968 raw → 44,061 grouped rows (81.48% reduction)**. Signed totals matched exactly in SQL. These are SQL result counts before normalization/monthly-total appending, not API response counts. The handoff's earlier **237,950 → 44,046 (~81.49%)** is historical; current counts differ and no frozen data snapshot exists. This probe does not prove every report cell or tenant matches.
+
+Reproduction query shape (database above, DBX dev, `--limit 1 --timeout 20s --json`): compare raw COUNT and signed SUM to COUNT and signed SUM of the grouped subquery below. The signed-total equality was evaluated inside SQL; amounts were not printed.
+
+```sql
+SELECT JvhDate, DeptCode, AccCode, AccNature, TransDrCr, Dim,
+       SUM(JvdBAmt) AS JvdBAmt
+FROM a_804f0906ceaf4862e87270c99071a747_paresa.VGlJv
+WHERE JvhDate >= '2025-01-01' AND JvhDate < '2027-01-01'
+  AND Prefix <> 'YE' AND Status <> 9
+GROUP BY JvhDate, DeptCode, AccCode, AccNature, TransDrCr, Dim;
+```
+
+The probe aggregates output locally in SQL; do not dump the grouped transactions into the conversation. DBX information_schema confirmed the 66-column VGlHis contract before implementation.
+
+```powershell
+& 'C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/MSBuild.exe' C:/dotnet/Carmen4/Carmen.WebApi.Test/Carmen.WebApi.Test.csproj /t:Build /p:Configuration=Debug /p:OutputPath=C:/Users/thago/AppData/Local/Temp/carmen-report-perf-20261007/tests/ /p:IntermediateOutputPath=C:/Users/thago/AppData/Local/Temp/carmen-report-perf-20261007/test-obj/ /p:BuildProjectReferences=false /verbosity:quiet /nologo /clp:ErrorsOnly
+& 'C:/dotnet/Carmen4/packages/xunit.runner.console.2.4.1/tools/net452/xunit.console.exe' C:/Users/thago/AppData/Local/Temp/carmen-report-perf-20261007/tests/Carmen.WebApi.Test.dll -class Carmen.WebApi.Test.ReportDataQueryPlannerTests -class Carmen.WebApi.Test.FinancialReportQueryFiltersTests -class Carmen.WebApi.Test.ReportAccessPolicyTests -class Carmen.WebApi.Test.ReportDefinitionContractTests -noshadow
+```
+
+WebApi build and fresh-process benchmark commands are in the earlier reproduction section. Prepared DLL SHA256 at measurement: `8969C96E939A7D4980E02823F920AB5CD2E494F0D706E1DA496CD6EE63A9DA8A`. Benchmark baseline was the existing source-bin DLL, hash `9C8E9DB87115E196CB7E6892A62ADFCBF546A0B17C36E9FBA477E1EB31C8D357`, timestamp 2026-10-07 16:08:28; its serving-IIS identity is unverified. Other concurrent source work means the prepared hash describes that build, not an immutable release manifest.
+
+### Remaining verification and rollback
+
+No deployment was performed. Before rollout, confirm other tenant VGlHis/VGlJv contracts, SQL collation/grouping behavior for code/Dim strings, fiscal boundaries, brought-forward balances, mixed Daily AC/ACC use and all report cells/formulas/percentages against an immutable baseline. Daily mixed monthly columns now intentionally use transaction-derived totals; differences from independently stored history must be investigated, not hidden by formula changes. Budget revisions, access isolation and Day reuse still require live smoke tests. Verify API response size/row counts after appended monthly totals, then ≥20 uncached latency/report-ready samples for both reports. No live improvement or financial-cell parity is claimed from the synthetic and aggregate checks.
+
+Rollback: retain the verified serving DLL/PDB/configuration before any separately authorized deployment; restore that exact build if values, access, failures or latency regress. For source rollback, reverse only the continuation's hunks in FncReportV2, FinancialReportQueryFilters and ReportDataQueryPlanner; preserve unrelated uncommitted work and regression tests. Reverting YTD support reintroduces the known correctness bug, so that older build is not a correctness-approved release. No schema/data rollback is required. Do not copy all isolated dependency DLLs into IIS.
+
+Files touched by this continuation: backend `Functions/FncReportV2.cs`, `Functions/FinancialReportQueryFilters.cs`, `Functions/ReportDataQueryPlanner.cs`, `Carmen.WebApi.Test/FinancialReportQueryFiltersTests.cs`; retained preexisting `ReportDataQueryPlannerTests.cs` YTD regression; frontend `scripts/report-normalization-benchmark.ps1` and the three existing performance documents.

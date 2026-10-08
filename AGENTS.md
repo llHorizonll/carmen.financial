@@ -42,14 +42,35 @@ This repository now uses a small Vite React scaffold with the main application i
 - Keep motion subtle and purposeful: login entrance effects, shell tab transitions, and modal/sheet transitions are acceptable, but avoid animating the report table or other dense data surfaces.
 - Respect reduced-motion preferences whenever adding new animations or transitions.
 
+## Codex Usage Efficiency
+
+Minimize unnecessary token and quota consumption while preserving correctness.
+
+- Use targeted searches instead of scanning the entire repository.
+- Do not repeatedly read files already inspected unless they changed or additional context is required.
+- Reuse information already discovered during the current task.
+- Avoid exploring unrelated files or expanding task scope without a clear reason.
+- Do not inspect generated files, build outputs, node_modules, or large logs unless required.
+- Batch related edits before running validation.
+- Do not run build, lint, typecheck, or tests after every small edit.
+- Prefer the smallest relevant test or validation command.
+- Run broader validation only after the implementation is substantially complete.
+- For large tasks, divide work into small logical phases.
+- Before starting a task likely to require broad repository exploration or many iterations, provide a short plan first.
+- Complete only the requested scope. Do not proactively refactor or improve unrelated code.
+- Stop after the requested task and necessary validation are complete.
+
 ## Verification Checklist
-- Confirm the app loads in both `VIEW` and `SETUP` modes through the Vite entrypoint.
-- Confirm GL CSV upload updates master data and report output.
-- Confirm Budget CSV upload updates report output.
-- Confirm OCR import creates a report template.
-- Confirm report cloning, blank creation, deletion, and access management still work.
-- Confirm Excel export and browser print still produce usable output.
-- Confirm `localStorage` persistence survives a reload.
+
+Apply only the checks relevant to the files or behavior changed by the current task.
+
+- For VIEW/SETUP changes: confirm the affected mode loads correctly.
+- For GL import changes: confirm GL CSV upload updates master data and report output.
+- For Budget import changes: confirm Budget CSV upload updates report output.
+- For OCR import changes: confirm OCR import creates a report template.
+- For report management changes: confirm affected create/clone/delete/access behavior.
+- For export/print changes: confirm the affected output remains usable.
+- For persistence changes: confirm relevant localStorage state survives reload.
 
 ## Excel Import Guardrails (confirmed with Ohm, 2026-10-05)
 - Preserve Excel import behavior during unrelated UI changes. Do not reset imported row types, formulas, mappings, or multiline column labels.

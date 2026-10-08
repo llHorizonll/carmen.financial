@@ -4,6 +4,8 @@ Created: 2026-10-07, Asia/Bangkok. Reference: [investigation and plan](report-da
 
 Implementation evidence: [2026-10-07 source/build record](report-data-performance-2026-10-07.md). Pending gates below remain open even when source tests pass.
 
+Continuation: YTD monthly dependency, filtered Daily SQL aggregation and Monthly projection/normalization are implemented. Current read-only Daily probe: 237,968 → 44,061 rows (81.48%), identical signed totals. Four backend classes: 30 tests passed; actual-normalizer retained-field/Budget fixtures and daily/monthly projection checks passed. WebApi and test-project builds passed. Synthetic monthly median: 235.18 → 157.85 ms. Full financial-cell parity and deployed measurements remain open; these results do not close C01–C08 or P01.
+
 Frontend: `C:\source\carmen.financial`  
 Backend: `C:\dotnet\Carmen4\Carmen.WebApi`  
 Database: `a_804f0906ceaf4862e87270c99071a747_paresa`, DBX connection `dev`.
@@ -35,7 +37,7 @@ Use only `ยังไม่ตรวจ / ผ่าน / ไม่ผ่าน 
 | C06 | Verify rapid navigation/filter changes, duplicate requests, stale responses, timeout/retry and recovery from errors | ยังไม่ตรวจ | — | No stale result wins or stuck Loading state |
 | C07 | Verify tenant/access isolation and data freshness; refresh and changed report definition invalidate reuse | ยังไม่ตรวจ | — | Any later server cache needs separate key/invalidation tests |
 | C08 | Verify VIEW/SETUP, Excel export, Print and Save/Reload | ยังไม่ตรวจ | — | Rendered and exported values/formats agree |
-| C09 | Run frontend engine/import/view/setup/API/App regressions and relevant backend report tests | ผ่าน | 2026-10-07; commands/results in implementation record | Frontend 150; current linked backend source 26; real normalizer fixtures 18; isolated WebApi build passed. Live financial parity still pending |
+| C09 | Run frontend engine/import/view/setup/API/App regressions and relevant backend report tests | ผ่าน | 2026-10-07; commands/results in implementation record | Earlier frontend 150; continuation actual backend test project 30; real normalizer fixtures 18 with retained-field equivalence; daily/monthly projection checks and isolated WebApi/test-project builds passed. No frontend source changes, so frontend suite not rerun. Live financial parity still pending |
 | P01 | API p95 ≤3s and report-ready p95 ≤5s for uncached scenarios, with ≥20 samples each | ยังไม่ตรวจ | — | If missed, record dominant stage and measured gap; do not mark passed from cache results |
 
 ## Results worksheet
