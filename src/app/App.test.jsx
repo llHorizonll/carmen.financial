@@ -726,6 +726,9 @@ describe('App shell', () => {
 
     await waitFor(() => expect(reportApiMocks.fetchCarmenReports).toHaveBeenCalled());
     expect(screen.queryByText('Local Storage Report')).not.toBeInTheDocument();
+    await screen.findByText('catalog unavailable');
+    fireEvent.click(screen.getByRole('button', { name: 'Import Excel' }));
+    expect(await screen.findByRole('heading', { name: 'Excel report import' })).toBeInTheDocument();
   });
 
   it('ignores the revision selector for reports without budget columns', async () => {

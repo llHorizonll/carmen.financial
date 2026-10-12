@@ -276,6 +276,7 @@ body {
 
 @media (pointer: coarse) {
   [data-slot="button"],
+  button[data-slot="popover-trigger"],
   [data-slot="input"],
   [data-slot="select-trigger"] {
     min-height: 2.75rem;

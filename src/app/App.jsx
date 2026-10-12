@@ -2318,7 +2318,7 @@ export default function App({ onLogout = null }) {
 
                     <Button
                       size="sm"
-                      className="h-9 w-full self-end px-3 text-sm"
+                      className="h-9 w-full self-end px-3 text-sm sm:w-auto sm:min-w-24 sm:justify-self-start"
                       onClick={handleApplyFilters}
                       disabled={isLoading}
                     >
@@ -2341,11 +2341,12 @@ export default function App({ onLogout = null }) {
                       Excel
                     </Button>
                     <Button
-                      className={`h-9 w-full px-3 text-sm sm:w-auto ${NEUTRAL_BUTTON_CLASS}`}
+                      className={`h-9 w-full px-3 text-sm sm:w-9 sm:px-0 pointer-coarse:sm:w-11 ${NEUTRAL_BUTTON_CLASS}`}
                       size="sm"
                       variant="outline"
                       onClick={() => window.print()}
                       title={t("Print")}
+                      aria-label={t("Print")}
                     >
                       <Printer />
                     </Button>
@@ -2360,7 +2361,7 @@ export default function App({ onLogout = null }) {
           className={`min-h-0 flex-1 ${visibleActiveTab === "setup" ? "overflow-visible" : "overflow-hidden"} ${mainContentPaddingClass}`}
         >
           <div className={`${mainContentWidthClass} ${activeTabMotionClass}`}>
-            {(masterDataError || reportCatalogError) && reports.length === 0 ? (
+            {visibleActiveTab === "report" && (masterDataError || reportCatalogError) && reports.length === 0 ? (
               <Card className="mx-auto w-full max-w-[500px] border border-destructive/20 bg-destructive/5 shadow-none ring-0">
                 <CardContent className="flex flex-col items-center justify-center p-6 text-center sm:p-10">
                   <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-destructive/10 text-destructive mb-4">
