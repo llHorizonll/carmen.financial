@@ -209,7 +209,7 @@ export default function RowsConfigurator({
                 <SelectItem value="data">{t("Data")}</SelectItem>
                 <SelectItem value="header">{t("Header")}</SelectItem>
                 <SelectItem value="formula">{t("Formula")}</SelectItem>
-                <SelectItem value="formula-percent">Formula %</SelectItem>
+                <SelectItem value="formula-percent">{t("Formula %")}</SelectItem>
               </SelectContent>
             </Select>
             </div>
@@ -331,7 +331,7 @@ export default function RowsConfigurator({
                           <SelectItem value="D">{t("Data (D)")}</SelectItem>
                           <SelectItem value="H">{t("Header (H)")}</SelectItem>
                           <SelectItem value="F">{t("Formula (F)")}</SelectItem>
-                          {isTotal && <SelectItem value="F%">Formula %</SelectItem>}
+                          {isTotal && <SelectItem value="F%">{t("Formula %")}</SelectItem>}
                         </SelectContent>
                       </Select>
                     </TableCell>

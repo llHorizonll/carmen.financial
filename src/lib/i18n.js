@@ -269,6 +269,7 @@ const thai = {
   "Monthly": "รายเดือน",
   "Data": "ข้อมูล",
   "Formula": "สูตร",
+  "Formula %": "สูตร %",
   "Header": "หัวข้อ",
   "Type": "ประเภท",
   "Label": "ข้อความ",
