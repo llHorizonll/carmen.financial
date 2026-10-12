@@ -148,6 +148,16 @@ describe('reportAdapters', () => {
     expect(mergeCarmenMasterData(cached, {})).toEqual(cached);
   });
 
+  it('decodes tenant membership permission codes and respects explicit flags', () => {
+    expect(deriveCarmenFinancialReportAccess([{ Name: 'GL.FinancialReport', Code: 'A0' }]))
+      .toEqual({ view: true, add: false, update: true, delete: false, setup: true });
+    expect(deriveCarmenFinancialReportAccess([{ Name: 'GL.FinancialReport', Code: '80' }]))
+      .toEqual({ view: true, add: false, update: false, delete: false, setup: false });
+    expect(deriveCarmenFinancialReportAccess([{ Name: 'GL.FinancialReport', Code: 'F0', View: false, Add: false, Update: false, Delete: false }]))
+      .toEqual({ view: false, add: false, update: false, delete: false, setup: false });
+    expect(deriveCarmenFinancialReportAccess([{ Name: 'GL.FinancialReport', Code: 'invalid' }]).view).toBe(false);
+  });
+
   it('derives setup access from Carmen financial report permissions', () => {
     expect(deriveCarmenFinancialReportAccess([
       { Name: 'GL.FinancialReport', View: true, Add: false, Update: true, Delete: false },

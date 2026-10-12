@@ -1,3 +1,4 @@
+import { useTranslation } from "@/lib/i18n.js";
 import React, {
   forwardRef,
   useEffect,
@@ -74,6 +75,7 @@ const ExcelTemplateImportWizard = forwardRef(function ExcelTemplateImportWizard(
   onImportTemplates,
   onOpenImportedReport,
 }, ref) {
+  const t = useTranslation();
   const [step, setStep] = useState("upload");
   const [file, setFile] = useState(null);
   const [workbook, setWorkbook] = useState(null);
@@ -247,17 +249,13 @@ const ExcelTemplateImportWizard = forwardRef(function ExcelTemplateImportWizard(
             <FileSpreadsheet className="size-5" aria-hidden="true" />
           </section>
           <section>
-            <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-              Excel report import
-            </h1>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-              Create one report per worksheet, then review its mappings before use.
-            </p>
+            <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">{t("Excel report import")}</h1>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">{t("Create one report per worksheet, then review its mappings before use.")}</p>
           </section>
         </section>
       </header>
 
-      <nav data-tour="import-progress" aria-label="Import progress" className="data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-xl data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary">
+      <nav data-tour="import-progress" aria-label={t("Import progress")} className="data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-xl data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary">
         <ol className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           {STEPS.map((item, index) => {
             const isActive = index === activeStepIndex;
@@ -293,20 +291,15 @@ const ExcelTemplateImportWizard = forwardRef(function ExcelTemplateImportWizard(
       {step === "upload" && (
         <Card className="border border-border bg-card shadow-none ring-0">
           <CardHeader data-tour="import-select-header" className="border-b pb-4 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary">
-            <CardTitle className="text-base font-semibold sm:text-lg">
-              Choose a workbook
-            </CardTitle>
-            <CardDescription className="max-w-2xl leading-6">
-              Excel files are processed in your browser and are not uploaded.
-              Maximum file size is 25 MB.
-            </CardDescription>
+            <CardTitle className="text-base font-semibold sm:text-lg">{t("Choose a workbook")}</CardTitle>
+            <CardDescription className="max-w-2xl leading-6">{t("Excel files are processed in your browser and are not uploaded. Maximum file size is 25 MB.")}</CardDescription>
           </CardHeader>
           <CardContent className="pt-5">
             <input
               id="excel-template-file"
               type="file"
               accept=".xlsx,.xls,.xlsm"
-              aria-label="Choose an Excel workbook"
+              aria-label={t("Choose an Excel workbook")}
               className="peer sr-only"
               onChange={(event) =>
                 handleFileChange(event.target.files?.[0] || null)
@@ -345,21 +338,19 @@ const ExcelTemplateImportWizard = forwardRef(function ExcelTemplateImportWizard(
                 )}
               </section>
               <h2 className="mt-4 text-base font-semibold text-foreground">
-                {isReading ? "Reading workbook" : "Drop your Excel file here"}
+                {isReading ? t("Reading workbook") : t("Drop your Excel file here")}
               </h2>
               <p className="mt-1 max-w-md text-sm leading-6 text-muted-foreground">
                 {isReading
                   ? file?.name
-                  : "or click to browse from your computer (.xlsx or .xls)"}
+                  : t("or click to browse from your computer (.xlsx or .xls)")}
               </p>
               {!isReading && (
                 <section
                   aria-hidden="true"
                   className="mt-4 inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-sm font-medium text-foreground"
                 >
-                  <FileSpreadsheet aria-hidden="true" />
-                  Browse files
-                </section>
+                  <FileSpreadsheet aria-hidden="true" />{t("Browse files")}</section>
               )}
             </label>
 
@@ -388,17 +379,14 @@ const ExcelTemplateImportWizard = forwardRef(function ExcelTemplateImportWizard(
                   <FileCheck2
                     className="size-5 text-primary"
                     aria-hidden="true"
-                  />
-                  Select worksheets
-                </CardTitle>
+                  />{t("Select worksheets")}</CardTitle>
                 <CardDescription className="mt-1 truncate">
                   {workbook.fileName}
                 </CardDescription>
               </section>
               <section className="flex flex-wrap items-center gap-2">
                 <Badge variant="secondary" className="h-7 rounded-lg px-2.5">
-                  {selectedSheetNames.size} of {workbook.sheets.length} selected
-                </Badge>
+                  {selectedSheetNames.size} {t("of")} {workbook.sheets.length}{" "}{t("selected")}</Badge>
                 <Button
                   type="button"
                   variant="outline"
@@ -408,17 +396,13 @@ const ExcelTemplateImportWizard = forwardRef(function ExcelTemplateImportWizard(
                       new Set(recommendedSheets.map((sheet) => sheet.name)),
                     )
                   }
-                >
-                  Select recommended
-                </Button>
+                >{t("Select recommended")}</Button>
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   onClick={() => setSelectedSheetNames(new Set())}
-                >
-                  Clear
-                </Button>
+                >{t("Clear")}</Button>
               </section>
             </section>
           </CardHeader>
@@ -426,7 +410,7 @@ const ExcelTemplateImportWizard = forwardRef(function ExcelTemplateImportWizard(
           <CardContent data-tour="import-worksheets" className="p-0 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary">
             <ScrollArea className="h-80 sm:h-96">
               <ul
-                aria-label="Worksheets"
+                aria-label={t("Worksheets")}
                 className="w-full min-w-0 max-w-full divide-y divide-border overflow-hidden"
               >
                 {workbook.sheets.map((sheet) => {
@@ -466,11 +450,10 @@ const ExcelTemplateImportWizard = forwardRef(function ExcelTemplateImportWizard(
                             {sheet.name}
                           </p>
                           <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                            {sheet.rowCount} populated rows ·{" "}
-                            {sheet.columnCount} populated columns
-                            {sheet.isRecommended
+                            {sheet.rowCount} {t("populated rows ·")}{" "}
+                            {sheet.columnCount}{" "}{t("populated columns")}{sheet.isRecommended
                               ? ` · ${sheet.detectedRows.length} template rows · ${sheet.detectedColumns.length} report columns`
-                              : " · No report structure detected"}
+                              : t(" · No report structure detected")}
                           </p>
                           {sheet.previewRows.length > 0 && (
                             <p className="mt-1 truncate text-xs text-muted-foreground/80">
@@ -487,18 +470,14 @@ const ExcelTemplateImportWizard = forwardRef(function ExcelTemplateImportWizard(
                               variant="secondary"
                               className="max-w-full rounded-lg"
                             >
-                              <CheckCircle2 aria-hidden="true" />
-                              Ready
-                            </Badge>
+                              <CheckCircle2 aria-hidden="true" />{t("Ready")}</Badge>
                             <Button
                               type="button"
                               variant={isConfigured ? "secondary" : "outline"}
                               size="sm"
                               onClick={() => setConfiguredSheetName(sheet.name)}
                             >
-                              <Settings2 aria-hidden="true" />
-                              Configure
-                            </Button>
+                              <Settings2 aria-hidden="true" />{t("Configure")}</Button>
                           </section>
                         )}
                       </section>
@@ -535,9 +514,7 @@ const ExcelTemplateImportWizard = forwardRef(function ExcelTemplateImportWizard(
 
           <CardFooter className="flex flex-col-reverse items-stretch justify-between gap-3 border-t bg-muted/20 p-4 sm:flex-row sm:items-center">
             <Button type="button" variant="outline" onClick={resetWizard}>
-              <ArrowLeft aria-hidden="true" />
-              Choose another file
-            </Button>
+              <ArrowLeft aria-hidden="true" />{t("Choose another file")}</Button>
             <Button
               data-tour="import-create"
               className="data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary"
@@ -556,8 +533,7 @@ const ExcelTemplateImportWizard = forwardRef(function ExcelTemplateImportWizard(
                 />
               ) : (
                 <Import aria-hidden="true" />
-              )}
-              Create {selectedSheetNames.size} {selectedSheetNames.size === 1 ? "report" : "reports"}
+              )}{t("Create")}{" "}{selectedSheetNames.size} {t(selectedSheetNames.size === 1 ? "report" : "reports")}
               {!isImporting && <ArrowRight aria-hidden="true" />}
             </Button>
           </CardFooter>
@@ -571,24 +547,16 @@ const ExcelTemplateImportWizard = forwardRef(function ExcelTemplateImportWizard(
               <CheckCircle2 className="size-7" aria-hidden="true" />
             </section>
             <h2 data-tour="import-done-heading" className="mt-5 rounded-lg text-xl font-semibold tracking-tight text-foreground data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary">
-              {importedReports.length} {importedReports.length === 1 ? "report" : "reports"} created
-            </h2>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
-              Your imported reports are in the report list. Review mappings and
-              calculation rules in Setup before using them.
-            </p>
+              {importedReports.length} {t(importedReports.length === 1 ? "report" : "reports")}{" "}{t("created")}</h2>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">{t("Your imported reports are in the report list. Review mappings and calculation rules in Setup before using them.")}</p>
             <section className="mt-6 flex flex-col gap-2 sm:flex-row">
               <Button
                 type="button"
                 onClick={() => onOpenImportedReport(importedReports[0]?.id)}
-              >
-                Open first report
-                <ArrowRight aria-hidden="true" />
+              >{t("Open first report")}<ArrowRight aria-hidden="true" />
               </Button>
               <Button type="button" variant="outline" onClick={resetWizard}>
-                <RotateCcw aria-hidden="true" />
-                Import another workbook
-              </Button>
+                <RotateCcw aria-hidden="true" />{t("Import another workbook")}</Button>
             </section>
           </CardContent>
         </Card>

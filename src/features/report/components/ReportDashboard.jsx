@@ -1,3 +1,4 @@
+import { useTranslation, getLocale } from "@/lib/i18n.js";
 import React from 'react';
 import { ArrowDownToLine, ArrowUpFromLine, WalletCards } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card.jsx';
@@ -15,13 +16,14 @@ import ReportViewModeToggle from './ReportViewModeToggle.jsx';
 
 const EMPTY_ROWS = [];
 const EMPTY_COLUMNS = [];
-const amountFormatter = new Intl.NumberFormat(undefined, {
+const amountFormatters = Object.fromEntries(["en-US", "th-TH-u-ca-gregory", "vi-VN"].map(locale => [locale, new Intl.NumberFormat(locale, {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
-});
+})]));
 
 const formatAmount = (value) => {
   const amount = Number(value) || 0;
+  const amountFormatter = amountFormatters[getLocale()];
   return amount < 0 ? `(${amountFormatter.format(Math.abs(amount))})` : amountFormatter.format(amount);
 };
 
@@ -74,6 +76,7 @@ const buildSectionTotals = (rows, columnId) => {
 };
 
 function SummaryChart({ positiveTotal, negativeTotal, net }) {
+  const t = useTranslation();
   const maxMagnitude = Math.max(positiveTotal, negativeTotal, Math.abs(net), 1);
   const maxBarHeight = 78;
   const baseline = 116;
@@ -90,8 +93,8 @@ function SummaryChart({ positiveTotal, negativeTotal, net }) {
       role="img"
       aria-labelledby="summary-chart-title summary-chart-description"
     >
-      <title id="summary-chart-title">Report value summary chart</title>
-      <desc id="summary-chart-description">Positive total, negative total, and net result for the selected report column.</desc>
+      <title id="summary-chart-title">{t("Report value summary chart")}</title>
+      <desc id="summary-chart-description">{t("Positive total, negative total, and net result for the selected report column.")}</desc>
       <line x1="48" x2="632" y1={baseline} y2={baseline} className="stroke-border" strokeWidth="2" />
       {bars.map((bar) => {
         const height = Math.max(2, (Math.abs(bar.value) / maxMagnitude) * maxBarHeight);
@@ -104,7 +107,7 @@ function SummaryChart({ positiveTotal, negativeTotal, net }) {
               {formatAmount(bar.displayValue)}
             </text>
             <text x={bar.x + 48} y="220" textAnchor="middle" className="fill-muted-foreground text-base font-medium">
-              {bar.label}
+              {t(bar.label)}
             </text>
           </g>
         );
@@ -114,6 +117,7 @@ function SummaryChart({ positiveTotal, negativeTotal, net }) {
 }
 
 function SummaryCompactChart({ positiveTotal, negativeTotal, net }) {
+  const t = useTranslation();
   const maxMagnitude = Math.max(positiveTotal, negativeTotal, Math.abs(net), 1);
   const movements = [
     { id: 'positive', label: 'Positive', value: positiveTotal, className: 'fill-emerald-600 dark:fill-emerald-500' },
@@ -122,11 +126,11 @@ function SummaryCompactChart({ positiveTotal, negativeTotal, net }) {
   ];
 
   return (
-    <ul className="mt-5 w-full space-y-4 sm:hidden" aria-label="Report value summary chart">
+    <ul className="mt-5 w-full space-y-4 sm:hidden" aria-label={t("Report value summary chart")}>
       {movements.map((movement) => (
         <li key={movement.id} className="space-y-1.5">
           <span className="flex items-center justify-between gap-3 text-sm">
-            <span className="font-medium text-foreground">{movement.label}</span>
+            <span className="font-medium text-foreground">{t(movement.label)}</span>
             <span className={cn('font-semibold tabular-nums text-foreground', movement.value < 0 && 'text-destructive')}>
               {formatAmount(movement.value)}
             </span>
@@ -142,18 +146,17 @@ function SummaryCompactChart({ positiveTotal, negativeTotal, net }) {
 }
 
 function SectionTotalsChart({ sections }) {
+  const t = useTranslation();
   if (sections.length === 0) {
     return (
-      <p className="px-4 py-8 text-center text-sm text-pretty text-muted-foreground">
-        No header sections with data rows are available.
-      </p>
+      <p className="px-4 py-8 text-center text-sm text-pretty text-muted-foreground">{t("No header sections with data rows are available.")}</p>
     );
   }
 
   const maxMagnitude = Math.max(...sections.map((section) => Math.abs(section.value)), 1);
 
   return (
-    <ul className="divide-y divide-border" aria-label="Totals by report header">
+    <ul className="divide-y divide-border" aria-label={t("Totals by report header")}>
       {sections.map((section) => {
         const barWidth = Math.max(1.5, (Math.abs(section.value) / maxMagnitude) * 100);
         const isNegative = section.value < 0;
@@ -163,7 +166,7 @@ function SectionTotalsChart({ sections }) {
             <span className="flex items-start justify-between gap-4">
               <span className="min-w-0">
                 <span className="block truncate text-sm font-semibold text-foreground" title={section.label}>{section.label}</span>
-                <span className="block text-xs tabular-nums text-muted-foreground">{section.dataRowCount} data {section.dataRowCount === 1 ? 'row' : 'rows'}</span>
+                <span className="block text-xs tabular-nums text-muted-foreground">{section.dataRowCount} data {section.dataRowCount === 1 ? 'row' : t("rows")}</span>
               </span>
               <span className={cn('shrink-0 text-sm font-semibold tabular-nums text-foreground', isNegative && 'text-destructive')}>
                 {formatAmount(section.value)}
@@ -185,14 +188,15 @@ function SectionTotalsChart({ sections }) {
 }
 
 function TopContributors({ rows }) {
+  const t = useTranslation();
   if (rows.length === 0) {
-    return <p className="px-4 py-8 text-center text-sm text-pretty text-muted-foreground">No non-zero detail rows are available.</p>;
+    return <p className="px-4 py-8 text-center text-sm text-pretty text-muted-foreground">{t("No non-zero detail rows are available.")}</p>;
   }
 
   const maxMagnitude = Math.max(...rows.map((row) => Math.abs(row.value)), 1);
 
   return (
-    <ol className="divide-y divide-border" aria-label="Top value contributors">
+    <ol className="divide-y divide-border" aria-label={t("Top value contributors")}>
       {rows.map((row, index) => (
         <li key={row.id} className="space-y-2 px-4 py-3">
           <span className="flex items-start justify-between gap-4">
@@ -248,6 +252,7 @@ export default function ReportDashboard({
   viewMode = 'dashboard',
   onViewModeChange,
 }) {
+  const t = useTranslation();
   const [selectedColumnId, setSelectedColumnId] = React.useState('');
 
   if (!activeReport) return null;
@@ -261,7 +266,7 @@ export default function ReportDashboard({
 
   return (
     <Card className="flex h-full min-h-0 flex-col border border-border shadow-none ring-0">
-      <CardHeader className="relative space-y-1 border-b px-4 pt-14 pb-3 sm:px-5 sm:pt-4 sm:pb-4">
+      <CardHeader className="relative border-b px-4 pt-14 sm:px-5 sm:pt-4">
         <ReportViewModeToggle
           className="absolute top-3 right-3 sm:top-4 sm:right-4"
           value={viewMode}
@@ -288,20 +293,20 @@ export default function ReportDashboard({
             {!hasValues ? (
               <section className="flex min-h-64 flex-col items-center justify-center rounded-xl border border-dashed border-border px-6 text-center">
                 <WalletCards className="mb-3 size-8 text-muted-foreground" />
-                <h2 className="text-base font-semibold text-balance text-foreground">No dashboard values available</h2>
-                <p className="mt-1 max-w-md text-sm text-pretty text-muted-foreground">Apply report filters or add an active numeric column to show the dashboard.</p>
+                <h2 className="text-base font-semibold text-balance text-foreground">{t("No dashboard values available")}</h2>
+                <p className="mt-1 max-w-md text-sm text-pretty text-muted-foreground">{t("Apply report filters or add an active numeric column to show the dashboard.")}</p>
               </section>
             ) : (
               <>
                 <section className="flex flex-col gap-3 rounded-xl border border-border bg-muted/30 p-3 sm:flex-row sm:items-center sm:justify-between">
                   <span>
-                    <span className="block text-sm font-semibold text-foreground">Dashboard value column</span>
+                    <span className="block text-sm font-semibold text-foreground">{t("Dashboard value column")}</span>
                     <span className="block text-xs text-pretty text-muted-foreground">
                       {primaryColumn.label || primaryColumn.id} · {displayPeriodLabel} · {departmentContext}
                     </span>
                   </span>
                   <Select value={primaryColumn.id} onValueChange={setSelectedColumnId}>
-                    <SelectTrigger id="dashboard-value-column" size="sm" className="w-full bg-background sm:w-64" aria-label="Dashboard value column">
+                    <SelectTrigger id="dashboard-value-column" size="sm" className="w-full bg-background sm:w-64" aria-label={t("Dashboard value column")}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent position="popper" align="end">
@@ -324,10 +329,8 @@ export default function ReportDashboard({
                   <section className="flex min-h-80 flex-col rounded-xl border border-border bg-background p-4">
                     <header>
                       <span>
-                        <h2 className="text-base font-semibold text-balance text-foreground">Value summary</h2>
-                        <p className="mt-0.5 text-sm text-pretty text-muted-foreground">
-                          Calculated from active detail rows. Header and total rows are excluded.
-                        </p>
+                        <h2 className="text-base font-semibold text-balance text-foreground">{t("Value summary")}</h2>
+                        <p className="mt-0.5 text-sm text-pretty text-muted-foreground">{t("Calculated from active detail rows. Header and total rows are excluded.")}</p>
                       </span>
                     </header>
                     <div className="flex min-h-0 flex-1 items-center">
@@ -339,8 +342,8 @@ export default function ReportDashboard({
                   <section className="overflow-hidden rounded-xl border border-border bg-background">
                     <header className="border-b border-border px-4 py-3">
                       <span>
-                        <h2 className="text-base font-semibold text-balance text-foreground">Top contributors</h2>
-                        <p className="mt-0.5 text-sm text-pretty text-muted-foreground">Largest detail rows by absolute value.</p>
+                        <h2 className="text-base font-semibold text-balance text-foreground">{t("Top contributors")}</h2>
+                        <p className="mt-0.5 text-sm text-pretty text-muted-foreground">{t("Largest detail rows by absolute value.")}</p>
                       </span>
                     </header>
                     <TopContributors rows={summary.contributors} />
@@ -349,8 +352,8 @@ export default function ReportDashboard({
 
                 <section className="overflow-hidden rounded-xl border border-border bg-background">
                   <header className="border-b border-border px-4 py-3">
-                    <h2 className="text-base font-semibold text-balance text-foreground">Section totals</h2>
-                    <p className="mt-0.5 text-sm text-pretty text-muted-foreground">Sum of active detail rows under each report header.</p>
+                    <h2 className="text-base font-semibold text-balance text-foreground">{t("Section totals")}</h2>
+                    <p className="mt-0.5 text-sm text-pretty text-muted-foreground">{t("Sum of active detail rows under each report header.")}</p>
                   </header>
                   <SectionTotalsChart sections={sectionTotals} />
                 </section>

@@ -1,11 +1,12 @@
-import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation, getLanguage } from "@/lib/i18n.js";
+import React, { useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card.jsx';
 import { Input } from '@/components/ui/input.jsx';
 import { Label } from '@/components/ui/label.jsx';
-import { Skeleton } from '@/components/ui/skeleton.jsx';
+import LanguagePreference from './LanguagePreference.jsx';
 import {
   clearCarmenSession,
   getDefaultBusinessUnit,
@@ -14,97 +15,81 @@ import {
   saveCarmenSession,
 } from '../features/report/lib/carmenSession.js';
 
-const LoginSelectFields = lazy(() => import('./LoginSelectFields.jsx'));
 const loadLoginApi = () => import('../features/report/lib/reportApi.js');
-const languageList = [
-  { value: 'en-US', label: 'English (United States)' },
-  { value: 'th-TH', label: 'Thai' },
-  { value: 'vi-VN', label: 'Vietnamese' },
-];
-const languageToApiCode = (value) => {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (normalized.startsWith('th')) return 'TH';
-  if (normalized.startsWith('vi')) return 'VI';
-  return 'EN';
-};
 
 export default function LoginForm({ onAuthenticated }) {
+  const t = useTranslation();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [language, setLanguage] = useState('en-US');
-  const [businessUnits, setBusinessUnits] = useState([]);
-  const [selectedTenant, setSelectedTenant] = useState('');
   const [isLoadingBusinessUnits, setIsLoadingBusinessUnits] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [submitAttempted, setSubmitAttempted] = useState(false);
-  const usernameUsedForBusinessUnitsRef = useRef('');
-  const selectedBusinessUnit = useMemo(
-    () => businessUnits.find((item) => getBusinessUnitTenant(item) === selectedTenant) || null,
-    [businessUnits, selectedTenant],
-  );
-  const canSubmit = Boolean(username.trim() && password && selectedTenant && !isLoggingIn);
+  const usernameRef = useRef('');
+  const lookupRef = useRef(null);
+  const submittingRef = useRef(false);
+  const canSubmit = Boolean(username.trim() && password && !isLoggingIn);
 
-  useEffect(() => {
-    if (businessUnits.length === 0) return;
-    setSelectedTenant((currentTenant) => {
-      const currentTenantStillExists = businessUnits.some(
-        (item) => getBusinessUnitTenant(item) === currentTenant,
-      );
-      if (currentTenantStillExists) return currentTenant;
-      return getBusinessUnitTenant(getDefaultBusinessUnit(businessUnits));
-    });
-  }, [businessUnits]);
-
-  const loadBusinessUnits = async () => {
-    const trimmedUserName = username.trim();
-    if (!trimmedUserName || trimmedUserName === usernameUsedForBusinessUnitsRef.current) return;
-
+  const loadBusinessUnits = (trimmedUserName) => {
+    if (!trimmedUserName) return Promise.resolve(null);
+    if (lookupRef.current?.username === trimmedUserName) return lookupRef.current.promise;
     setError('');
     setIsLoadingBusinessUnits(true);
-    try {
-      const { fetchBusinessUnitsByUsername } = await loadLoginApi();
-      const items = await fetchBusinessUnitsByUsername(trimmedUserName);
-      setBusinessUnits(items);
-      usernameUsedForBusinessUnitsRef.current = trimmedUserName;
-      const defaultItem = getDefaultBusinessUnit(items);
-      if (!defaultItem) setError('No business unit was found for this username. Check the username and try again.');
-    } catch (fetchError) {
-      setBusinessUnits([]);
-      setSelectedTenant('');
-      setError(fetchError?.message || 'Unable to load business units.');
-    } finally {
-      setIsLoadingBusinessUnits(false);
-    }
+    const lookup = { username: trimmedUserName };
+    lookup.promise = (async () => {
+      try {
+        const { fetchBusinessUnitsByUsername } = await loadLoginApi();
+        const items = await fetchBusinessUnitsByUsername(trimmedUserName);
+        const defaultItem = getDefaultBusinessUnit(items);
+        if (!getBusinessUnitTenant(defaultItem)) {
+          throw new Error('No business unit was found for this username. Check the username and try again.');
+        }
+        return defaultItem;
+      } catch (fetchError) {
+        if (lookupRef.current === lookup) lookupRef.current = null;
+        if (usernameRef.current === trimmedUserName) {
+          setError(fetchError?.message || 'Unable to load business units.');
+        }
+        throw fetchError;
+      } finally {
+        if (usernameRef.current === trimmedUserName) setIsLoadingBusinessUnits(false);
+      }
+    })();
+    lookupRef.current = lookup;
+    return lookup.promise;
   };
 
   const handleLogin = async (event) => {
     event.preventDefault();
+    if (submittingRef.current) return;
     setSubmitAttempted(true);
     const nextErrors = {};
     if (!username.trim()) nextErrors.username = 'Enter your username.';
     if (!password) nextErrors.password = 'Enter your password.';
-    if (!selectedTenant) nextErrors.selectedTenant = 'Choose a business unit.';
     setFieldErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
     const trimmedUserName = username.trim();
     setError('');
+    submittingRef.current = true;
     setIsLoggingIn(true);
     try {
       const { loginWithCarmenCredentials } = await loadLoginApi();
+      const selectedBusinessUnit = await loadBusinessUnits(trimmedUserName);
+      if (usernameRef.current !== trimmedUserName) return;
+      const selectedTenant = getBusinessUnitTenant(selectedBusinessUnit);
       const loginResult = await loginWithCarmenCredentials({
         userName: trimmedUserName,
         password,
         tenant: selectedTenant,
-        language: languageToApiCode(language),
+        language: getLanguage().toUpperCase(),
       });
       saveCarmenSession({
         accessToken: loginResult.accessToken,
         username: trimmedUserName,
         businessUnit: {
-          description: selectedBusinessUnit ? getBusinessUnitDisplayName(selectedBusinessUnit) : selectedTenant,
+          description: getBusinessUnitDisplayName(selectedBusinessUnit),
           tenant: selectedTenant,
         },
         user: loginResult.user,
@@ -114,6 +99,7 @@ export default function LoginForm({ onAuthenticated }) {
       clearCarmenSession();
       setError(loginError?.message || 'Login failed.');
     } finally {
+      submittingRef.current = false;
       setIsLoggingIn(false);
     }
   };
@@ -121,14 +107,15 @@ export default function LoginForm({ onAuthenticated }) {
   return (
     <Card className="login-enter-from-left order-1 w-full max-w-md justify-self-center self-center border border-border bg-card shadow-lg ring-0 lg:justify-self-start">
       <CardHeader className="space-y-2">
-        <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">Secure sign-in</Badge>
-        <CardTitle className="text-xl tracking-tight sm:text-2xl">Carmen Blue Financial Report Login</CardTitle>
-        <CardDescription>Use your Carmen credentials to continue.</CardDescription>
+        <LanguagePreference />
+        <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">{t("Secure sign-in")}</Badge>
+        <CardTitle className="text-xl tracking-tight sm:text-2xl">{t("Carmen Blue Financial Report Login")}</CardTitle>
+        <CardDescription>{t("Use your Carmen credentials to continue.")}</CardDescription>
       </CardHeader>
       <form onSubmit={handleLogin}>
         <CardContent className="space-y-5 pb-6 sm:pb-8">
           <div className="space-y-2.5">
-            <Label htmlFor="username">Username</Label>
+            <Label htmlFor="username">{t("Username")}</Label>
             <Input
               id="username"
               type="text"
@@ -136,61 +123,46 @@ export default function LoginForm({ onAuthenticated }) {
               onChange={(event) => {
                 const next = event.target.value;
                 setUsername(next);
+                usernameRef.current = next.trim();
                 setFieldErrors((prev) => ({ ...prev, username: '' }));
-                if (next.trim() !== usernameUsedForBusinessUnitsRef.current) {
-                  setBusinessUnits([]);
-                  setSelectedTenant('');
-                  setFieldErrors((prev) => ({ ...prev, selectedTenant: '' }));
-                }
+                setError('');
+                setIsLoadingBusinessUnits(false);
               }}
-              onBlur={loadBusinessUnits}
+              onBlur={() => { void loadBusinessUnits(usernameRef.current).catch(() => {}); }}
+              disabled={isLoggingIn}
               autoComplete="username"
-              placeholder="Enter username"
+              placeholder={t("Enter username")}
               aria-invalid={Boolean(submitAttempted && fieldErrors.username)}
               aria-describedby={fieldErrors.username ? 'username-error' : undefined}
             />
-            {submitAttempted && fieldErrors.username && <p id="username-error" className="text-xs text-destructive">{fieldErrors.username}</p>}
+            {submitAttempted && fieldErrors.username && <p id="username-error" className="text-xs text-destructive">{t(fieldErrors.username)}</p>}
           </div>
 
           <div className="space-y-2.5">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">{t("Password")}</Label>
             <Input
               id="password"
               type="password"
+              disabled={isLoggingIn}
               value={password}
               onChange={(event) => {
                 setPassword(event.target.value);
                 setFieldErrors((prev) => ({ ...prev, password: '' }));
               }}
               autoComplete="current-password"
-              placeholder="Enter password"
+              placeholder={t("Enter password")}
               aria-invalid={Boolean(submitAttempted && fieldErrors.password)}
               aria-describedby={fieldErrors.password ? 'password-error' : undefined}
             />
-            {submitAttempted && fieldErrors.password && <p id="password-error" className="text-xs text-destructive">{fieldErrors.password}</p>}
+            {submitAttempted && fieldErrors.password && <p id="password-error" className="text-xs text-destructive">{t(fieldErrors.password)}</p>}
           </div>
 
-          <Suspense fallback={<Skeleton className="h-44 w-full rounded-xl" aria-hidden="true" />}>
-            <LoginSelectFields
-              businessUnits={businessUnits}
-              fieldErrors={fieldErrors}
-              getBusinessUnitDisplayName={getBusinessUnitDisplayName}
-              getBusinessUnitTenant={getBusinessUnitTenant}
-              isLoadingBusinessUnits={isLoadingBusinessUnits}
-              language={language}
-              languageList={languageList}
-              selectedTenant={selectedTenant}
-              setLanguage={setLanguage}
-              setSelectedTenant={setSelectedTenant}
-              submitAttempted={submitAttempted}
-              username={username}
-            />
-          </Suspense>
+          {isLoadingBusinessUnits && <p role="status" className="text-sm text-muted-foreground">{t("Loading business units...")}</p>}
 
           {error && (
             <div role="alert" className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-              <p className="leading-5">{error}</p>
+              <p className="leading-5">{t(error)}</p>
             </div>
           )}
         </CardContent>
@@ -201,7 +173,7 @@ export default function LoginForm({ onAuthenticated }) {
             className="w-full"
             disabled={!canSubmit}
           >
-            {isLoggingIn ? 'Signing in...' : 'Sign in'}
+            {isLoggingIn ? t("Signing in...") : t("Sign in")}
           </Button>
         </div>
       </form>

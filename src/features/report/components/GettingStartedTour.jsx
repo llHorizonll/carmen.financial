@@ -1,3 +1,4 @@
+import { useTranslation } from "@/lib/i18n.js";
 import React, { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
@@ -46,6 +47,7 @@ export default function GettingStartedTour({
   onStepChange,
   onClose,
 }) {
+  const t = useTranslation();
   const isMobile = useIsMobile();
   const steps = useMemo(
     () => (customSteps || TOUR_STEPS).filter((step) => (canSetup || !step.adminOnly) && (!isMobile || !step.desktopOnly)),
@@ -110,11 +112,10 @@ export default function GettingStartedTour({
         <CardHeader className="gap-2 pb-3">
           <section className="flex items-start justify-between gap-3">
             <section>
-              <CardDescription>
-                Getting started · {safeStepIndex + 1} of {steps.length}
+              <CardDescription>{t("Getting started ·")}{" "}{safeStepIndex + 1} {t("of")} {steps.length}
               </CardDescription>
               <CardTitle id="getting-started-title" className="mt-1 text-balance text-lg">
-                {step.title}
+                {t(step.title)}
               </CardTitle>
             </section>
             <Button
@@ -122,7 +123,7 @@ export default function GettingStartedTour({
               variant="ghost"
               size="icon-sm"
               onClick={onClose}
-              aria-label="Close getting started guide"
+              aria-label={t("Close getting started guide")}
             >
               <X className="size-4" />
             </Button>
@@ -130,7 +131,7 @@ export default function GettingStartedTour({
         </CardHeader>
         <CardContent className="space-y-4">
           <p id="getting-started-description" className="text-pretty text-sm leading-6 text-muted-foreground">
-            {step.description}
+            {t(step.description)}
           </p>
           <section className="flex items-center justify-between gap-3">
             <Button
@@ -138,9 +139,7 @@ export default function GettingStartedTour({
               variant="ghost"
               size="sm"
               onClick={onClose}
-            >
-              Skip
-            </Button>
+            >{t("Skip")}</Button>
             <section className="flex items-center gap-2">
               <Button
                 type="button"
@@ -149,9 +148,7 @@ export default function GettingStartedTour({
                 disabled={safeStepIndex === 0}
                 onClick={() => onStepChange(safeStepIndex - 1)}
               >
-                <ChevronLeft className="size-4" />
-                Back
-              </Button>
+                <ChevronLeft className="size-4" />{t("Back")}</Button>
               <Button
                 ref={nextButtonRef}
                 type="button"
@@ -160,7 +157,7 @@ export default function GettingStartedTour({
                   isLastStep ? onClose() : onStepChange(safeStepIndex + 1)
                 }
               >
-                {isLastStep ? "Done" : "Next"}
+                {isLastStep ? t("Done") : t("Next")}
                 {!isLastStep && <ChevronRight className="size-4" />}
               </Button>
             </section>
@@ -178,9 +175,9 @@ export default function GettingStartedTour({
           className="max-h-[70dvh] overflow-y-auto rounded-t-xl pb-[env(safe-area-inset-bottom)]"
           onOpenAutoFocus={focusNextButton}
         >
-          <SheetTitle className="sr-only">{step.title}</SheetTitle>
+          <SheetTitle className="sr-only">{t(step.title)}</SheetTitle>
           <SheetDescription className="sr-only">
-            {step.description}
+            {t(step.description)}
           </SheetDescription>
           {tourCard}
         </SheetContent>
@@ -194,7 +191,7 @@ export default function GettingStartedTour({
         type="button"
         className="fixed inset-0 z-40 cursor-default bg-foreground/35 print:hidden"
         data-testid="tour-backdrop"
-        aria-label="Dismiss guide backdrop"
+        aria-label={t("Dismiss guide backdrop")}
         onClick={onClose}
       />
         <section

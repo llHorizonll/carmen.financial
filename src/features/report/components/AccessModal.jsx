@@ -1,3 +1,4 @@
+import { useTranslation } from "@/lib/i18n.js";
 import React from 'react';
 import { Check, UserCheck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge.jsx';
@@ -23,6 +24,7 @@ const isSetupAdmin = (user) => {
 const getUserRoleLabel = (user) => (isSetupAdmin(user) ? 'Admin' : 'User');
 
 export default function AccessModal({ isOpen, masterData, activeReport, onClose, onUpdateUsers }) {
+  const t = useTranslation();
   if (!activeReport) return null;
   const friendlyButtonClassName = 'border-border bg-background text-foreground hover:bg-muted';
   const assignedUsers = new Set(activeReport.assignedUsers);
@@ -32,10 +34,8 @@ export default function AccessModal({ isOpen, masterData, activeReport, onClose,
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <UserCheck className="size-4" />
-            Manage Report Access
-          </DialogTitle>
-          <DialogDescription>Choose which users can view this report.</DialogDescription>
+            <UserCheck className="size-4" />{t("Manage Report Access")}</DialogTitle>
+          <DialogDescription>{t("Choose which users can view this report.")}</DialogDescription>
         </DialogHeader>
 
         <ScrollArea className="max-h-96 pr-3">
@@ -64,7 +64,7 @@ export default function AccessModal({ isOpen, masterData, activeReport, onClose,
                     <div className="text-sm font-medium">{user.name}</div>
                     <div className="text-xs text-muted-foreground">{getUserRoleLabel(user)}</div>
                   </div>
-                  {isSelected && <Badge variant="secondary">Can view</Badge>}
+                  {isSelected && <Badge variant="secondary">{t("Can view")}</Badge>}
                 </button>
               );
             })}
@@ -72,9 +72,7 @@ export default function AccessModal({ isOpen, masterData, activeReport, onClose,
         </ScrollArea>
 
         <DialogFooter className="gap-2 sm:gap-2">
-          <Button variant="outline" className={`w-full sm:w-auto ${friendlyButtonClassName}`} onClick={onClose}>
-            Done
-          </Button>
+          <Button variant="outline" className={`w-full sm:w-auto ${friendlyButtonClassName}`} onClick={onClose}>{t("Done")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

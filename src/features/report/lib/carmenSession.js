@@ -3,6 +3,8 @@ const SESSION_KEYS = {
   username: 'carmen_username',
   businessUnit: 'carmen_business_unit',
   user: 'carmen_user',
+  language: 'carmen_language',
+  selectedBusinessUnits: 'carmen_selected_business_units',
 };
 
 export const getBusinessUnitTenant = (item) => String(item?.Tenant || item?.tenant || '').trim();
@@ -38,7 +40,28 @@ export const getStoredCarmenSession = () => {
   } catch {
     user = null;
   }
-  return { accessToken, username, businessUnit, user };
+  const storedLanguage = window.localStorage.getItem(SESSION_KEYS.language);
+  const language = ['en', 'th', 'vi'].includes(storedLanguage) ? storedLanguage : 'en';
+  return { accessToken, username, businessUnit, user, language };
+};
+
+export const setCarmenSessionLanguage = (language) => {
+  if (!['en', 'th', 'vi'].includes(language)) throw new Error('Unsupported Carmen language.');
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  window.localStorage.setItem(SESSION_KEYS.language, language);
+  window.dispatchEvent(new Event('carmen-language-changed'));
+};
+
+export const getStoredBusinessUnitSelection = () => {
+  try {
+    const selection = JSON.parse(window.localStorage.getItem(SESSION_KEYS.selectedBusinessUnits));
+    return Array.isArray(selection) && selection.every((tenant) => typeof tenant === 'string') ? selection : null;
+  } catch { return null; }
+};
+
+export const saveBusinessUnitSelection = (selection) => {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  window.localStorage.setItem(SESSION_KEYS.selectedBusinessUnits, JSON.stringify(selection));
 };
 
 export const saveCarmenSession = ({ accessToken, username, businessUnit, user }) => {
@@ -47,6 +70,10 @@ export const saveCarmenSession = ({ accessToken, username, businessUnit, user })
   window.localStorage.setItem(SESSION_KEYS.username, username || '');
   window.localStorage.setItem(SESSION_KEYS.businessUnit, JSON.stringify(businessUnit || null));
   window.localStorage.setItem(SESSION_KEYS.user, JSON.stringify(user || null));
+  if (!['en', 'th', 'vi'].includes(window.localStorage.getItem(SESSION_KEYS.language))) {
+    window.localStorage.setItem(SESSION_KEYS.language, 'en');
+  }
+  window.localStorage.removeItem(SESSION_KEYS.selectedBusinessUnits);
   window.dispatchEvent(new Event('carmen-session-changed'));
 };
 
@@ -56,5 +83,6 @@ export const clearCarmenSession = () => {
   window.localStorage.removeItem(SESSION_KEYS.username);
   window.localStorage.removeItem(SESSION_KEYS.businessUnit);
   window.localStorage.removeItem(SESSION_KEYS.user);
+  window.localStorage.removeItem(SESSION_KEYS.selectedBusinessUnits);
   window.dispatchEvent(new Event('carmen-session-changed'));
 };

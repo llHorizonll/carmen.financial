@@ -9,6 +9,7 @@ import { INITIAL_MASTER_DATA } from '../features/report/lib/reportLogic.js';
 const reportApiMocks = vi.hoisted(() => ({
   isCarmenApiConfigured: vi.fn(() => false),
   getStoredCarmenSession: vi.fn(() => null),
+  fetchCarmenBusinessUnits: vi.fn(),
   fetchCarmenDimensions: vi.fn(),
   fetchCarmenMasterData: vi.fn(),
   fetchCarmenReportOptions: vi.fn(),
@@ -117,6 +118,12 @@ describe('App shell', () => {
       groups: {},
     });
 
+    reportApiMocks.fetchCarmenBusinessUnits.mockReset();
+    reportApiMocks.fetchCarmenBusinessUnits.mockImplementation(async () => {
+      const session = reportApiMocks.getStoredCarmenSession();
+      return session?.businessUnit?.tenant ? [{ Tenant: session.businessUnit.tenant,
+        financialReport: { view: true, setup: session.user?.role === 'Admin', add: session.user?.role === 'Admin' } }] : [];
+    });
     reportApiMocks.fetchCarmenDimensions.mockReset();
     reportApiMocks.fetchCarmenDimensions.mockResolvedValue([]);
 
@@ -147,6 +154,16 @@ describe('App shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
     expect(screen.queryByText('Compare')).not.toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument(), { timeout: 5000 });
+  });
+
+  it('shows Language beside Theme in account preferences', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Account preferences' }));
+    expect(screen.getByRole('button', { name: 'Theme' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Language' }));
+    fireEvent.click(screen.getByRole('button', { name: 'ไทย' }));
+    expect(window.localStorage.getItem('carmen_language')).toBe('th');
+    expect(screen.getByRole('button', { name: 'ไทย' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('opens report setup from Edit for the admin user', async () => {
@@ -480,6 +497,35 @@ describe('App shell', () => {
     ));
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
     await waitFor(() => expect(onLogout).toHaveBeenCalledOnce());
+  });
+
+  it('browses identical report IDs in separate BUs and creates in one explicit destination', async () => {
+    reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
+    reportApiMocks.getStoredCarmenSession.mockReturnValue({ accessToken: 'token', businessUnit: { tenant: 'a' }, user: { id: 'admin', role: 'Admin' } });
+    reportApiMocks.fetchCarmenBusinessUnits.mockResolvedValue([
+      { Tenant: 'a', Description: 'Unit A', financialReport: { view: true, setup: true } },
+      { Tenant: 'b', Description: 'Unit B', financialReport: { view: true, setup: true } },
+    ]);
+    const definition = { ...getDefaultReports()[0], id: 'same', name: 'P&L',
+      rows: [{ id: 'r1', desc: 'Sales', accCodes: '4001', isActive: true }],
+      columns: [{ id: 'C1', label: 'Actual', type: 'AC', isActive: true }] };
+    reportApiMocks.fetchCarmenReports.mockResolvedValue([definition]);
+    reportApiMocks.fetchCarmenReportData.mockImplementation(async ({ tenant, year, period }) => ({ actualRows: [{ year, acccode: '4001', [`amt${period}`]: tenant === 'b' ? 200 : 100 }], budgetRows: [] }));
+    reportApiMocks.createCarmenReport.mockImplementation(async (report) => ({ ...report, lastModified: 'version' }));
+    render(<App />);
+    await screen.findByRole('region', { name: 'Reports in a' });
+    await screen.findByText('100.00');
+    fireEvent.click(screen.getByRole('button', { name: /BU.*Unit A/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Unit B', exact: true }));
+    fireEvent.keyDown(screen.getByPlaceholderText('Search business units...'), { key: 'Escape' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Unit B (1)', exact: true }));
+    const groupB = await screen.findByRole('region', { name: 'Reports in b' });
+    fireEvent.click(await within(groupB).findByRole('button', { name: 'P&L' }));
+    await screen.findByText('200.00');
+    expect(reportApiMocks.fetchCarmenMasterData).toHaveBeenCalledWith(expect.objectContaining({ tenant: 'b' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New Report', exact: true }));
+    fireEvent.click(await screen.findByRole('button', { name: /Unit B.*b/ }));
+    await waitFor(() => expect(reportApiMocks.createCarmenReport).toHaveBeenCalledWith(expect.objectContaining({ id: expect.any(String) }), { tenant: 'b' }));
   });
 
   it('keeps the newest report data when an older request finishes later', async () => {

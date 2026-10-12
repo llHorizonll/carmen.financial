@@ -1,3 +1,4 @@
+import { useTranslation } from "@/lib/i18n.js";
 import React, { useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { normalizeDeptLookupCode } from '../lib/normalizeCode.js';
@@ -25,6 +26,7 @@ export default function DetailSelectorModal({
   onCancel,
   masterData,
 }) {
+  const t = useTranslation();
   const [searchTerm, setSearchTerm] = useState('');
   const [tempSelected, setTempSelected] = useState(() => toSelectedIds(selectedItems));
   const friendlyButtonClassName = 'border-border bg-background text-foreground hover:bg-muted';
@@ -83,10 +85,8 @@ export default function DetailSelectorModal({
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-xl border border-border bg-background">
             <div className="flex flex-col gap-2 border-b bg-muted/30 p-3 sm:flex-row">
-              <Input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search..." className="h-9" />
-              <Button type="button" variant="outline" className={`w-full sm:w-auto ${friendlyButtonClassName}`} onClick={handleSelectAll}>
-                Select all
-              </Button>
+              <Input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder={t("Search...")} className="h-9" />
+              <Button type="button" variant="outline" className={`w-full sm:w-auto ${friendlyButtonClassName}`} onClick={handleSelectAll}>{t("Select all")}</Button>
             </div>
             <ScrollArea className="h-[min(54vh,420px)]">
               <div className="divide-y">
@@ -101,7 +101,7 @@ export default function DetailSelectorModal({
                     <span className="text-foreground">{item.name}</span>
                   </button>
                 ))}
-                {filteredAvailable.length === 0 && <div className="p-4 text-center text-sm text-muted-foreground">No items found</div>}
+                {filteredAvailable.length === 0 && <div className="p-4 text-center text-sm text-muted-foreground">{t("No items found")}</div>}
               </div>
             </ScrollArea>
           </div>
@@ -109,16 +109,13 @@ export default function DetailSelectorModal({
           <div className="rounded-xl border border-border bg-background">
             <div className="flex items-center justify-between gap-2 border-b bg-muted/30 p-3">
               <div className="text-sm font-medium tabular-nums">
-                {tempSelected.length} {tempSelected.length === 1 ? 'item' : 'items'} selected
-              </div>
+                {tempSelected.length} {t(tempSelected.length === 1 ? 'item' : 'items')}{" "}{t("selected")}</div>
               <Button
                 type="button"
                 variant="destructive"
                 className="border-destructive/30 bg-destructive/10 text-destructive hover:border-destructive/40 hover:bg-destructive/20"
                 onClick={handleRemoveAll}
-              >
-                Remove all
-              </Button>
+              >{t("Remove all")}</Button>
             </div>
             <ScrollArea className="h-[min(54vh,420px)]">
               <div className="divide-y">
@@ -141,7 +138,7 @@ export default function DetailSelectorModal({
                     </button>
                   );
                 })}
-                {tempSelected.length === 0 && <div className="p-6 text-center text-sm text-muted-foreground">No items selected</div>}
+                {tempSelected.length === 0 && <div className="p-6 text-center text-sm text-muted-foreground">{t("No items selected")}</div>}
               </div>
             </ScrollArea>
           </div>
@@ -150,8 +147,8 @@ export default function DetailSelectorModal({
         <Separator />
 
         <DialogFooter className="flex-col-reverse sm:flex-row">
-          <Button variant="outline" className={`w-full sm:w-auto ${friendlyButtonClassName}`} onClick={onCancel}>Cancel</Button>
-          <Button className="w-full sm:w-auto" onClick={() => onSave(tempSelected)}>Save selection</Button>
+          <Button variant="outline" className={`w-full sm:w-auto ${friendlyButtonClassName}`} onClick={onCancel}>{t("Cancel")}</Button>
+          <Button className="w-full sm:w-auto" onClick={() => onSave(tempSelected)}>{t("Save selection")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

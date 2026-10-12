@@ -1,3 +1,4 @@
+import { useTranslation } from "@/lib/i18n.js";
 import React, { forwardRef, useImperativeHandle, useState } from 'react';
 import { ArrowLeft, LoaderCircle, RotateCcw, Save, Undo2 } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
@@ -26,6 +27,7 @@ const SETUP_TOUR_STEPS = [
 ];
 
 const ReportSetup = forwardRef(function ReportSetup(props, ref) {
+  const t = useTranslation();
   const setupTourStorageKey = `${props.guideStoragePrefix || 'carmen_bi'}:setup`;
   const [isSetupTourOpen, setIsSetupTourOpen] = useState(
     () => window.localStorage.getItem(setupTourStorageKey) !== 'done',
@@ -40,31 +42,25 @@ const ReportSetup = forwardRef(function ReportSetup(props, ref) {
 
   return (
     <div className="flex min-h-0 flex-col gap-4">
-      <section aria-label="Report setup controls" className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-2 border-b border-border bg-background/95 px-4 py-2.5 backdrop-blur-sm">
-        <section aria-label="Report navigation and save status" className="flex flex-wrap items-center gap-3">
+      <section aria-label={t("Report setup controls")} className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-2 border-b border-border bg-background/95 px-4 py-2.5 backdrop-blur-sm">
+        <section aria-label={t("Report navigation and save status")} className="flex flex-wrap items-center gap-3">
           <Button size="sm" type="button" variant="outline" onClick={props.onBack} disabled={props.isSaving}>
-            <ArrowLeft />
-            Back
-          </Button>
+            <ArrowLeft />{t("Back")}</Button>
           <p className="flex items-center gap-2 text-sm" aria-live="polite">
             <span className={cn('size-2 rounded-full', props.isDirty ? 'bg-amber-500' : 'bg-emerald-500')} />
             <span className={props.isDirty ? 'font-medium text-foreground' : 'text-muted-foreground'}>
-              {props.isDirty ? 'Unsaved changes' : 'All changes saved'}
+              {props.isDirty ? t("Unsaved changes") : t("All changes saved")}
             </span>
           </p>
         </section>
-        <nav data-tour="setup-save" aria-label="Save or cancel report settings" className="flex w-full flex-wrap items-center gap-2 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-lg data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary lg:w-auto lg:justify-self-end">
-          <Button className="flex-1 lg:flex-none" size="sm" type="button" variant="outline" onClick={props.onUndo} disabled={!props.canUndo || props.isSaving} title="Undo the last setup change">
-            <Undo2 />
-            Undo
-          </Button>
+        <nav data-tour="setup-save" aria-label={t("Save or cancel report settings")} className="flex w-full flex-wrap items-center gap-2 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-lg data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary lg:w-auto lg:justify-self-end">
+          <Button className="flex-1 lg:flex-none" size="sm" type="button" variant="outline" onClick={props.onUndo} disabled={!props.canUndo || props.isSaving} title={t("Undo the last setup change")}>
+            <Undo2 />{t("Undo")}</Button>
           <Button className="flex-1 lg:flex-none" size="sm" type="button" variant="outline" onClick={props.onCancel} disabled={!props.isDirty || props.isSaving}>
-            <RotateCcw />
-            Cancel changes
-          </Button>
+            <RotateCcw />{t("Cancel changes")}</Button>
           <Button className="flex-1 lg:flex-none" size="sm" type="button" onClick={props.onSave} disabled={!props.isDirty || props.isSaving}>
             {props.isSaving ? <LoaderCircle className="animate-spin motion-reduce:animate-none" /> : <Save />}
-            {props.isSaving ? 'Saving...' : 'Save changes'}
+            {props.isSaving ? t("Saving...") : t("Save changes")}
           </Button>
         </nav>
       </section>

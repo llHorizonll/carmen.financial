@@ -9,6 +9,7 @@ import {
   adaptCarmenReportDefinition,
   adaptCarmenReportDefinitions,
   adaptCarmenLoginUser,
+  deriveCarmenFinancialReportAccess,
 } from './reportAdapters.js';
 import {
   clearCarmenSession,
@@ -121,7 +122,7 @@ const readResponsePayload = async (response) => {
   return typeof response.json === 'function' ? response.json() : null;
 };
 
-const throwResponseError = async (response, { path, context, isAuthenticated = false }) => {
+const throwResponseError = async (response, { path, context, isAuthenticated = false, authorizationFailureAffectsSession = true }) => {
   let payload = null;
   try {
     payload = await readResponsePayload(response);
@@ -129,7 +130,7 @@ const throwResponseError = async (response, { path, context, isAuthenticated = f
     payload = null;
   }
 
-  const unauthorized = isAuthenticated && [401, 403].includes(response.status);
+  const unauthorized = isAuthenticated && (response.status === 401 || (response.status === 403 && authorizationFailureAffectsSession));
   if (unauthorized) {
     throw createCarmenApiError(
       'Your Carmen session expired. Please sign in again.',
@@ -314,17 +315,36 @@ export const loginWithCarmenCredentials = async ({ userName, password, tenant, l
 
 const pendingReadRequests = new Map();
 
+export const fetchCarmenBusinessUnits = async () => {
+  const username = getStoredCarmenSession()?.username;
+  if (!username) throw new Error('Carmen session username is missing.');
+  const response = await requestCarmenJson(`/api/userTenant/UserName/${encodeURIComponent(username)}`, {
+    useTenant: false, authorizationFailureAffectsSession: false,
+  });
+  const items = Array.isArray(response) ? response : response?.Data;
+  if (!Array.isArray(items)) throw new Error('Invalid business unit response.');
+  return items.map((item) => ({
+    Tenant: getBusinessUnitTenant(item.Tenant),
+    Description: getBusinessUnitDisplayName(item.Tenant),
+    IsDefault: item.IsDefault,
+    financialReport: deriveCarmenFinancialReportAccess(item.Permission),
+  }));
+};
+
 const requestCarmenJson = async (path, options = {}) => {
   const session = getStoredCarmenSession();
   if (!session?.accessToken) throw new Error('Carmen session is missing.');
   const method = options.method || 'GET';
-  const url = buildUrl(path, options);
+  const url = options.tenant
+    ? buildUrl(path, { ...options, useTenant: false, query: { ...options.query, useTenant: options.tenant } })
+    : buildUrl(path, options);
 
   const executeRequest = async () => {
     const response = await fetchWithNetworkHandling(url, {
       method,
       headers: {
         Authorization: session.accessToken,
+        'Accept-Language': session.language,
         ...(options.body ? { 'Content-Type': 'application/json' } : {}),
         ...(options.headers || {}),
       },
@@ -336,6 +356,7 @@ const requestCarmenJson = async (path, options = {}) => {
         path,
         context: `Carmen API request for ${path}`,
         isAuthenticated: true,
+        authorizationFailureAffectsSession: options.tenant ? false : options.authorizationFailureAffectsSession,
       });
     }
 
@@ -345,7 +366,7 @@ const requestCarmenJson = async (path, options = {}) => {
   const isReadRequest = method === 'GET' || (method === 'POST' && /\/search(?:\?|$)/.test(path));
   if (!isReadRequest) return executeRequest();
 
-  const requestKey = JSON.stringify([session.accessToken, method, url, options.body || null]);
+  const requestKey = JSON.stringify([session.accessToken, session.language, method, url, options.body || null]);
   if (!pendingReadRequests.has(requestKey)) {
     pendingReadRequests.set(
       requestKey,
@@ -355,12 +376,12 @@ const requestCarmenJson = async (path, options = {}) => {
   return pendingReadRequests.get(requestKey);
 };
 
-export const fetchCarmenReportOptions = async () => {
+export const fetchCarmenReportOptions = async (context = {}) => {
   if (!isCarmenApiConfigured()) {
     throw new Error('Carmen API session is not configured.');
   }
 
-  const options = await requestCarmenJson('/api/report-options');
+  const options = await requestCarmenJson('/api/report-options', context);
   return {
     themes: Array.isArray(options?.themes) ? options.themes : [],
     periodFormats: Array.isArray(options?.periodFormats) ? options.periodFormats : [],
@@ -375,12 +396,13 @@ export const fetchCarmenReportOptions = async () => {
   };
 };
 
-export const fetchCarmenDimensions = async () => {
+export const fetchCarmenDimensions = async (context = {}) => {
   if (!isCarmenApiConfigured()) {
     throw new Error('Carmen API session is not configured.');
   }
 
   const response = await requestCarmenJson('/api/dimension/search', {
+    ...context,
     method: 'POST',
     body: {
       Limit: 0,
@@ -451,7 +473,8 @@ export const fetchCarmenUsers = async () => {
     .sort((left, right) => left.name.localeCompare(right.name));
 };
 
-const fetchCarmenLookupSearch = async (path) => requestCarmenJson(path, {
+const fetchCarmenLookupSearch = async (path, context) => requestCarmenJson(path, {
+  ...context,
   method: 'POST',
   body: {
     Limit: 0,
@@ -460,48 +483,49 @@ const fetchCarmenLookupSearch = async (path) => requestCarmenJson(path, {
   },
 });
 
-export const fetchCarmenAccountGroups = async () => {
+export const fetchCarmenAccountGroups = async (context = {}) => {
   if (!isCarmenApiConfigured()) {
     throw new Error('Carmen API session is not configured.');
   }
-  const response = await fetchCarmenLookupSearch('/api/accountGroup/search');
+  const response = await fetchCarmenLookupSearch('/api/accountGroup/search', context);
   return adaptCarmenAccountGroups(response);
 };
 
-export const fetchCarmenDepartmentGroups = async () => {
+export const fetchCarmenDepartmentGroups = async (context = {}) => {
   if (!isCarmenApiConfigured()) {
     throw new Error('Carmen API session is not configured.');
   }
-  const response = await fetchCarmenLookupSearch('/api/DepartmentCategory/search');
+  const response = await fetchCarmenLookupSearch('/api/DepartmentCategory/search', context);
   return adaptCarmenDepartmentGroups(response);
 };
 
-export const fetchCarmenReportPeriods = async ({ year } = {}) => {
+export const fetchCarmenReportPeriods = async ({ year, tenant } = {}) => {
   if (!isCarmenApiConfigured()) {
     throw new Error('Carmen API session is not configured.');
   }
 
   const periods = await requestCarmenJson('/api/report-periods', {
+    tenant,
     query: { year },
   });
   return Array.isArray(periods) ? periods : [];
 };
 
-export const fetchCarmenReports = async () => {
+export const fetchCarmenReports = async (context = {}) => {
   if (!isCarmenApiConfigured()) {
     throw new Error('Carmen API session is not configured.');
   }
 
-  const reports = await requestCarmenJson('/api/reports');
+  const reports = await requestCarmenJson('/api/reports', context);
   return adaptCarmenReportDefinitions(reports);
 };
 
-export const fetchCarmenReport = async (id) => {
+export const fetchCarmenReport = async (id, context = {}) => {
   if (!isCarmenApiConfigured()) {
     throw new Error('Carmen API session is not configured.');
   }
 
-  return adaptCarmenReportDefinition(await requestCarmenJson(`/api/reports/${encodeURIComponent(id)}`));
+  return adaptCarmenReportDefinition(await requestCarmenJson(`/api/reports/${encodeURIComponent(id)}`, context));
 };
 
 export const buildReportDefinitionPayload = (report) => ({
@@ -562,7 +586,7 @@ export const buildReportDefinitionPayload = (report) => ({
       : [],
 });
 
-export const createCarmenReport = async (report) => {
+export const createCarmenReport = async (report, context = {}) => {
   if (!isCarmenApiConfigured()) {
     throw new Error('Carmen API session is not configured.');
   }
@@ -572,6 +596,7 @@ export const createCarmenReport = async (report) => {
     throw new Error('Report id is required before creating a report.');
   }
   const response = await requestCarmenJson('/api/reports', {
+    ...context,
     method: 'POST',
     body: payload,
   });
@@ -590,7 +615,7 @@ export const createCarmenReport = async (report) => {
   // POST returns a success flag on Carmen API. Read the stored timestamp before
   // the first edit, because PUT requires it for optimistic concurrency.
   const savedReport = adaptCarmenReportDefinition(
-    await requestCarmenJson(`/api/reports/${encodeURIComponent(createdId)}`),
+    await requestCarmenJson(`/api/reports/${encodeURIComponent(createdId)}`, context),
   );
   if (!savedReport?.lastModified) {
     throw new Error('Carmen API did not return a version for the new report.');
@@ -598,21 +623,22 @@ export const createCarmenReport = async (report) => {
   return savedReport;
 };
 
-export const fetchCarmenReportHistory = (id) =>
-  requestCarmenJson(`/api/reports/${encodeURIComponent(id)}/history`);
+export const fetchCarmenReportHistory = (id, context = {}) =>
+  requestCarmenJson(`/api/reports/${encodeURIComponent(id)}/history`, context);
 
-export const fetchCarmenReportHistoryVersion = async (id, historyId) =>
+export const fetchCarmenReportHistoryVersion = async (id, historyId, context = {}) =>
   adaptCarmenReportDefinition(await requestCarmenJson(
     `/api/reports/${encodeURIComponent(id)}/history/${encodeURIComponent(historyId)}`,
+    context,
   ));
 
-export const restoreCarmenReportHistoryVersion = async (id, historyId, lastModified) =>
+export const restoreCarmenReportHistoryVersion = async (id, historyId, lastModified, context = {}) =>
   adaptCarmenReportDefinition(await requestCarmenJson(
     `/api/reports/${encodeURIComponent(id)}/history/${encodeURIComponent(historyId)}/restore`,
-    { method: 'POST', body: { lastModified } },
+    { ...context, method: 'POST', body: { lastModified } },
   ));
 
-export const saveCarmenReport = async (report) => {
+export const saveCarmenReport = async (report, context = {}) => {
   if (!isCarmenApiConfigured()) {
     throw new Error('Carmen API session is not configured.');
   }
@@ -624,6 +650,7 @@ export const saveCarmenReport = async (report) => {
     : '/api/reports';
 
   const response = await requestCarmenJson(path, {
+    ...context,
     method,
     body: payload,
   });
@@ -631,60 +658,69 @@ export const saveCarmenReport = async (report) => {
   return response;
 };
 
-export const saveCarmenReports = async (reports) => {
+export const saveCarmenReports = async (reports, context = {}) => {
   if (!isCarmenApiConfigured()) {
     throw new Error('Carmen API session is not configured.');
   }
   if (!Array.isArray(reports) || reports.length === 0) return [];
 
   return requestCarmenJson('/api/reports/batch', {
+    ...context,
     method: 'POST',
     body: reports.map(buildReportDefinitionPayload),
   });
 };
 
-export const deleteCarmenReport = async (id) => {
+export const deleteCarmenReport = async (id, context = {}) => {
   if (!isCarmenApiConfigured()) {
     throw new Error('Carmen API session is not configured.');
   }
 
   const response = await requestCarmenJson(`/api/reports/${encodeURIComponent(id)}`, {
+    ...context,
     method: 'DELETE',
   });
 
   return response;
 };
 
-export const cloneCarmenReport = async (id) => {
+export const cloneCarmenReport = async (id, context = {}) => {
   if (!isCarmenApiConfigured()) {
     throw new Error('Carmen API session is not configured.');
   }
 
   const report = await requestCarmenJson(`/api/reports/${encodeURIComponent(id)}/clone`, {
+    ...context,
     method: 'POST',
   });
   return adaptCarmenReportDefinition(report);
 };
 
-export const fetchCarmenMasterData = async ({ year }) => {
+export const fetchCarmenMasterData = async ({ year, tenant }) => {
   if (!isCarmenApiConfigured()) {
     throw new Error('Carmen API session is not configured.');
   }
 
   const session = getStoredCarmenSession();
-  const usersPromise = fetchCarmenUsers().catch(() => []);
+  const context = { tenant };
+  const usersPromise = tenant ? Promise.resolve([]) : fetchCarmenUsers().catch(() => []);
+  // Group maintenance permissions are separate from Financial Report View.
+  const optionalGroupLookup = (error) => {
+    if (error.status === 403) return [];
+    throw error;
+  };
   try {
     const [masterData, users, accountGroups, deptGroups] = await Promise.all([
-      requestCarmenJson(`/api/report-master-data?year=${encodeURIComponent(year)}`),
+      requestCarmenJson(`/api/report-master-data?year=${encodeURIComponent(year)}`, context),
       usersPromise,
-      fetchCarmenAccountGroups().catch(() => []),
-      fetchCarmenDepartmentGroups().catch(() => []),
+      tenant ? fetchCarmenAccountGroups(context).catch(optionalGroupLookup) : fetchCarmenAccountGroups().catch(() => []),
+      tenant ? fetchCarmenDepartmentGroups(context).catch(optionalGroupLookup) : fetchCarmenDepartmentGroups().catch(() => []),
     ]);
     const currentUser = masterData?.currentUser || session?.user || null;
     return {
       currentUser,
       users: currentUser
-        ? [currentUser, ...users.filter((user) => String(user.id) !== String(currentUser.id))]
+        ? [currentUser, ...(tenant ? masterData.users || [] : users).filter((user) => String(user.id) !== String(currentUser.id))]
         : users,
       companyProfile: adaptCarmenCompany(masterData?.companyProfile),
       depts: adaptCarmenDepartments(masterData?.depts),
@@ -700,7 +736,8 @@ export const fetchCarmenMasterData = async ({ year }) => {
         L4: Array.isArray(masterData?.groups?.L4) ? masterData.groups.L4 : [],
       },
     };
-  } catch {
+  } catch (error) {
+    if (tenant) throw error;
     const session = getStoredCarmenSession();
     if (!session?.accessToken) {
       throw new Error('Carmen session expired. Please sign in again.');
@@ -745,12 +782,13 @@ export const fetchCarmenMasterData = async ({ year }) => {
   }
 };
 
-export const fetchCarmenReportData = async ({ reportId = '', year, period, revision, deptIds = [], day = '' }) => {
+export const fetchCarmenReportData = async ({ reportId = '', year, period, revision, deptIds = [], day = '', tenant }) => {
   if (!isCarmenApiConfigured()) {
     throw new Error('Carmen API session is not configured.');
   }
 
   const response = await requestCarmenJson('/api/report-data', {
+    tenant,
     timeoutMs: 120000,
     query: {
       reportId,

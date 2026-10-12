@@ -1,3 +1,4 @@
+import { useTranslation } from "@/lib/i18n.js";
 import React, { useMemo, useState } from 'react';
 import { Check, ChevronDown, Search } from 'lucide-react';
 import { normalizeDeptLookupCode } from '../lib/normalizeCode.js';
@@ -11,7 +12,8 @@ import {
 } from '@/components/ui/popover.jsx';
 import { cn } from '@/lib/utils.js';
 
-export default function MultiSelectDropdown({ options, selected, onChange, label, testIdPrefix, normalizeValue = normalizeDeptLookupCode, searchPlaceholder = 'Search department...', emptyLabel = 'All', noDataLabel = 'No options available' }) {
+export default function MultiSelectDropdown({ options, selected, onChange, label, testIdPrefix, normalizeValue = normalizeDeptLookupCode, searchPlaceholder = 'Search department...', emptyLabel = 'All', noDataLabel = 'No options available', showAllLabel = true }) {
+  const t = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const friendlyButtonClassName = 'border-border bg-background text-foreground hover:bg-muted';
@@ -35,9 +37,9 @@ export default function MultiSelectDropdown({ options, selected, onChange, label
       const key = normalizeValue(id);
       if (!id || seen.has(key)) return;
       seen.add(key);
-      const display = option.name && option.name !== option.id && option.name !== `Dept ${option.id}`
+      const display = option.display || (option.name && option.name !== option.id && option.name !== `Dept ${option.id}`
         ? `${id} - ${option.name}`
-        : id;
+        : id);
       unique.push({ id, display, searchText: `${id} ${option.name || ''}`.trim() });
     });
 
@@ -77,12 +79,12 @@ export default function MultiSelectDropdown({ options, selected, onChange, label
           data-testid={`dropdown-${testIdPrefix}`}
         >
           <span className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-            <span className="shrink-0 text-xs font-medium text-muted-foreground">{label}</span>
+            <span className="shrink-0 text-xs font-medium text-muted-foreground">{t(label)}</span>
             <span className="truncate text-sm font-medium" data-testid={`selected-value-${testIdPrefix}`}>
               {selected.length === 0
-                ? emptyLabel
-                : isAllSelected
-                  ? 'All'
+                ? t(emptyLabel)
+                : isAllSelected && showAllLabel
+                  ? t("All")
                 : selectedItems.length <= 2
                   ? selectedItems.map((item) => item.display).join(', ')
                   : `${selectedItems.length} selected`}
@@ -107,7 +109,7 @@ export default function MultiSelectDropdown({ options, selected, onChange, label
                   setSearchTerm('');
                 }
               }}
-              placeholder={searchPlaceholder}
+              placeholder={t(searchPlaceholder)}
               className="h-8 border-0 bg-transparent p-0 shadow-none focus-visible:ring-0"
             />
           </div>
@@ -119,9 +121,7 @@ export default function MultiSelectDropdown({ options, selected, onChange, label
               className="h-8 px-3 text-xs font-medium text-muted-foreground hover:text-foreground"
               onClick={selectAll}
               disabled={validOptions.length === 0 || isAllSelected}
-            >
-              Select all
-            </Button>
+            >{t("Select all")}</Button>
             <Button
               type="button"
               variant="ghost"
@@ -129,15 +129,13 @@ export default function MultiSelectDropdown({ options, selected, onChange, label
               className="h-8 px-3 text-xs font-medium text-muted-foreground hover:text-foreground"
               onClick={clearAll}
               disabled={selected.length === 0}
-            >
-              Clear
-            </Button>
+            >{t("Clear")}</Button>
           </div>
         </div>
         <div className="max-h-[min(60vh,320px)] overflow-y-auto p-1">
           {filteredOptions.length === 0 ? (
             <div className="px-3 py-6 text-center text-sm text-muted-foreground">
-              {searchTerm.trim() ? 'No matching options' : noDataLabel}
+              {searchTerm.trim() ? t("No matching options") : t(noDataLabel)}
             </div>
           ) : (
             filteredOptions.map((option) => {

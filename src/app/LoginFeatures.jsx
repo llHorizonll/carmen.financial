@@ -1,3 +1,4 @@
+import { useTranslation } from "@/lib/i18n.js";
 import React from 'react';
 import { FileText, ShieldCheck, SlidersHorizontal } from 'lucide-react';
 import { Separator } from '@/components/ui/separator.jsx';
@@ -9,6 +10,7 @@ const featureRows = [
 ];
 
 export default function LoginFeatures() {
+  const t = useTranslation();
   return (
     <section aria-label="Carmen Blue Financial Report" className="grid max-w-2xl gap-0 overflow-hidden rounded-xl border bg-card">
       {featureRows.map((item, index) => {
@@ -18,7 +20,7 @@ export default function LoginFeatures() {
             {index > 0 && <Separator />}
             <article className="login-enter-rise flex items-start gap-4 px-4 py-4 sm:px-5">
               <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border bg-muted/40"><Icon className="size-4 text-foreground" /></span>
-              <div className="space-y-1"><h2 className="text-sm font-semibold text-foreground">{item.title}</h2><p className="text-sm leading-6 text-pretty text-muted-foreground">{item.description}</p></div>
+              <div className="space-y-1"><h2 className="text-sm font-semibold text-foreground">{t(item.title)}</h2><p className="text-sm leading-6 text-pretty text-muted-foreground">{t(item.description)}</p></div>
             </article>
           </React.Fragment>
         );

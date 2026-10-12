@@ -73,13 +73,21 @@ const getCarmenFinancialReportPermission = (permissions) => {
 
 export const deriveCarmenFinancialReportAccess = (permissions) => {
   const permission = getCarmenFinancialReportPermission(permissions);
-  const add = getFlag(permission, ['Add', 'add']);
-  const update = getFlag(permission, ['Update', 'update']);
-  const deleteAccess = getFlag(permission, ['Delete', 'delete']);
+  const code = String(permission?.Code ?? permission?.code ?? '').trim();
+  const bits = /^[0-9a-f]{2}$/i.test(code) ? parseInt(code, 16) : 0;
+  const hasAccess = (name, mask) => {
+    const names = [name, name.toLowerCase()];
+    return names.some((key) => permission?.[key] !== undefined)
+      ? getFlag(permission, names)
+      : (bits & mask) !== 0;
+  };
+  const add = hasAccess('Add', 0x40);
+  const update = hasAccess('Update', 0x20);
+  const deleteAccess = hasAccess('Delete', 0x10);
   const setup = add || update || deleteAccess;
 
   return {
-    view: getFlag(permission, ['View', 'view']),
+    view: hasAccess('View', 0x80),
     add,
     update,
     delete: deleteAccess,

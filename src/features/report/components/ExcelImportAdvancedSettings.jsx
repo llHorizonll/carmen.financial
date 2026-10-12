@@ -1,3 +1,4 @@
+import { useTranslation } from "@/lib/i18n.js";
 import React from "react";
 import { RotateCcw, Settings2 } from "lucide-react";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
@@ -109,6 +110,7 @@ export default function ExcelImportAdvancedSettings({
   onChange,
   onReset,
 }) {
+  const t = useTranslation();
   const config = sheet.importConfig || {};
   const errors = sheet.importIssues?.errors || [];
   const warnings = sheet.importIssues?.warnings || [];
@@ -128,28 +130,22 @@ export default function ExcelImportAdvancedSettings({
           <VStack gap={1}>
             <HStack gap={2} vAlign="center">
               <Settings2 className="size-4 text-primary" aria-hidden="true" />
-              <h2 className="text-balance text-base font-semibold text-foreground">
-                Advanced import settings · {sheet.name}
+              <h2 className="text-balance text-base font-semibold text-foreground">{t("Advanced import settings ·")}{" "}{sheet.name}
               </h2>
             </HStack>
-            <p className="text-pretty text-sm leading-6 text-muted-foreground">
-              Auto-detected coordinates are editable. The preview updates as you
-              change them.
-            </p>
+            <p className="text-pretty text-sm leading-6 text-muted-foreground">{t("Auto-detected coordinates are editable. The preview updates as you change them.")}</p>
           </VStack>
           <HStack gap={2} vAlign="center">
             <Badge variant={errors.length === 0 ? "secondary" : "destructive"}>
-              {errors.length === 0 ? "Ready" : "Needs attention"}
+              {errors.length === 0 ? t("Ready") : t("Needs attention")}
             </Badge>
             <Button type="button" variant="outline" size="sm" onClick={onReset}>
-              <RotateCcw aria-hidden="true" />
-              Reset auto-detect
-            </Button>
+              <RotateCcw aria-hidden="true" />{t("Reset auto-detect")}</Button>
           </HStack>
         </HStack>
 
         <fieldset className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <legend className="sr-only">Worksheet import coordinates</legend>
+          <legend className="sr-only">{t("Worksheet import coordinates")}</legend>
           {FIELDS.map((field) => (
             <ImportConfigField
               key={field.key}
@@ -165,7 +161,7 @@ export default function ExcelImportAdvancedSettings({
           <VStack as="section" gap={2} aria-live="polite">
             {errors.length > 0 && (
               <section
-                aria-label="Import setting errors"
+                aria-label={t("Import setting errors")}
                 className="rounded-xl border border-destructive/25 bg-destructive/8 text-destructive"
               >
                 <VStack gap={1} padding={3}>
@@ -179,7 +175,7 @@ export default function ExcelImportAdvancedSettings({
             )}
             {warnings.length > 0 && (
               <section
-                aria-label="Import setting warnings"
+                aria-label={t("Import setting warnings")}
                 className="rounded-xl border border-border bg-muted/35 text-foreground"
               >
                 <VStack gap={1} padding={3}>
@@ -202,23 +198,19 @@ export default function ExcelImportAdvancedSettings({
             vAlign="center"
             wrap="wrap"
           >
-            <h3 className="text-balance text-sm font-semibold text-foreground">
-              Mapping preview
-            </h3>
+            <h3 className="text-balance text-sm font-semibold text-foreground">{t("Mapping preview")}</h3>
             <p className="text-sm tabular-nums text-muted-foreground">
-              {sheet.detectedRows.length} rows · {sheet.detectedColumns.length}{" "}
-              report columns
-            </p>
+              {sheet.detectedRows.length} {t("rows ·")} {sheet.detectedColumns.length}{" "}{t("report columns")}</p>
           </HStack>
           {previewRows.length > 0 ? (
             <section className="overflow-x-auto rounded-xl border border-border">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-20">Row</TableHead>
-                    <TableHead className="min-w-48">Description</TableHead>
-                    <TableHead className="min-w-40">Dept mapping</TableHead>
-                    <TableHead className="min-w-64">Account mapping</TableHead>
+                    <TableHead className="w-20">{t("Row")}</TableHead>
+                    <TableHead className="min-w-48">{t("Description")}</TableHead>
+                    <TableHead className="min-w-40">{t("Dept mapping")}</TableHead>
+                    <TableHead className="min-w-64">{t("Account mapping")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -251,10 +243,7 @@ export default function ExcelImportAdvancedSettings({
               </Table>
             </section>
           ) : (
-            <p className="rounded-xl border border-dashed border-border p-4 text-pretty text-sm text-muted-foreground">
-              No report rows match these coordinates. Adjust the row range or
-              description column.
-            </p>
+            <p className="rounded-xl border border-dashed border-border p-4 text-pretty text-sm text-muted-foreground">{t("No report rows match these coordinates. Adjust the row range or description column.")}</p>
           )}
         </VStack>
       </VStack>

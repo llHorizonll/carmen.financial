@@ -1,3 +1,4 @@
+import { useTranslation } from "@/lib/i18n.js";
 import React from 'react';
 import { ChevronDown, SearchIcon, Settings2 } from 'lucide-react';
 import { Accordion } from 'radix-ui';
@@ -47,6 +48,7 @@ export default function EditMappingModal({
   onApply,
   onClose,
 }) {
+  const t = useTranslation();
   if (!isOpen || !editingRow) return null;
   const friendlyButtonClassName = 'border-border bg-background text-foreground hover:bg-muted';
 
@@ -73,15 +75,13 @@ export default function EditMappingModal({
       <DialogContent className="flex max-h-[calc(100dvh-2rem)] w-full min-h-0 flex-col overflow-hidden bg-popover sm:max-w-6xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Settings2 className="size-4" />
-            Edit Mapping
-          </DialogTitle>
-          <DialogDescription>Adjust row mapping details and detail selectors.</DialogDescription>
+            <Settings2 className="size-4" />{t("Edit Mapping")}</DialogTitle>
+          <DialogDescription>{t("Adjust row mapping details and detail selectors.")}</DialogDescription>
         </DialogHeader>
 
         <section className="grid min-h-0 flex-1 gap-4 overflow-y-auto pr-1">
           <section className="space-y-2">
-            <Label>Description</Label>
+            <Label>{t("Description")}</Label>
             <Input value={editingRow.desc} onChange={(e) => setEditingRow({ ...editingRow, desc: e.target.value })} />
           </section>
 
@@ -89,12 +89,12 @@ export default function EditMappingModal({
           <Accordion.Item value="department" className="rounded-xl border border-border bg-background">
             <Accordion.Header>
               <Accordion.Trigger aria-label={`Department: ${departmentSummary}`} className="flex w-full items-center gap-3 p-4 text-left text-sm font-medium focus-visible:rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&[data-state=open]>svg]:rotate-180">
-                <span>Department</span><span className="min-w-0 flex-1 truncate text-xs font-normal text-muted-foreground">{departmentSummary}</span><ChevronDown className="size-4 shrink-0 transition-transform" />
+                <span>{t("Department")}</span><span className="min-w-0 flex-1 truncate text-xs font-normal text-muted-foreground">{departmentSummary}</span><ChevronDown className="size-4 shrink-0 transition-transform" />
               </Accordion.Trigger>
             </Accordion.Header>
             <Accordion.Content className="space-y-3 px-4 pb-4">
             <section className="space-y-2">
-              <Label>Department Group</Label>
+              <Label>{t("Department Group")}</Label>
               <GroupSelectDropdown
                 ariaLabel="Department group"
                 emptyLabel="No department group"
@@ -111,26 +111,22 @@ export default function EditMappingModal({
                 }}
               />
               {selectedDepartmentGroup && (
-                <p className="text-xs text-muted-foreground">
-                  This group maps {selectedDepartmentGroup.deptIds?.length || 0} department(s). Clear the group before selecting individual departments.
-                </p>
+                <p className="text-xs text-muted-foreground">{t("This group maps")}{" "}{selectedDepartmentGroup.deptIds?.length || 0}{" "}{t("department(s). Clear the group before selecting individual departments.")}</p>
               )}
             </section>
 
             <section className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <Label>Departments</Label>
+              <Label>{t("Departments")}</Label>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 className={`w-full justify-start sm:w-auto ${friendlyButtonClassName}`}
-                aria-label="Select departments"
+                aria-label={t("Select departments")}
                 disabled={hasDepartmentGroup}
                 onClick={() => onOpenDetailSelector({ field: 'dept', title: 'Select Departments', subTitle: editingRow.desc, items: masterData.depts })}
               >
-                <SearchIcon />
-                Select Departments
-              </Button>
+                <SearchIcon />{t("Select Departments")}</Button>
             </section>
             <Input
               value={editingRow.dept}
@@ -144,12 +140,12 @@ export default function EditMappingModal({
           <Accordion.Item value="account" className="rounded-xl border border-border bg-background">
             <Accordion.Header>
               <Accordion.Trigger aria-label={`Account: ${accountSummary}`} className="flex w-full items-center gap-3 p-4 text-left text-sm font-medium focus-visible:rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&[data-state=open]>svg]:rotate-180">
-                <span>Account</span><span className="min-w-0 flex-1 truncate text-xs font-normal text-muted-foreground">{accountSummary}</span><ChevronDown className="size-4 shrink-0 transition-transform" />
+                <span>{t("Account")}</span><span className="min-w-0 flex-1 truncate text-xs font-normal text-muted-foreground">{accountSummary}</span><ChevronDown className="size-4 shrink-0 transition-transform" />
               </Accordion.Trigger>
             </Accordion.Header>
             <Accordion.Content className="space-y-3 px-4 pb-4">
             <section className="space-y-2">
-              <Label>Account Group</Label>
+              <Label>{t("Account Group")}</Label>
               <GroupSelectDropdown
                 ariaLabel="Account group"
                 emptyLabel="No account group"
@@ -169,17 +165,15 @@ export default function EditMappingModal({
                 }}
               />
               {selectedAccountGroup && (
-                <p className="text-xs text-muted-foreground">
-                  This {selectedAccountGroup.level} group maps {selectedAccountGroup.accountIds?.length || 0} account code(s). Clear the group before selecting individual accounts.
-                </p>
+                <p className="text-xs text-muted-foreground">{t("This")}{" "}{selectedAccountGroup.level} {t("group maps")} {selectedAccountGroup.accountIds?.length || 0}{" "}{t("account code(s). Clear the group before selecting individual accounts.")}</p>
               )}
             </section>
 
             <section className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <Label>Account Codes Filter</Label>
+              <Label>{t("Account Codes Filter")}</Label>
               <Select value={modalAccCategory} onValueChange={setModalAccCategory} disabled={hasAccountGroup}>
                 <SelectTrigger className="h-9 w-full sm:w-40">
-                  <SelectValue placeholder="All Categories" />
+                  <SelectValue placeholder={t("All Categories")} />
                 </SelectTrigger>
                 <SelectContent position="popper">
                   {accountCategoryOptions.map((option) => (
@@ -193,22 +187,20 @@ export default function EditMappingModal({
 
             <section className="space-y-2">
               <section className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <Label>Account Codes</Label>
+                <Label>{t("Account Codes")}</Label>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   className={`w-full justify-start sm:w-auto ${friendlyButtonClassName}`}
-                  aria-label="Select account details"
+                  aria-label={t("Select account details")}
                   disabled={hasAccountGroup}
                   onClick={() => onOpenDetailSelector({ field: 'accCodes', title: 'Select Account Detail', subTitle: editingRow.desc, items: masterData.accCodes.filter((item) => modalAccCategory === 'ALL' || item.type === modalAccCategory) })}
                 >
-                  <SearchIcon />
-                  Select Account Detail
-                </Button>
+                  <SearchIcon />{t("Select Account Detail")}</Button>
               </section>
               <Textarea
-                aria-label="Account codes"
+                aria-label={t("Account codes")}
                 value={editingRow.accCodes}
                 onChange={(e) => setEditingRow({ ...editingRow, accCodes: e.target.value })}
                 placeholder="e.g. 4001, 4002"
@@ -222,7 +214,7 @@ export default function EditMappingModal({
           <Accordion.Item value="dimensions" className="rounded-xl border border-border bg-background">
             <Accordion.Header>
               <Accordion.Trigger aria-label={`Dimensions: ${dimensionCount} of 10 configured`} className="flex w-full items-center gap-3 p-4 text-left text-sm font-medium focus-visible:rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&[data-state=open]>svg]:rotate-180">
-                <span>Dimensions</span><span className="min-w-0 flex-1 truncate text-xs font-normal text-muted-foreground">{dimensionCount ? `${dimensionCount} of 10 configured` : 'Not configured'}</span><ChevronDown className="size-4 shrink-0 transition-transform" />
+                <span>{t("Dimensions")}</span><span className="min-w-0 flex-1 truncate text-xs font-normal text-muted-foreground">{dimensionCount ? `${dimensionCount} of 10 configured` : t("Not configured")}</span><ChevronDown className="size-4 shrink-0 transition-transform" />
               </Accordion.Trigger>
             </Accordion.Header>
             <Accordion.Content className="px-4 pb-4">
@@ -253,12 +245,8 @@ export default function EditMappingModal({
         </section>
 
         <DialogFooter className="shrink-0 flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button variant="outline" size="sm" className={`w-full sm:w-auto ${friendlyButtonClassName}`} onClick={onClose}>
-            Cancel
-          </Button>
-          <Button size="sm" className="w-full sm:w-auto" onClick={onApply}>
-            Apply Mapping
-          </Button>
+          <Button variant="outline" size="sm" className={`w-full sm:w-auto ${friendlyButtonClassName}`} onClick={onClose}>{t("Cancel")}</Button>
+          <Button size="sm" className="w-full sm:w-auto" onClick={onApply}>{t("Apply Mapping")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

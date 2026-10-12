@@ -1,3 +1,4 @@
+import { useTranslation } from "@/lib/i18n.js";
 import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card.jsx';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area.jsx';
@@ -35,6 +36,7 @@ export default function ReportView({
   periodOptions,
   masterData,
 }) {
+  const t = useTranslation();
   const [selectedCell, setSelectedCell] = useState(null);
   const drilldown = useMemo(() => selectedCell && activeReport ? buildReportDrilldown({
     activeReport,
@@ -74,9 +76,7 @@ export default function ReportView({
         <CardDescription className="text-center text-sm text-muted-foreground">
           {displayPeriodLabel}
         </CardDescription>
-        <div className="pt-1 text-center text-xs font-medium text-muted-foreground sm:hidden">
-          Swipe horizontally to inspect columns
-        </div>
+        <div className="pt-1 text-center text-xs font-medium text-muted-foreground sm:hidden">{t("Swipe horizontally to inspect columns")}</div>
       </CardHeader>
 
       <CardContent className="min-h-0 flex-1 p-0">
@@ -92,9 +92,7 @@ export default function ReportView({
                     <TableHead
                       key={col.id}
                       className={`${descriptionIsFirst ? 'sticky left-0 z-30 shadow-[1px_0_0_0_var(--border)]' : ''} min-w-[240px] border-r text-center text-xs font-semibold sm:min-w-[300px] ${currentTheme.header}`}
-                    >
-                      Description
-                    </TableHead>
+                    >{t("Description")}</TableHead>
                   ) : (
                     <TableHead
                       key={col.id}
@@ -164,21 +162,20 @@ export default function ReportView({
         <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
           <SheetHeader>
             <SheetTitle>{selectedCell?.row.desc} · {selectedCell?.col.label}</SheetTitle>
-            <SheetDescription>Account and department contributions from the {drilldown?.source || 'report'} summary data.</SheetDescription>
+            <SheetDescription>{t("Account and department contributions from the")} {drilldown?.source || 'report'} {t("summary data.")}</SheetDescription>
           </SheetHeader>
           {drilldown && <section className="grid gap-3 p-4 text-sm">
-            <p>Cell: {selectedCell.value.toLocaleString(undefined, { minimumFractionDigits: 2 })} · Breakdown: {drilldown.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
-            <p role="status" className={Math.abs(selectedCell.value - drilldown.total) < 0.005 ? 'text-emerald-700' : 'text-destructive'}>
-              Difference: {(selectedCell.value - drilldown.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            <p>{t("Cell:")} {selectedCell.value.toLocaleString(undefined, { minimumFractionDigits: 2 })} {t("· Breakdown:")} {drilldown.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+            <p role="status" className={Math.abs(selectedCell.value - drilldown.total) < 0.005 ? 'text-emerald-700' : 'text-destructive'}>{t("Difference:")}{" "}{(selectedCell.value - drilldown.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </p>
             <table className="w-full text-left tabular-nums">
-              <thead><tr className="border-b"><th className="py-2">Account</th><th>Department</th><th className="text-right">Amount</th></tr></thead>
+              <thead><tr className="border-b"><th className="py-2">{t("Account")}</th><th>{t("Department")}</th><th className="text-right">{t("Amount")}</th></tr></thead>
               <tbody>{drilldown.lines.map((line) => <tr key={`${line.accountCode}:${line.departmentCode}`} className="border-b">
                 <td className="py-2">{line.accountCode || '—'}</td><td>{line.departmentCode || '—'}</td>
                 <td className="text-right">{line.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
               </tr>)}</tbody>
             </table>
-            {drilldown.lines.length === 0 && <p className="text-muted-foreground">No matching source rows.</p>}
+            {drilldown.lines.length === 0 && <p className="text-muted-foreground">{t("No matching source rows.")}</p>}
           </section>}
         </SheetContent>
       </Sheet>

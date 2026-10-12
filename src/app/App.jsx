@@ -1,3 +1,4 @@
+import { useTranslation, getLocale } from "@/lib/i18n.js";
 import React, {
   useCallback,
   useEffect,
@@ -18,7 +19,6 @@ import {
   Check,
   Monitor,
   Type,
-  Building2,
   ZoomIn,
   ZoomOut,
   Download,
@@ -95,6 +95,9 @@ import {
 } from "../lib/theme.js";
 
 import MultiSelectDropdown from "../features/report/components/MultiSelectDropdown.jsx";
+import LanguagePreference from "./LanguagePreference.jsx";
+import useBusinessUnitReports, { reportKey } from "../features/report/hooks/useBusinessUnitReports.js";
+import { BusinessUnitSelector, BusinessUnitReportList, BusinessUnitTargetDialog } from "../features/report/components/BusinessUnitReports.jsx";
 import usePersistentState from "../hooks/usePersistentState.js";
 import { getDefaultReports } from "../features/report/data/defaultReports.js";
 import { createBlankReport } from "../features/report/data/reportTemplates.js";
@@ -382,6 +385,10 @@ const FONT_SIZE_OPTIONS = [
 ];
 
 export default function App({ onLogout = null }) {
+  const t = useTranslation();
+  const apiConfigured = isCarmenApiConfigured();
+  const storedCarmenSession = apiConfigured ? getStoredCarmenSession() : null;
+  const businessUnitsEnabled = apiConfigured && Boolean(storedCarmenSession?.businessUnit?.tenant);
   const [activeTab, setActiveTab] = useState("report");
   const [tabMotionDirection, setTabMotionDirection] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -405,10 +412,13 @@ export default function App({ onLogout = null }) {
   const confirmActionRef = useRef(null);
   const [setupSaveWarnings, setSetupSaveWarnings] = useState([]);
 
-  const [masterData, setMasterData] = usePersistentState(
+  const [localMasterData, setLocalMasterData] = usePersistentState(
     "carmen_bi_master_api_v1",
     INITIAL_MASTER_DATA,
   );
+  const [apiMasterData, setApiMasterData] = useState(INITIAL_MASTER_DATA);
+  const masterData = apiConfigured ? apiMasterData : localMasterData;
+  const setMasterData = apiConfigured ? setApiMasterData : setLocalMasterData;
   const [periodOptions, setPeriodOptions] = useState([]);
   const [budgetRevisionOptions, setBudgetRevisionOptions] = useState([]);
   const [reportOptions, setReportOptions] = useState(DEFAULT_REPORT_OPTIONS);
@@ -416,8 +426,6 @@ export default function App({ onLogout = null }) {
   const [isMasterDataLoading, setIsMasterDataLoading] = useState(false);
   const [isReportCatalogLoading, setIsReportCatalogLoading] = useState(false);
   const [reportCatalogError, setReportCatalogError] = useState(null);
-  const apiConfigured = isCarmenApiConfigured();
-  const storedCarmenSession = apiConfigured ? getStoredCarmenSession() : null;
 
   const [currentUser, setCurrentUser] = useState(() => {
     if (apiConfigured) {
@@ -496,6 +504,10 @@ export default function App({ onLogout = null }) {
   });
   const [reportsLoaded, setReportsLoaded] = useState(!apiConfigured);
   const [currentReportId, setCurrentReportId] = useState(null);
+  const businessUnits = useBusinessUnitReports({ enabled: businessUnitsEnabled, session: storedCarmenSession, setReports });
+  const [createTargetOpen, setCreateTargetOpen] = useState(false);
+  const creatingReportRef = useRef(false);
+  const [loadedTenant, setLoadedTenant] = useState(null);
   const [setupDraft, setSetupDraft] = useState(null);
   const [isSetupDirty, setIsSetupDirty] = useState(false);
   const [setupUndoHistory, setSetupUndoHistory] = useState([]);
@@ -504,11 +516,10 @@ export default function App({ onLogout = null }) {
   const [detailSelecting, setDetailSelecting] = useState(null);
   const [modalAccCategory, setModalAccCategory] = useState("ALL");
   const isMobile = useIsMobile();
-  const canSetupReports = canSetupFinancialReports(currentUser);
   const gettingStartedStorageKey = `${GETTING_STARTED_STORAGE_PREFIX}${currentUser?.id || "anonymous"}`;
   const accessibleReports = useMemo(
-    () => getAccessibleReports(reports, currentUser),
-    [reports, currentUser],
+    () => businessUnitsEnabled ? reports.filter((report) => businessUnits.selected.includes(report.tenant)) : getAccessibleReports(reports, currentUser),
+    [reports, currentUser, businessUnitsEnabled, businessUnits.selected],
   );
   const latestAccessibleReport = useMemo(
     () => getLatestCreatedReport(accessibleReports),
@@ -516,26 +527,42 @@ export default function App({ onLogout = null }) {
   );
   const resolvedCurrentReportId = useMemo(() => {
     if (currentReportId === NO_REPORT_SELECTED) return null;
-    if (accessibleReports.some((report) => report.id === currentReportId)) {
+    if (accessibleReports.some((report) => reportKey(report) === currentReportId)) {
       return currentReportId;
     }
 
-    return latestAccessibleReport?.id || null;
+    return reportKey(latestAccessibleReport) || null;
   }, [accessibleReports, currentReportId, latestAccessibleReport]);
   const activeReport = resolvedCurrentReportId
     ? accessibleReports.find(
-        (report) => report.id === resolvedCurrentReportId,
+        (report) => reportKey(report) === resolvedCurrentReportId,
       ) || null
     : null;
+  const activeTenant = activeReport?.tenant || businessUnits.selected[0];
+  const context = activeTenant ? { tenant: activeTenant } : {};
+  const unitPermission = businessUnits.units.find((unit) => unit.id === activeTenant)?.permission;
+  const tenantContextReady = !businessUnitsEnabled || loadedTenant === activeTenant;
+  const canSetupReports = businessUnitsEnabled ? Boolean(unitPermission?.setup) && tenantContextReady : canSetupFinancialReports(currentUser);
+  const creationUnits = businessUnits.units.filter((unit) => businessUnits.selected.includes(unit.id) && unit.permission?.setup);
+  const canCreateReports = businessUnitsEnabled ? creationUnits.length > 0 : canSetupReports;
   const setupReport =
-    setupDraft?.id === activeReport?.id ? setupDraft : activeReport;
+    reportKey(setupDraft) === reportKey(activeReport) ? setupDraft : activeReport;
+
+  useEffect(() => {
+    if (!businessUnitsEnabled) return;
+    latestReportDataRequestRef.current += 1;
+    loadedReportDataRef.current = null;
+    setLoadedTenant(null); setEngineData([]); setBudgetData([]); setApiDimensions({});
+    setMasterData(INITIAL_MASTER_DATA); setPeriodOptions([]); setBudgetRevisionOptions([]);
+    setGlobalDepts([]); setAppliedDepts([]); setMasterDataError(null);
+  }, [businessUnitsEnabled, activeTenant, setMasterData]);
 
   useEffect(() => {
     setSetupDraft(activeReport);
     setIsSetupDirty(false);
     setSetupUndoHistory([]);
     lastSetupUndoGroupRef.current = null;
-  }, [activeReport?.id]);
+  }, [resolvedCurrentReportId]);
   useEffect(() => {
     if (!currentUser?.id || !reportsLoaded) return;
     setGettingStartedStep(0);
@@ -565,7 +592,7 @@ export default function App({ onLogout = null }) {
   }, [activeReport]);
   const defaultReportDay = activeReportUsesDayFilter ? "1" : "";
   const currentDayFilter =
-    dayFilterState?.reportId === activeReport?.id &&
+    dayFilterState?.reportId === reportKey(activeReport) &&
     dayFilterState?.reportDay === defaultReportDay
       ? dayFilterState
       : null;
@@ -597,7 +624,7 @@ export default function App({ onLogout = null }) {
       day = "",
       source = "report",
     } = {}) => {
-      if (!apiConfigured || !activeReport?.id) return null;
+      if (!apiConfigured || !activeReport?.id || !tenantContextReady) return null;
 
       if (activeReportUsesDayFilter && String(day || "").trim()) {
         const dayNumber = Number.parseInt(day, 10);
@@ -640,6 +667,7 @@ export default function App({ onLogout = null }) {
       setIsLoading(true);
       try {
         const apiData = await fetchCarmenReportData({
+          ...context,
           reportId: reportId || activeReport.id,
           year,
           period,
@@ -670,22 +698,23 @@ export default function App({ onLogout = null }) {
           setIsLoading(false);
       }
     },
-    [apiConfigured, activeReport, activeReportUsesDayFilter, periodOptions, onLogout],
+    [apiConfigured, activeReport, activeTenant, tenantContextReady, activeReportUsesDayFilter, periodOptions, onLogout],
   );
 
   useEffect(() => {
     if (!apiConfigured || !/^\d{4}$/.test(String(globalYear))) return;
+    if (businessUnitsEnabled && !activeTenant) return;
 
     const masterDataLoadKey = String(globalYear);
-    if (masterDataLoadKeysRef.current.has(masterDataLoadKey)) return;
+    if (!businessUnitsEnabled && masterDataLoadKeysRef.current.has(masterDataLoadKey)) return;
 
     let isCancelled = false;
     const loadCarmenMasterData = async () => {
       setIsMasterDataLoading(true);
       try {
         const [apiData, dimensions] = await Promise.all([
-          fetchCarmenMasterData({ year: globalYear }),
-          fetchCarmenDimensions().catch(() => ({})),
+          fetchCarmenMasterData({ year: globalYear, ...context }),
+          businessUnitsEnabled ? fetchCarmenDimensions(context) : fetchCarmenDimensions().catch(() => ({})),
         ]);
         if (isCancelled) return;
 
@@ -697,6 +726,7 @@ export default function App({ onLogout = null }) {
           setCurrentUser(apiData.users[0]);
         setPeriodOptions(apiData.periods || []);
         setBudgetRevisionOptions(apiData.budgetRevisions || []);
+        setLoadedTenant(activeTenant);
         setMasterDataError(null);
       } catch (error) {
         if (!isCancelled) {
@@ -720,7 +750,7 @@ export default function App({ onLogout = null }) {
     return () => {
       isCancelled = true;
     };
-  }, [globalYear, apiConfigured, onLogout, setMasterData]);
+  }, [globalYear, apiConfigured, businessUnitsEnabled, activeTenant, onLogout, setMasterData]);
 
   useEffect(() => {
     if (!apiConfigured) return;
@@ -732,7 +762,7 @@ export default function App({ onLogout = null }) {
       try {
         const [optionsResult, reportsResult] = await Promise.allSettled([
           fetchCarmenReportOptions(),
-          fetchCarmenReports(),
+          businessUnitsEnabled ? Promise.resolve([]) : fetchCarmenReports(),
         ]);
         if (isCancelled) return;
 
@@ -788,12 +818,12 @@ export default function App({ onLogout = null }) {
     return () => {
       isCancelled = true;
     };
-  }, [apiConfigured, onLogout]);
+  }, [apiConfigured, businessUnitsEnabled, onLogout]);
 
   useEffect(() => {
-    if (!reportsLoaded) return;
+    if (!reportsLoaded || apiConfigured) return;
     writeStoredReports(reports);
-  }, [reports, reportsLoaded]);
+  }, [reports, reportsLoaded, apiConfigured]);
 
   // react-doctor-disable-next-line no-set-state-after-await-in-effect -- Cleanup flips isCancelled before any late request can update effect-owned notice state.
   useEffect(() => {
@@ -803,6 +833,7 @@ export default function App({ onLogout = null }) {
       !activeReport?.id
     )
       return;
+    if (!tenantContextReady) return;
     if (
       activeReportUsesDayFilter &&
       String(activeReportDay).trim() &&
@@ -843,6 +874,8 @@ export default function App({ onLogout = null }) {
     appliedBudgetRevision,
     appliedDepts,
     activeReport?.id,
+    activeTenant,
+    tenantContextReady,
     activeReportDay,
     activeReportUsesDayFilter,
     periodOptions,
@@ -863,7 +896,7 @@ export default function App({ onLogout = null }) {
     }
     lastSetupUndoGroupRef.current = { key: groupKey, time: now };
     setSetupDraft((currentDraft) => ({
-      ...(currentDraft?.id === activeReport.id ? currentDraft : activeReport),
+      ...(reportKey(currentDraft) === reportKey(activeReport) ? currentDraft : activeReport),
       ...updates,
     }));
     setIsSetupDirty(true);
@@ -874,7 +907,7 @@ export default function App({ onLogout = null }) {
     setIsSetupSaving(true);
     try {
       const saveResult = apiConfigured
-        ? await saveCarmenReport(setupReport)
+        ? await saveCarmenReport(setupReport, ...(activeTenant ? [context] : []))
         : null;
       const savedVersion = saveResult?.lastModified || saveResult?.LastModified;
       const savedReport = savedVersion
@@ -882,7 +915,7 @@ export default function App({ onLogout = null }) {
         : setupReport;
       setReports((currentReports) =>
         currentReports.map((report) =>
-          report.id === savedReport.id ? savedReport : report,
+          reportKey(report) === reportKey(savedReport) ? savedReport : report,
         ),
       );
       setSetupDraft(savedReport);
@@ -969,7 +1002,7 @@ export default function App({ onLogout = null }) {
     setAppliedYear(globalYear);
     setAppliedPeriod(globalPeriod);
     setDayFilterState({
-      reportId: activeReport?.id,
+      reportId: reportKey(activeReport),
       reportDay: defaultReportDay,
       globalDay: nextDay,
       appliedDay: nextDay,
@@ -1001,10 +1034,11 @@ export default function App({ onLogout = null }) {
     if (!sourceReport) return;
     if (apiConfigured) {
       try {
-        const apiClone = await cloneCarmenReport(sourceReport.id);
+        const apiClone = await cloneCarmenReport(sourceReport.id, ...(activeTenant ? [context] : []));
         if (apiClone) {
-          setReports((prev) => [...prev, apiClone]);
-          setCurrentReportId(apiClone.id);
+          const scopedClone = activeTenant ? { ...apiClone, tenant: activeTenant } : apiClone;
+          setReports((prev) => [...prev, scopedClone]);
+          setCurrentReportId(reportKey(scopedClone));
           return;
         }
         setReportCatalogError("Unable to clone report in Carmen API.");
@@ -1026,7 +1060,7 @@ export default function App({ onLogout = null }) {
     setCurrentReportId(newId);
   };
 
-  const handleCreateBlankReport = async () => {
+  const handleCreateBlankReport = async (targetTenant = activeTenant) => {
     const newId = "rep-" + Date.now();
     const newReport = createBlankReport(
       masterData.companyProfile.name,
@@ -1036,9 +1070,15 @@ export default function App({ onLogout = null }) {
     );
     if (apiConfigured) {
       try {
-        const createdReport = await createCarmenReport(newReport);
+        const targetContext = targetTenant ? { tenant: targetTenant } : {};
+        if (targetTenant && targetTenant !== activeTenant) {
+          const targetMaster = await fetchCarmenMasterData({ year: globalYear, ...targetContext });
+          newReport.companyName = targetMaster.companyProfile.name;
+        }
+        const created = await createCarmenReport(newReport, ...(targetTenant ? [targetContext] : []));
+        const createdReport = targetTenant ? { ...created, tenant: targetTenant } : created;
         setReports((prev) => [...prev, createdReport]);
-        setCurrentReportId(createdReport.id);
+        setCurrentReportId(reportKey(createdReport));
         return createdReport;
       } catch (error) {
         setReportCatalogError(
@@ -1056,10 +1096,11 @@ export default function App({ onLogout = null }) {
   const handleImportExcelTemplates = async (importedReports) => {
     if (!Array.isArray(importedReports) || importedReports.length === 0) return;
     if (apiConfigured) {
-      await saveCarmenReports(importedReports);
+      await saveCarmenReports(importedReports, ...(activeTenant ? [context] : []));
     }
-    setReports((currentReports) => [...currentReports, ...importedReports]);
-    setCurrentReportId(importedReports[0].id);
+    const scoped = activeTenant ? importedReports.map((report) => ({ ...report, tenant: activeTenant })) : importedReports;
+    setReports((currentReports) => [...currentReports, ...scoped]);
+    setCurrentReportId(reportKey(scoped[0]));
   };
 
   const handleDeleteReport = () => {
@@ -1067,7 +1108,7 @@ export default function App({ onLogout = null }) {
       const deletedReport = activeReport;
       if (apiConfigured && deletedReport?.id) {
         try {
-          await deleteCarmenReport(deletedReport.id);
+          await deleteCarmenReport(deletedReport.id, deletedReport.tenant ? { tenant: deletedReport.tenant } : {});
         } catch (error) {
           setReportCatalogError(
             error.message || "Unable to delete report from Carmen API.",
@@ -1075,12 +1116,12 @@ export default function App({ onLogout = null }) {
           return;
         }
       }
-      const newReports = reports.filter((r) => r.id !== deletedReport?.id);
+      const newReports = reports.filter((r) => reportKey(r) !== reportKey(deletedReport));
       setReports(newReports);
       setCurrentReportId(NO_REPORT_SELECTED);
     };
     setConfirmAction({
-      title: `Delete “${activeReport?.name || "this report"}”?`,
+      title: t("Delete “{name}”?", { name: activeReport?.name || t("Reports") }),
       msg: "This permanently removes the report and cannot be undone.",
       actionLabel: "Delete report",
     });
@@ -1089,7 +1130,7 @@ export default function App({ onLogout = null }) {
   // --- ENGINE ---
   const reportData = useMemo(
     () =>
-      buildReportData({
+      tenantContextReady ? buildReportData({
         activeReport,
         engineData,
         budgetData,
@@ -1100,7 +1141,7 @@ export default function App({ onLogout = null }) {
         appliedRevision: appliedBudgetRevision,
         periodOptions,
         masterData,
-      }),
+      }) : [],
     [
       activeReport,
       engineData,
@@ -1112,6 +1153,7 @@ export default function App({ onLogout = null }) {
       appliedBudgetRevision,
       periodOptions,
       masterData,
+      tenantContextReady,
     ],
   );
 
@@ -1303,7 +1345,7 @@ export default function App({ onLogout = null }) {
     }
   }
   const autoDateLabel = dailyReportDate && !Number.isNaN(dailyReportDate.getTime())
-    ? `As of ${dailyReportDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`
+    ? `${t("As of")} ${dailyReportDate.toLocaleDateString(getLocale(), { year: 'numeric', month: 'long', day: 'numeric' })}`
     : selectedAppliedPeriod?.dateLabel
     ? `As of ${selectedAppliedPeriod.dateLabel}`
     : `As of ${formatAutoPeriod(appliedYear, appliedPeriod, "end_of_month")}`;
@@ -1407,7 +1449,11 @@ export default function App({ onLogout = null }) {
   };
 
   const handleReportChange = (reportId) => {
+    if (isSetupSaving || creatingReportRef.current) return;
     const openReport = () => {
+      latestReportDataRequestRef.current += 1;
+      loadedReportDataRef.current = null;
+      setEngineData([]); setBudgetData([]);
       setCurrentReportId(reportId);
       applyTabChange("report");
       setIsSidebarOpen(false);
@@ -1427,12 +1473,23 @@ export default function App({ onLogout = null }) {
     openReport();
   };
 
-  const handleCreateReportFromSidebar = () => {
+  const handleCreateReportFromSidebar = (targetTenant) => {
+    if (isSetupSaving || creatingReportRef.current) return;
+    if (typeof targetTenant !== "string") {
+      if (businessUnitsEnabled && businessUnits.selected.length > 1) { setCreateTargetOpen(true); return; }
+      targetTenant = activeTenant;
+    }
+    if (businessUnitsEnabled && !creationUnits.some((unit) => unit.id === targetTenant)) return;
+    setCreateTargetOpen(false);
     const createAndOpenReport = async () => {
-      const createdReport = await handleCreateBlankReport();
-      if (!createdReport) return;
-      applyTabChange("setup");
-      setIsSidebarOpen(false);
+      if (creatingReportRef.current) return;
+      creatingReportRef.current = true;
+      try {
+        const createdReport = await handleCreateBlankReport(targetTenant);
+        if (!createdReport) return;
+        applyTabChange("setup");
+        setIsSidebarOpen(false);
+      } finally { creatingReportRef.current = false; }
     };
 
     if (visibleActiveTab === "setup" && isSetupDirty) {
@@ -1449,6 +1506,21 @@ export default function App({ onLogout = null }) {
     }
 
     void createAndOpenReport();
+  };
+
+  const handleBusinessUnitSelection = (selection) => {
+    if (isSetupSaving || creatingReportRef.current || businessUnits.loading) return;
+    const change = () => {
+      latestReportDataRequestRef.current += 1;
+      loadedReportDataRef.current = null;
+      setCurrentReportId(null); setEngineData([]); setBudgetData([]);
+      businessUnits.setSelected(selection);
+      applyTabChange("report");
+    };
+    if (isSetupDirty) {
+      requestConfirmation({ title: "Discard unsaved changes?", msg: "Changing business units will discard unsaved report changes.",
+        actionLabel: "Discard changes", onConfirm: () => { discardSetupChanges(); change(); } });
+    } else change();
   };
 
   const closeGettingStarted = () => {
@@ -1547,15 +1619,14 @@ export default function App({ onLogout = null }) {
       <ScrollArea className="min-w-0 flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
         <div className="p-3">
           <div className="mb-2 flex items-center justify-between gap-2 px-1">
-            <div className="text-xs font-medium text-muted-foreground">
-              Reports
-            </div>
+            <div className="text-xs font-medium text-muted-foreground">{t("Reports")}</div>
           </div>
           <div
             className="flex flex-col gap-1 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-xl data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary"
             data-tour="reports"
           >
-            {accessibleReports.map((report) => (
+            {businessUnitsEnabled ? <BusinessUnitReportList key={currentUser?.id || "anonymous"} storageKey={`carmen_report_navigation:${currentUser?.id || "anonymous"}`} catalog={businessUnits} reports={accessibleReports}
+              currentKey={resolvedCurrentReportId} onSelect={handleReportChange} /> : accessibleReports.map((report) => (
               <Button
                 key={report.id}
                 variant={
@@ -1577,10 +1648,8 @@ export default function App({ onLogout = null }) {
               </Button>
             ))}
           </div>
-          {accessibleReports.length === 0 && (
-            <div className="px-2 py-8 text-sm text-muted-foreground">
-              No reports available.
-            </div>
+          {!businessUnitsEnabled && accessibleReports.length === 0 && (
+            <div className="px-2 py-8 text-sm text-muted-foreground">{t("No reports available.")}</div>
           )}
         </div>
       </ScrollArea>
@@ -1589,14 +1658,16 @@ export default function App({ onLogout = null }) {
 
   return (
     <div className="flex min-h-dvh bg-background text-foreground">
+      <BusinessUnitTargetDialog open={createTargetOpen} units={creationUnits}
+        onSelect={handleCreateReportFromSidebar} onClose={() => setCreateTargetOpen(false)} />
       {alertMsg && (
         <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 px-4 sm:right-4 sm:left-auto sm:w-full sm:max-w-136 sm:px-0">
           <Card className="pointer-events-auto mx-auto w-full max-w-136 border border-border/80 bg-background/98 shadow-xl ring-1 ring-black/5 backdrop-blur-sm">
             <CardHeader className="space-y-1.5 pb-3">
               <CardTitle className="text-base tracking-tight">
-                {String(alertMsg).includes("Revision selector")
-                  ? "Budget revision not applied"
-                  : "Unable to load report data"}
+                {String(alertMsg).includes(t("Revision selector"))
+                  ? t("Budget revision not applied")
+                  : t("Unable to load report data")}
               </CardTitle>
               <CardDescription className="whitespace-pre-line text-sm leading-6">
                 {alertMsg}
@@ -1607,9 +1678,7 @@ export default function App({ onLogout = null }) {
                 variant="outline"
                 size="sm"
                 onClick={() => setAlertMsg(null)}
-              >
-                Dismiss
-              </Button>
+              >{t("Dismiss")}</Button>
             </CardContent>
           </Card>
         </div>
@@ -1661,13 +1730,8 @@ export default function App({ onLogout = null }) {
         >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <LoaderCircle className="size-5 animate-spin motion-reduce:animate-none" />
-              Loading report data
-            </DialogTitle>
-            <DialogDescription>
-              Please wait while Carmen prepares the report. Other actions are
-              temporarily unavailable.
-            </DialogDescription>
+              <LoaderCircle className="size-5 animate-spin motion-reduce:animate-none" />{t("Loading report data")}</DialogTitle>
+            <DialogDescription>{t("Please wait while Carmen prepares the report. Other actions are temporarily unavailable.")}</DialogDescription>
           </DialogHeader>
         </DialogContent>
       </Dialog>
@@ -1680,13 +1744,13 @@ export default function App({ onLogout = null }) {
           <AlertDialogHeader>
             <AlertDialogTitle>
               {setupSaveWarnings.some(isBlockingSetupWarning)
-                ? "Fix invalid row mappings"
-                : "Save incomplete report template?"}
+                ? t("Fix invalid row mappings")
+                : t("Save incomplete report template?")}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {setupSaveWarnings.some(isBlockingSetupWarning)
-                ? "Group mappings and individual-code mappings are mutually exclusive. Clear one mapping type before saving."
-                : "This template can be saved, but report data may be incomplete or incorrect until these items are fixed."}
+                ? t("Group mappings and individual-code mappings are mutually exclusive. Clear one mapping type before saving.")
+                : t("This template can be saved, but report data may be incomplete or incorrect until these items are fixed.")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <ScrollArea className="max-h-72 rounded-lg border border-border">
@@ -1700,18 +1764,14 @@ export default function App({ onLogout = null }) {
             </ul>
           </ScrollArea>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setSetupSaveWarnings([])}>
-              Go back
-            </AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setSetupSaveWarnings([])}>{t("Go back")}</AlertDialogCancel>
             {!setupSaveWarnings.some(isBlockingSetupWarning) && (
               <AlertDialogAction
                 onClick={() => {
                   setSetupSaveWarnings([]);
                   persistSetup();
                 }}
-              >
-                Save anyway
-              </AlertDialogAction>
+              >{t("Save anyway")}</AlertDialogAction>
             )}
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1724,22 +1784,20 @@ export default function App({ onLogout = null }) {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {confirmAction?.title || "Confirm action"}
+              {t(confirmAction?.title || "Confirm action")}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {confirmAction?.msg || ""}
+              {t(confirmAction?.msg || "")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={closeConfirmation}>
-              Cancel
-            </AlertDialogCancel>
+            <AlertDialogCancel onClick={closeConfirmation}>{t("Cancel")}</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
               className={confirmAction?.actionLabel === "Delete report" ? "bg-destructive text-white hover:bg-destructive/90 dark:bg-destructive dark:hover:bg-destructive/90" : undefined}
               onClick={confirmPendingAction}
             >
-              {confirmAction?.actionLabel || "Confirm"}
+              {t(confirmAction?.actionLabel || "Confirm")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1749,8 +1807,8 @@ export default function App({ onLogout = null }) {
         <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
           <SheetContent side="left" className="w-72 p-0">
             <SheetHeader className="sr-only">
-              <SheetTitle>Reports</SheetTitle>
-              <SheetDescription>Report navigation.</SheetDescription>
+              <SheetTitle>{t("Reports")}</SheetTitle>
+              <SheetDescription>{t("Report navigation.")}</SheetDescription>
             </SheetHeader>
             {sidebarPanel}
           </SheetContent>
@@ -1772,7 +1830,7 @@ export default function App({ onLogout = null }) {
                   variant="ghost"
                   size="icon-sm"
                   onClick={() => setIsSidebarOpen(true)}
-                  aria-label="Open navigation"
+                  aria-label={t("Open navigation")}
                 >
                   <Menu className="size-4" />
                 </Button>
@@ -1807,40 +1865,36 @@ export default function App({ onLogout = null }) {
                   className="max-w-64 truncate font-semibold text-foreground"
                   onClick={() => handleTabChange("report")}
                 >
-                  {activeReport?.name || "Reports"}
+                  {activeReport?.name || t("Reports")}
                 </Button>
               )}
 
               <div className="hidden flex-wrap items-center gap-2 sm:flex">
                 {visibleActiveTab === "setup" && (
-                  <Badge variant="secondary">Configuration</Badge>
+                  <Badge variant="secondary">{t("Configuration")}</Badge>
                 )}
                 {visibleActiveTab === "import" && (
-                  <Badge variant="secondary">Excel template wizard</Badge>
+                  <Badge variant="secondary">{t("Excel template wizard")}</Badge>
                 )}
                 {isMasterDataLoading && (
-                  <Badge variant="outline">Syncing master data</Badge>
+                  <Badge variant="outline">{t("Syncing master data")}</Badge>
                 )}
                 {isReportCatalogLoading && (
-                  <Badge variant="outline">Loading catalog</Badge>
+                  <Badge variant="outline">{t("Loading catalog")}</Badge>
                 )}
                 {masterDataError && (
                   <Badge
                     variant="destructive"
                     title={masterDataError}
                     className="rounded-full border-destructive/30 bg-destructive/15 px-2.5 py-1 text-xs text-destructive"
-                  >
-                    Carmen API unavailable
-                  </Badge>
+                  >{t("Carmen API unavailable")}</Badge>
                 )}
                 {reportCatalogError && (
                   <Badge
                     variant="destructive"
                     title={reportCatalogError}
                     className="rounded-full border-destructive/30 bg-destructive/15 px-2.5 py-1 text-xs text-destructive"
-                  >
-                    Report catalog error
-                  </Badge>
+                  >{t("Report catalog error")}</Badge>
                 )}
               </div>
             </div>
@@ -1857,8 +1911,8 @@ export default function App({ onLogout = null }) {
                       onClick={() =>
                         setTableZoom((current) => Math.max(50, current - 10))
                       }
-                      aria-label="Zoom out"
-                      title="Zoom out"
+                      aria-label={t("Zoom out")}
+                      title={t("Zoom out")}
                     >
                       <ZoomOut className="size-3.5" />
                     </Button>
@@ -1878,8 +1932,8 @@ export default function App({ onLogout = null }) {
                       onClick={() =>
                         setTableZoom((current) => Math.min(150, current + 10))
                       }
-                      aria-label="Zoom in"
-                      title="Zoom in"
+                      aria-label={t("Zoom in")}
+                      title={t("Zoom in")}
                     >
                       <ZoomIn className="size-3.5" />
                     </Button>
@@ -1889,19 +1943,8 @@ export default function App({ onLogout = null }) {
                   </div>
                 )}
 
-              {/* BU badge as in image */}
-              <div className="hidden items-center gap-1.5 rounded-full border border-border bg-muted/40 py-1 pr-2.5 pl-1.5 text-xs font-medium text-foreground md:flex">
-                <span className="flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                  <Building2 className="size-3.5" />
-                </span>
-                <span className="truncate max-w-32">
-                  {storedCarmenSession?.businessUnit?.tenant ||
-                    currentUser?.tenant ||
-                    "CARMEN-FIFO"}
-                </span>
-              </div>
-
-              <Button
+              {businessUnitsEnabled && <BusinessUnitSelector catalog={businessUnits} onChange={handleBusinessUnitSelection} />}
+<Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
@@ -1918,11 +1961,12 @@ export default function App({ onLogout = null }) {
                   <Button
                     type="button"
                     variant="outline"
+                    aria-label={t("Account preferences")}
                     className="h-10 gap-2.5 rounded-xl border-border bg-background px-3 hover:bg-muted"
                   >
                     <div className="hidden flex-col text-right sm:flex">
                       <span className="text-xs font-semibold leading-tight text-foreground max-w-36 truncate">
-                        {currentUser?.name || currentUser?.id || "User"}
+                        {currentUser?.name || currentUser?.id || t("User")}
                       </span>
                       <span className="text-[10px] leading-tight text-muted-foreground max-w-36 truncate">
                         {currentUser?.role
@@ -1972,7 +2016,7 @@ export default function App({ onLogout = null }) {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-foreground">
-                        {currentUser?.name || currentUser?.id || "User"}
+                        {currentUser?.name || currentUser?.id || t("User")}
                       </p>
                       <p className="truncate text-xs text-muted-foreground">
                         {currentUser?.userName || currentUser?.id || "user"}
@@ -1986,9 +2030,9 @@ export default function App({ onLogout = null }) {
                     </div>
                   </div>
 
-                  <div className="px-2 pt-2 pb-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                    Preferences
-                  </div>
+                  <div className="px-2 pt-2 pb-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{t("Preferences")}</div>
+
+                  <LanguagePreference />
 
                   <Popover>
                     <PopoverTrigger asChild>
@@ -2003,9 +2047,7 @@ export default function App({ onLogout = null }) {
                           <Monitor className="size-4" />
                         ) : (
                           <SunMedium className="size-4" />
-                        )}
-                        Theme
-                        <ChevronRight className="ml-auto size-4" />
+                        )}{t("Theme")}<ChevronRight className="ml-auto size-4" />
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent
@@ -2014,9 +2056,9 @@ export default function App({ onLogout = null }) {
                       className="w-44 gap-1 p-2"
                     >
                       {[
-                        ["light", "Light", SunMedium],
-                        ["dark", "Dark", MoonStar],
-                        ["system", "System", Monitor],
+                        ["light", t("Light"), SunMedium],
+                        ["dark", t("Dark"), MoonStar],
+                        ["system", t("System"), Monitor],
                       ].map(([value, label, Icon]) => (
                         <Button
                           key={value}
@@ -2042,9 +2084,7 @@ export default function App({ onLogout = null }) {
                         variant="ghost"
                         className="w-full justify-start text-xs font-normal"
                       >
-                        <Type className="size-4" />
-                        Font size
-                        <ChevronRight className="ml-auto size-4" />
+                        <Type className="size-4" />{t("Font size")}<ChevronRight className="ml-auto size-4" />
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent
@@ -2062,7 +2102,7 @@ export default function App({ onLogout = null }) {
                           onClick={() => setFontSize(value)}
                         >
                           <Type className={iconSize} />
-                          <span className="flex-1 text-left">{label}</span>
+                          <span className="flex-1 text-left">{t(label)}</span>
                           {fontSize === value && <Check className="size-4" />}
                         </Button>
                       ))}
@@ -2078,9 +2118,7 @@ export default function App({ onLogout = null }) {
                         className="w-full justify-start text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
                         onClick={onLogout}
                       >
-                        <LogOut className="size-4" />
-                        Log out
-                      </Button>
+                        <LogOut className="size-4" />{t("Log out")}</Button>
                     </>
                   )}
                 </PopoverContent>
@@ -2094,7 +2132,7 @@ export default function App({ onLogout = null }) {
           <div className="px-4 pt-4 print:hidden">
             <section
               className="mb-3 flex min-w-0 flex-wrap items-center justify-between gap-3"
-              aria-label="Report title and actions"
+              aria-label={t("Report title and actions")}
             >
               <h1 className="min-w-0 flex-1 text-balance text-xl font-semibold text-foreground">
                 <Button
@@ -2105,37 +2143,32 @@ export default function App({ onLogout = null }) {
                   title={activeReport?.name || "Reports"}
                 >
                   <span className="truncate">
-                    {activeReport?.name || "Reports"}
+                    {activeReport?.name || t("Reports")}
                   </span>
                 </Button>
               </h1>
-              {canSetupReports && (
+              {(canSetupReports || canCreateReports) && (
                 <div data-tour="report-actions" className="flex flex-wrap items-center justify-end gap-2 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-lg data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary">
                   <Button
                     size="sm"
                     onClick={handleCreateReportFromSidebar}
                   >
-                    <FilePlus />
-                    New Report
-                  </Button>
+                    <FilePlus />{t("New Report")}</Button>
                   <Button
                     size="sm"
                     variant="outline"
+                    disabled={!canSetupReports}
                     onClick={() => handleTabChange("import")}
                   >
-                    <FileSpreadsheet />
-                    Import Excel
-                  </Button>
-                  {activeReport && (
+                    <FileSpreadsheet />{t("Import Excel")}</Button>
+                  {activeReport && canSetupReports && (
                     <>
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => handleTabChange("setup")}
                       >
-                        <Pencil />
-                        Edit
-                      </Button>
+                        <Pencil />{t("Edit")}</Button>
 
                       <Button
                         size="sm"
@@ -2143,29 +2176,25 @@ export default function App({ onLogout = null }) {
                         className="border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive focus-visible:border-destructive focus-visible:ring-destructive/20"
                         onClick={handleDeleteReport}
                       >
-                        <Trash2 />
-                        Delete
-                      </Button>
+                        <Trash2 />{t("Delete")}</Button>
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={handleCloneReport}
                       >
-                        <Copy />
-                        Duplicate
-                      </Button>
+                        <Copy />{t("Duplicate")}</Button>
                       {apiConfigured && (
                         <ReportHistory
-                          key={activeReport.id}
+                          key={reportKey(activeReport)}
                           report={activeReport}
                           isDirty={false}
                           onRestored={(restored) => {
                             setReports((currentReports) =>
                               currentReports.map((report) =>
-                                report.id === restored.id ? restored : report,
+                                reportKey(report) === reportKey({ ...restored, tenant: activeReport.tenant }) ? { ...restored, tenant: activeReport.tenant } : report,
                               ),
                             );
-                            setSetupDraft(restored);
+                            setSetupDraft({ ...restored, tenant: activeReport.tenant });
                             setIsSetupDirty(false);
                             setSetupUndoHistory([]);
                             lastSetupUndoGroupRef.current = null;
@@ -2195,9 +2224,7 @@ export default function App({ onLogout = null }) {
                     </div>
 
                     <div className="space-y-1">
-                      <span className="block text-xs font-medium text-muted-foreground">
-                        Year
-                      </span>
+                      <span className="block text-xs font-medium text-muted-foreground">{t("Year")}</span>
                       <Input
                         type="number"
                         value={globalYear}
@@ -2207,9 +2234,7 @@ export default function App({ onLogout = null }) {
                     </div>
 
                     <div className="space-y-1">
-                      <span className="block text-xs font-medium text-muted-foreground">
-                        Period
-                      </span>
+                      <span className="block text-xs font-medium text-muted-foreground">{t("Period")}</span>
                       <Select
                         value={globalPeriod}
                         onValueChange={setGlobalPeriod}
@@ -2217,7 +2242,7 @@ export default function App({ onLogout = null }) {
                         <SelectTrigger
                           className={`h-9 min-w-0 text-sm ${NEUTRAL_FILTER_TRIGGER_CLASS}`}
                         >
-                          <SelectValue placeholder="Period" />
+                          <SelectValue placeholder={t("Period")} />
                         </SelectTrigger>
                         <SelectContent position="popper">
                           {periodSelectOptions.map((option) => (
@@ -2225,7 +2250,7 @@ export default function App({ onLogout = null }) {
                               key={option.id}
                               value={String(option.id)}
                             >
-                              {option.label}
+                              {t(option.label)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -2237,9 +2262,7 @@ export default function App({ onLogout = null }) {
                         <label
                           htmlFor="view-day"
                           className="block text-xs font-medium text-muted-foreground"
-                        >
-                          Day
-                        </label>
+                        >{t("Day")}</label>
                         <Input
                           id="view-day"
                           type="number"
@@ -2248,7 +2271,7 @@ export default function App({ onLogout = null }) {
                           value={globalDay}
                           onChange={(event) =>
                             setDayFilterState({
-                              reportId: activeReport?.id,
+                              reportId: reportKey(activeReport),
                               reportDay: defaultReportDay,
                               globalDay: event.target.value,
                               appliedDay: activeReportDay,
@@ -2260,9 +2283,7 @@ export default function App({ onLogout = null }) {
                     )}
 
                     <div className="space-y-1">
-                      <span className="block text-xs font-medium text-muted-foreground">
-                        Budget revision
-                      </span>
+                      <span className="block text-xs font-medium text-muted-foreground">{t("Budget revision")}</span>
                       <Select
                         value={globalRevision}
                         onValueChange={(nextValue) => {
@@ -2280,7 +2301,7 @@ export default function App({ onLogout = null }) {
                         <SelectTrigger
                           className={`h-9 w-full min-w-0 text-sm ${NEUTRAL_FILTER_TRIGGER_CLASS}`}
                         >
-                          <SelectValue placeholder="Revision" />
+                          <SelectValue placeholder={t("Revision")} />
                         </SelectTrigger>
                         <SelectContent position="popper">
                           {revisionSelectOptions.map((option) => (
@@ -2288,7 +2309,7 @@ export default function App({ onLogout = null }) {
                               key={option.id}
                               value={String(option.id)}
                             >
-                              {option.label}
+                              {t(option.label)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -2304,7 +2325,7 @@ export default function App({ onLogout = null }) {
                       {isLoading ? (
                         <LoaderCircle className="animate-spin motion-reduce:animate-none" />
                       ) : null}
-                      {isLoading ? "Loading..." : "Apply"}
+                      {isLoading ? t("Loading...") : t("Apply")}
                     </Button>
                   </div>
 
@@ -2314,7 +2335,7 @@ export default function App({ onLogout = null }) {
                       size="sm"
                       className={`h-9 w-full px-3 text-sm sm:w-auto ${NEUTRAL_BUTTON_CLASS}`}
                       onClick={exportToExcel}
-                      title="Export to Excel"
+                      title={t("Export to Excel")}
                     >
                       <Download />
                       Excel
@@ -2324,7 +2345,7 @@ export default function App({ onLogout = null }) {
                       size="sm"
                       variant="outline"
                       onClick={() => window.print()}
-                      title="Print"
+                      title={t("Print")}
                     >
                       <Printer />
                     </Button>
@@ -2347,8 +2368,8 @@ export default function App({ onLogout = null }) {
                   </div>
                   <h3 className="text-lg font-semibold text-foreground mb-2">
                     {masterDataError
-                      ? "Unable to load master data"
-                      : "Unable to load report catalog"}
+                      ? t("Unable to load master data")
+                      : t("Unable to load report catalog")}
                   </h3>
                   <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
                     {masterDataError || reportCatalogError}
@@ -2358,9 +2379,7 @@ export default function App({ onLogout = null }) {
                     variant="outline"
                     className="h-9 border border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:border-destructive/40 transition-colors gap-2"
                   >
-                    <RefreshCw className="size-3.5" />
-                    Retry
-                  </Button>
+                    <RefreshCw className="size-3.5" />{t("Retry")}</Button>
                 </CardContent>
               </Card>
             ) : (
@@ -2369,9 +2388,7 @@ export default function App({ onLogout = null }) {
                   <React.Suspense
                     fallback={
                       <Card className="flex h-full min-h-0 items-center justify-center border border-border shadow-none ring-0">
-                        <CardContent className="py-16 text-center text-sm text-muted-foreground">
-                          Loading report view...
-                        </CardContent>
+                        <CardContent className="py-16 text-center text-sm text-muted-foreground">{t("Loading report view...")}</CardContent>
                       </Card>
                     }
                   >
@@ -2427,21 +2444,17 @@ export default function App({ onLogout = null }) {
                 {visibleActiveTab === "report" && !activeReport && (
                   <Card className="flex h-full items-center justify-center border border-border shadow-none ring-0">
                     <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
-                      <h3 className="text-lg font-semibold text-foreground">
-                        No reports yet
-                      </h3>
+                      <h3 className="text-lg font-semibold text-foreground">{t("No reports yet")}</h3>
                       <p className="max-w-md text-sm text-muted-foreground">
                         {canSetupReports
-                          ? "Create a blank report or import an Excel workbook to get started."
-                          : "No financial reports are available."}
+                          ? t("Create a blank report or import an Excel workbook to get started.")
+                          : t("No financial reports are available.")}
                       </p>
-                      {canSetupReports && (
+                      {canCreateReports && (
                         <Button
                           size="sm"
                           onClick={handleCreateReportFromSidebar}
-                        >
-                          New report
-                        </Button>
+                        >{t("New report")}</Button>
                       )}
                     </CardContent>
                   </Card>
@@ -2453,9 +2466,7 @@ export default function App({ onLogout = null }) {
                     <React.Suspense
                       fallback={
                         <Card className="flex h-full min-h-0 items-center justify-center border border-border shadow-none ring-0">
-                          <CardContent className="py-16 text-center text-sm text-muted-foreground">
-                            Loading setup tools...
-                          </CardContent>
+                          <CardContent className="py-16 text-center text-sm text-muted-foreground">{t("Loading setup tools...")}</CardContent>
                         </Card>
                       }
                     >
@@ -2473,12 +2484,13 @@ export default function App({ onLogout = null }) {
                         isSaving={isSetupSaving}
                         apiConfigured={apiConfigured}
                         onHistoryRestored={(restored) => {
+                          const scopedRestored = activeReport.tenant ? { ...restored, tenant: activeReport.tenant } : restored;
                           setReports((currentReports) =>
                             currentReports.map((report) =>
-                              report.id === restored.id ? restored : report,
+                              reportKey(report) === reportKey(scopedRestored) ? scopedRestored : report,
                             ),
                           );
-                          setSetupDraft(restored);
+                          setSetupDraft(scopedRestored);
                           setIsSetupDirty(false);
                           setSetupUndoHistory([]);
                           lastSetupUndoGroupRef.current = null;
@@ -2515,9 +2527,7 @@ export default function App({ onLogout = null }) {
                   <React.Suspense
                     fallback={
                       <Card className="flex h-full min-h-0 items-center justify-center border border-border shadow-none ring-0">
-                        <CardContent className="py-16 text-center text-sm text-muted-foreground">
-                          Loading Excel template wizard...
-                        </CardContent>
+                        <CardContent className="py-16 text-center text-sm text-muted-foreground">{t("Loading Excel template wizard...")}</CardContent>
                       </Card>
                     }
                   >
@@ -2552,8 +2562,8 @@ export default function App({ onLogout = null }) {
         size="icon"
         className="fixed right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-40 rounded-full shadow-md print:hidden"
         onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-        aria-label="Scroll to top"
-        title="Scroll to top"
+        aria-label={t("Scroll to top")}
+        title={t("Scroll to top")}
       >
         <ArrowUp />
       </Button>

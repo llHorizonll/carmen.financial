@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildReportDefinitionPayload, cloneCarmenReport, createCarmenReport, deleteCarmenReport, fetchBusinessUnitsByUsername, fetchCarmenAccountGroups, fetchCarmenDepartmentGroups, fetchCarmenDimensions, fetchCarmenReport, fetchCarmenReportHistory, fetchCarmenReportOptions, fetchCarmenUsers, loginWithCarmenCredentials, saveCarmenReport, saveCarmenReports } from './reportApi.js';
 import { clearCarmenApiFailure, getCarmenApiFailure } from '../../../lib/carmenApiFailure.js';
+import { setCarmenSessionLanguage } from './carmenSession.js';
+import { fetchCarmenBusinessUnits, fetchCarmenReports, fetchCarmenReportData, fetchCarmenMasterData, restoreCarmenReportHistoryVersion } from './reportApi.js';
 
 const createSessionStorageMock = (session = {}) => {
   const storage = new Map();
@@ -37,6 +39,119 @@ afterEach(() => {
 });
 
 describe('reportApi helpers', () => {
+  it('loads all three nested BU entries from the existing username endpoint', async () => {
+    createSessionStorageMock({ accessToken: 'token', username: 'user' });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ Data: [
+      { Tenant: { Tenant: 'carmencloud', Description: 'CarmenCloud' }, IsDefault: true, Permission: [{ Name: 'gl.financialreport', Code: '80' }] },
+      { Tenant: { Tenant: 'prod', Description: 'paresa' }, Permission: [{ Name: 'gl.financialreport', Code: 'C0' }] },
+      { Tenant: { Tenant: 'noon', Description: 'lilit' }, Permission: [] },
+    ] }) });
+    vi.stubGlobal('fetch', fetchMock);
+    const units = await fetchCarmenBusinessUnits();
+    expect(units.map((unit) => unit.Description)).toEqual(['CarmenCloud', 'paresa', 'lilit']);
+    expect(units[1].financialReport.setup).toBe(true);
+    expect(units[2].financialReport.view).toBe(false);
+    expect(fetchMock.mock.calls[0][0]).toContain('/api/userTenant/UserName/user');
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('token');
+  });
+  it('separates in-flight report reads by BU and routes a save/history to the chosen BU', async () => {
+    createSessionStorageMock({ accessToken: 'token', businessUnit: { tenant: 'a' } });
+    const finishes = [];
+    const fetchMock = vi.fn(() => new Promise((resolve) => { finishes.push(resolve); }));
+    vi.stubGlobal('fetch', fetchMock);
+    const a = fetchCarmenReports({ tenant: 'a' });
+    const b = fetchCarmenReports({ tenant: 'b' });
+    const duplicate = fetchCarmenReports({ tenant: 'b' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0][0]).toContain('/api/reports?useTenant=a');
+    expect(fetchMock.mock.calls[1][0]).toContain('/api/reports?useTenant=b');
+    for (const finish of finishes) finish({ ok: true, json: async () => [] });
+    await Promise.all([a, b, duplicate]);
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) });
+    await saveCarmenReport({ id: 'same', lastModified: 'version', rows: [], columns: [] }, { tenant: 'b' });
+    expect(fetchMock.mock.lastCall[0]).toContain('/api/reports/same?useTenant=b');
+    expect(fetchMock.mock.lastCall[1].method).toBe('PUT');
+    await fetchCarmenReportHistory('same', { tenant: 'b' });
+    expect(fetchMock.mock.lastCall[0]).toContain('/api/reports/same/history?useTenant=b');
+    await restoreCarmenReportHistoryVersion('same', 7, 'version', { tenant: 'b' });
+    expect(fetchMock.mock.lastCall[0]).toContain('/api/reports/same/history/7/restore?useTenant=b');
+  });
+  it('loads financial report master data without separately denied group lookups', async () => {
+    createSessionStorageMock({ accessToken: 'token', businessUnit: { tenant: 'a' } });
+    const fetchMock = vi.fn().mockImplementation(async (url) => url.includes('report-master-data')
+      ? { ok: true, json: async () => ({ companyProfile: { HotelName: 'Scoped Hotel' }, depts: [], accCodes: [] }) }
+      : { ok: false, status: 403, json: async () => ({ Message: 'Access denied' }) });
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(fetchCarmenMasterData({ year: 2025, tenant: 'b' })).resolves.toEqual(expect.objectContaining({
+      companyProfile: { name: 'Scoped Hotel' }, accountGroups: [], deptGroups: [],
+    }));
+    expect(fetchMock.mock.calls.every(([url]) => new URL(url).searchParams.get('useTenant') === 'b')).toBe(true);
+  });
+
+  it('still rejects failed group services instead of treating them as denied permissions', async () => {
+    createSessionStorageMock({ accessToken: 'token', businessUnit: { tenant: 'a' } });
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url) => url.includes('report-master-data')
+      ? { ok: true, json: async () => ({}) }
+      : { ok: false, status: 500, json: async () => ({ Message: 'Lookup unavailable' }) }));
+    await expect(fetchCarmenMasterData({ year: 2025, tenant: 'b' })).rejects.toThrow(/Lookup unavailable/);
+  });
+
+  it('does not fall back to the login BU when a scoped master lookup fails', async () => {
+    createSessionStorageMock({ accessToken: 'token', businessUnit: { tenant: 'a' } });
+    const fetchMock = vi.fn().mockImplementation(async (url) => url.includes('report-master-data')
+      ? { ok: false, status: 403, json: async () => ({ Message: 'Access denied' }) }
+      : { ok: true, json: async () => ({ Data: [] }) });
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(fetchCarmenMasterData({ year: 2025, tenant: 'b' })).rejects.toThrow(/denied/);
+    expect(fetchMock.mock.calls.every(([url]) => new URL(url).searchParams.get('useTenant') === 'b')).toBe(true);
+    expect(fetchMock.mock.calls.some(([url]) => url.includes('/user/search'))).toBe(false);
+  });
+  it('uses existing report endpoints with explicit useTenant and preserves the token BU', async () => {
+    window.__CARMEN_CONFIG__ = { adminToken: 'scope' };
+    const storage = createSessionStorageMock({ accessToken: 'token', username: 'admin', businessUnit: { tenant: 'a' } });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => [] });
+    vi.stubGlobal('fetch', fetchMock);
+    await fetchCarmenBusinessUnits();
+    expect(fetchMock.mock.calls[0][0]).toContain('/api/userTenant/UserName/admin');
+    await fetchCarmenReports({ tenant: 'b' });
+    const query = { tenant: 'b', reportId: 'one', year: 2025, period: 2, revision: 0 };
+    await fetchCarmenReportData(query);
+    for (const [url, options] of fetchMock.mock.calls) {
+      expect(url).not.toContain('/api/business-units/'); expect(options.headers.Authorization).toBe('token');
+    }
+    expect(new URL(fetchMock.mock.calls[0][0]).searchParams.has('useTenant')).toBe(false);
+    expect(new URL(fetchMock.mock.calls[2][0]).pathname).toBe('/Carmen.WebApi/api/report-data');
+    expect(new URL(fetchMock.mock.calls[2][0]).searchParams.get('useTenant')).toBe('b');
+    expect(storage.get('carmen_business_unit')).toBe(JSON.stringify({ tenant: 'a' }));
+  });
+  it('keeps a valid session after a denied report BU but expires it on HTTP 401', async () => {
+    window.__CARMEN_CONFIG__ = { adminToken: 'scope' };
+    const storage = createSessionStorageMock({ accessToken: 'token', username: 'admin', businessUnit: { tenant: 'a' } });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 403, json: async () => ({ Message: 'Access denied' }) });
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(fetchCarmenReports({ tenant: 'b' })).rejects.toThrow(/denied/);
+    expect(storage.get('carmen_access_token')).toBe('token');
+    fetchMock.mockResolvedValue({ ok: false, status: 401, json: async () => ({}) });
+    await expect(fetchCarmenBusinessUnits()).rejects.toThrow(/expired/);
+    expect(storage.has('carmen_access_token')).toBe(false);
+  });
+  it('sends the selected language and separates pending requests by language', async () => {
+    createSessionStorageMock({ accessToken: 'token', businessUnit: { tenant: 'a' } });
+    const resolvers = [];
+    const fetchMock = vi.fn(() => new Promise((resolve) => { resolvers.push(resolve); }));
+    vi.stubGlobal('fetch', fetchMock);
+    const english = fetchCarmenReportOptions();
+    setCarmenSessionLanguage('th');
+    const thai = fetchCarmenReportOptions();
+    const sameThai = fetchCarmenReportOptions();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0][1].headers['Accept-Language']).toBe('en');
+    expect(fetchMock.mock.calls[1][1].headers['Accept-Language']).toBe('th');
+    expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe('token');
+    expect(fetchMock.mock.calls[1][0]).toContain('useTenant=a');
+    for (const resolve of resolvers) resolve({ ok: true, json: async () => ({ themes: [] }) });
+    await Promise.all([english, thai, sameThai]);
+  });
   it('explains when the report history endpoint is missing without exposing an HTML error page', async () => {
     createSessionStorageMock({ accessToken: 'token', businessUnit: { tenant: 'tenant-1' } });
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({

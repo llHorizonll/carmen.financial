@@ -1,3 +1,4 @@
+import { useTranslation } from "@/lib/i18n.js";
 import React from "react";
 import {
   Calculator,
@@ -55,6 +56,7 @@ export default function RowsConfigurator({
   setEditingRow,
   setConfirmAction,
 }) {
+  const t = useTranslation();
   const [searchQuery, setSearchQuery] = React.useState("");
   const rowElementsRef = React.useRef(new Map());
   const brokenRowReferences = React.useMemo(
@@ -173,20 +175,15 @@ export default function RowsConfigurator({
           <div className="space-y-1.5">
             <CardTitle className="flex flex-wrap items-center gap-2 text-base font-semibold tracking-tight text-foreground">
               <Layout className="size-4 text-muted-foreground" />
-              <span>Rows Configurator</span>
+              <span>{t("Rows Configurator")}</span>
               <Badge variant="secondary" className="tabular-nums">
-                {activeReport.rows.length} rows
-              </Badge>
+                {activeReport.rows.length}{" "}{t("rows")}</Badge>
               {hiddenRowCount > 0 ? (
                 <Badge variant="outline" className="tabular-nums text-muted-foreground">
-                  {hiddenRowCount} hidden
-                </Badge>
+                  {hiddenRowCount}{" "}{t("hidden")}</Badge>
               ) : null}
             </CardTitle>
-            <CardDescription className="text-sm text-muted-foreground">
-              Drag for nearby changes, or choose an exact position for long
-              moves.
-            </CardDescription>
+            <CardDescription className="text-sm text-muted-foreground">{t("Drag for nearby changes, or choose an exact position for long moves.")}</CardDescription>
           </div>
           <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
             <div className="w-full sm:w-56">
@@ -194,8 +191,8 @@ export default function RowsConfigurator({
                 type="search"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search rows…"
-                aria-label="Search rows by reference, name, type, or mapping"
+                placeholder={t("Search rows…")}
+                aria-label={t("Search rows by reference, name, type, or mapping")}
               />
             </div>
             <div className="flex items-center gap-2">
@@ -205,13 +202,13 @@ export default function RowsConfigurator({
                 </span>
               ) : null}
             <Select value="" onValueChange={handleAddRow}>
-              <SelectTrigger className="w-full sm:w-44" aria-label="+ Add row">
-                <SelectValue placeholder="+ Add Row" />
+              <SelectTrigger className="w-full sm:w-44" aria-label={t("+ Add row")}>
+                <SelectValue placeholder={t("+ Add Row")} />
               </SelectTrigger>
               <SelectContent position="popper">
-                <SelectItem value="data">Data</SelectItem>
-                <SelectItem value="header">Header</SelectItem>
-                <SelectItem value="formula">Formula</SelectItem>
+                <SelectItem value="data">{t("Data")}</SelectItem>
+                <SelectItem value="header">{t("Header")}</SelectItem>
+                <SelectItem value="formula">{t("Formula")}</SelectItem>
               </SelectContent>
             </Select>
             </div>
@@ -224,36 +221,21 @@ export default function RowsConfigurator({
           {announcement}
         </p>
         {brokenRowReferences.length > 0 && (
-          <div className="border-b bg-destructive/5 px-4 py-2 text-sm text-destructive">
-            Broken row references found. These {brokenRowReferences.length}{" "}
-            invalid reference(s) may produce incomplete report data.
-          </div>
+          <div className="border-b bg-destructive/5 px-4 py-2 text-sm text-destructive">{t("Broken row references found. These")}{" "}{brokenRowReferences.length}{" "}{t("invalid reference(s) may produce incomplete report data.")}</div>
         )}
 
         <div className="overflow-auto">
           <Table className="min-w-[1000px] table-fixed text-sm [&_td]:px-2 [&_th]:px-2">
             <TableHeader className="sticky top-0 z-10 bg-muted/80">
               <TableRow>
-                <TableHead className="w-32 text-center align-middle text-xs font-semibold uppercase tracking-wide text-foreground">
-                  Type
-                </TableHead>
-                <TableHead className="w-48 text-xs font-semibold uppercase tracking-wide text-foreground">Description</TableHead>
-                <TableHead className="w-24 text-center align-middle text-xs font-semibold uppercase tracking-wide text-foreground">
-                  Indent
-                </TableHead>
-                <TableHead className="w-24 text-center align-middle text-xs font-semibold uppercase tracking-wide text-foreground">
-                  Row
-                </TableHead>
-                <TableHead className="w-24 text-center align-middle text-xs font-semibold uppercase tracking-wide text-foreground">
-                  % Base
-                </TableHead>
-                <TableHead className="w-40">Number format</TableHead>
-                <TableHead className="w-96 min-w-96 max-w-96 whitespace-normal text-xs font-semibold uppercase tracking-wide text-foreground">
-                  Row mapping rules
-                </TableHead>
-                <TableHead className="sticky right-0 z-20 w-40 min-w-40 max-w-40 border-l bg-muted text-center align-middle text-xs font-semibold uppercase tracking-wide text-foreground">
-                  Action
-                </TableHead>
+                <TableHead className="w-32 text-center align-middle text-xs font-semibold uppercase tracking-wide text-foreground">{t("Type")}</TableHead>
+                <TableHead className="w-48 text-xs font-semibold uppercase tracking-wide text-foreground">{t("Description")}</TableHead>
+                <TableHead className="w-24 text-center align-middle text-xs font-semibold uppercase tracking-wide text-foreground">{t("Indent")}</TableHead>
+                <TableHead className="w-24 text-center align-middle text-xs font-semibold uppercase tracking-wide text-foreground">{t("Row")}</TableHead>
+                <TableHead className="w-24 text-center align-middle text-xs font-semibold uppercase tracking-wide text-foreground">{t("% Base")}</TableHead>
+                <TableHead className="w-40">{t("Number format")}</TableHead>
+                <TableHead className="w-96 min-w-96 max-w-96 whitespace-normal text-xs font-semibold uppercase tracking-wide text-foreground">{t("Row mapping rules")}</TableHead>
+                <TableHead className="sticky right-0 z-20 w-40 min-w-40 max-w-40 border-l bg-muted text-center align-middle text-xs font-semibold uppercase tracking-wide text-foreground">{t("Action")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody ref={containerRef}>
@@ -329,12 +311,12 @@ export default function RowsConfigurator({
                         }}
                       >
                         <SelectTrigger className="mx-auto h-8 w-full max-w-[10rem] rounded-lg text-center">
-                          <SelectValue placeholder="Type" />
+                          <SelectValue placeholder={t("Type")} />
                         </SelectTrigger>
                         <SelectContent position="popper">
-                          <SelectItem value="D">Data (D)</SelectItem>
-                          <SelectItem value="H">Header (H)</SelectItem>
-                          <SelectItem value="F">Formula (F)</SelectItem>
+                          <SelectItem value="D">{t("Data (D)")}</SelectItem>
+                          <SelectItem value="H">{t("Header (H)")}</SelectItem>
+                          <SelectItem value="F">{t("Formula (F)")}</SelectItem>
                         </SelectContent>
                       </Select>
                     </TableCell>
@@ -355,13 +337,13 @@ export default function RowsConfigurator({
                         }
                       >
                         <SelectTrigger className="mx-auto h-8 w-full max-w-[7rem] rounded-lg text-center">
-                          <SelectValue placeholder="Indent 0" />
+                          <SelectValue placeholder={t("Indent 0")} />
                         </SelectTrigger>
                         <SelectContent position="popper">
-                          <SelectItem value="0">Indent 0</SelectItem>
-                          <SelectItem value="1">Indent 1</SelectItem>
-                          <SelectItem value="2">Indent 2</SelectItem>
-                          <SelectItem value="3">Indent 3</SelectItem>
+                          <SelectItem value="0">{t("Indent 0")}</SelectItem>
+                          <SelectItem value="1">{t("Indent 1")}</SelectItem>
+                          <SelectItem value="2">{t("Indent 2")}</SelectItem>
+                          <SelectItem value="3">{t("Indent 3")}</SelectItem>
                         </SelectContent>
                       </Select>
                     </TableCell>
@@ -408,15 +390,13 @@ export default function RowsConfigurator({
                         <SelectTrigger aria-label={`Number format R${idx + 1}`}><SelectValue /></SelectTrigger>
                         <SelectContent position="popper">
                           <SelectItem value="column">ตาม Column</SelectItem>
-                          {isTotal && <SelectItem value="percent">Percent (%)</SelectItem>}
+                          {isTotal && <SelectItem value="percent">{t("Percent (%)")}</SelectItem>}
                         </SelectContent>
                       </Select>}
                     </TableCell>
                     <TableCell className="w-96 min-w-96 max-w-96 whitespace-normal px-2 py-2 align-middle">
                       {isHeader ? (
-                        <span className="inline-flex rounded-full border border-border bg-background px-2.5 py-1 text-sm text-muted-foreground">
-                          Header row — no data mapping
-                        </span>
+                        <span className="inline-flex rounded-full border border-border bg-background px-2.5 py-1 text-sm text-muted-foreground">{t("Header row — no data mapping")}</span>
                       ) : isTotal ? (
                         <div
                           className={`flex items-center gap-2 rounded-lg border p-2.5 ${isFormulaBroken ? "border-destructive/60 bg-destructive/5" : ""}`}
@@ -551,8 +531,8 @@ export default function RowsConfigurator({
                           title={`Delete row ${row.id}`}
                           onClick={() =>
                             setConfirmAction({
-                              title: `Delete row ${row.id}?`,
-                              msg: `This permanently removes “${row.desc || row.id}” and updates affected row references.`,
+                              title: t("Delete row {id}?", { id: row.id }),
+                              msg: t("This permanently removes “{name}” and updates affected row references.", { name: row.desc || row.id }),
                               actionLabel: "Delete row",
                               onConfirm: () => handleDeleteRow(row.id),
                             })

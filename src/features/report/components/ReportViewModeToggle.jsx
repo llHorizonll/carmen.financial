@@ -1,3 +1,4 @@
+import { useTranslation } from "@/lib/i18n.js";
 import React from 'react';
 import { LayoutDashboard, Table2 } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
@@ -15,12 +16,13 @@ const VIEW_MODES = [
 ];
 
 export default function ReportViewModeToggle({ value, onChange, className }) {
+  const t = useTranslation();
   return (
     <TooltipProvider>
       <section
         className={cn('flex items-center gap-0.5 rounded-lg border border-border bg-muted/60 p-0.5 print:hidden', className)}
         role="group"
-        aria-label="Report view mode"
+        aria-label={t("Report view mode")}
       >
         {VIEW_MODES.map(({ id, label, icon: Icon }) => {
           const isActive = value === id;
@@ -32,14 +34,14 @@ export default function ReportViewModeToggle({ value, onChange, className }) {
                   variant={isActive ? 'secondary' : 'ghost'}
                   size="icon-sm"
                   className={cn(isActive && 'bg-background text-foreground shadow-sm hover:bg-background')}
-                  aria-label={`Show ${label.toLowerCase()}`}
+                  aria-label={t(`Show ${label.toLowerCase()}`)}
                   aria-pressed={isActive}
                   onClick={() => onChange(id)}
                 >
                   <Icon className="size-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>{label}</TooltipContent>
+              <TooltipContent side="bottom" sideOffset={6}>{t(label)}</TooltipContent>
             </Tooltip>
           );
         })}

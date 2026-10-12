@@ -1,3 +1,4 @@
+import { useTranslation } from "@/lib/i18n.js";
 import React from 'react';
 import { Settings2 } from 'lucide-react';
 import { CardDescription } from '@/components/ui/card.jsx';
@@ -32,6 +33,7 @@ export default function ReportDetailsPanel({
   updateActiveReport,
   onBusyTransition,
 }) {
+  const t = useTranslation();
   const periodFormatOptions = (reportOptions.periodFormats?.length > 0
     ? reportOptions.periodFormats
     : [
@@ -55,39 +57,39 @@ export default function ReportDetailsPanel({
       <header className="flex flex-col gap-3 border-b border-border pb-5 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h2 className="flex items-center gap-2 text-xl font-semibold text-balance text-foreground"><Settings2 className="size-5 text-muted-foreground" />{activeReport.name}</h2>
-          <CardDescription className="mt-1 text-sm text-pretty text-muted-foreground"><span className="font-medium text-foreground">Report Details</span> and display labels.</CardDescription>
+          <CardDescription className="mt-1 text-sm text-pretty text-muted-foreground"><span className="font-medium text-foreground">{t("Report Details")}</span> {t("and display labels.")}</CardDescription>
         </div>
       </header>
 
       <div className="space-y-5">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <div className="space-y-2">
-            <Label className="text-foreground">Report Name</Label>
+            <Label className="text-foreground">{t("Report Name")}</Label>
             <Input value={activeReport.name} onChange={(e) => updateActiveReport({ name: e.target.value })} />
           </div>
           <div className="space-y-2">
-            <Label className="text-foreground">Company Name</Label>
+            <Label className="text-foreground">{t("Company Name")}</Label>
             <Input
               value={activeReport.companyName || ''}
               onChange={(e) => updateActiveReport({ companyName: e.target.value })}
-              placeholder="Use company default"
+              placeholder={t("Use company default")}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="report-type" className="text-foreground">Report Type</Label>
+            <Label htmlFor="report-type" className="text-foreground">{t("Report Type")}</Label>
             <Select value={activeReport.reportType || 'Monthly'} onValueChange={(value) => updateActiveReport({ reportType: value })}>
               <SelectTrigger id="report-type" className="h-9 w-full">
-                <SelectValue placeholder="Select report type" />
+                <SelectValue placeholder={t("Select report type")} />
               </SelectTrigger>
               <SelectContent position="popper">
-                <SelectItem value="Monthly">Monthly</SelectItem>
-                <SelectItem value="Daily">Daily</SelectItem>
+                <SelectItem value="Monthly">{t("Monthly")}</SelectItem>
+                <SelectItem value="Daily">{t("Daily")}</SelectItem>
                 <SelectItem value="Mixed">Mixed</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="auto-period-format" className="text-foreground">Auto Period Format</Label>
+            <Label htmlFor="auto-period-format" className="text-foreground">{t("Auto Period Format")}</Label>
             <Select
               value={activeReport.periodFormat || 'standard'}
               onValueChange={(value) => {
@@ -96,12 +98,12 @@ export default function ReportDetailsPanel({
               }}
             >
               <SelectTrigger id="auto-period-format" className="h-9 w-full">
-                <SelectValue placeholder="Select format" />
+                <SelectValue placeholder={t("Select format")} />
               </SelectTrigger>
               <SelectContent position="popper">
                 {periodFormatOptions.map((option) => (
                   <SelectItem key={option.id} value={option.id}>
-                    {option.label}
+                    {t(option.label)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -110,7 +112,7 @@ export default function ReportDetailsPanel({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="report-remark" className="text-foreground">Remark</Label>
+          <Label htmlFor="report-remark" className="text-foreground">{t("Remark")}</Label>
           <Textarea id="report-remark" value={activeReport.remark || ''} onChange={(e) => updateActiveReport({ remark: e.target.value })} />
         </div>
 

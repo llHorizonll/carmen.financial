@@ -1,3 +1,4 @@
+import { useTranslation, useLanguage } from "@/lib/i18n.js";
 import React, { Suspense, lazy, useCallback, useSyncExternalStore } from 'react';
 import { BarChart3 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge.jsx';
@@ -20,6 +21,7 @@ import {
 } from '../lib/carmenApiFailure.js';
 import { initializeTheme } from '../lib/theme.js';
 
+
 const App = lazy(() => import('./App.jsx'));
 const LoginForm = lazy(() => import('./LoginForm.jsx'));
 const LoginFeatures = lazy(() => import('./LoginFeatures.jsx'));
@@ -35,6 +37,9 @@ const subscribeToCarmenSession = (listener) => {
 };
 
 export default function LoginShell() {
+  const language = useLanguage();
+  const t = useTranslation();
+  React.useEffect(() => { document.documentElement.lang = language; }, [language]);
   const isAuthenticated = useSyncExternalStore(
     subscribeToCarmenSession,
     hasSession,
@@ -81,7 +86,7 @@ export default function LoginShell() {
   }, [isAuthenticated]);
 
   const content = isAuthenticated ? (
-      <Suspense fallback={<div className="flex min-h-dvh items-center justify-center bg-background text-sm text-muted-foreground">Loading Carmen Blue Financial Report...</div>}>
+      <Suspense fallback={<div className="flex min-h-dvh items-center justify-center bg-background text-sm text-muted-foreground">{t("Loading Carmen Blue Financial Report...")}</div>}>
         <App
           onLogout={handleLogout}
         />
@@ -94,15 +99,15 @@ export default function LoginShell() {
             <header className="login-enter-from-right max-w-2xl space-y-5">
               <Badge variant="outline" className="w-fit rounded-full px-3 py-1"><BarChart3 className="size-3.5" />Carmen Blue Financial Report</Badge>
               <div className="space-y-4">
-                <h1 className="max-w-xl text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl lg:text-5xl">A focused workspace for financial reporting.</h1>
-                <p className="max-w-xl text-base leading-7 text-pretty text-muted-foreground">Sign in to review reports, adjust report structure, and manage access in one consistent workspace.</p>
+                <h1 className="max-w-xl text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl lg:text-5xl">{t("A focused workspace for financial reporting.")}</h1>
+                <p className="max-w-xl text-base leading-7 text-pretty text-muted-foreground">{t("Sign in to review reports, adjust report structure, and manage access in one consistent workspace.")}</p>
               </div>
             </header>
             <Suspense fallback={<Skeleton className="h-56 w-full max-w-2xl rounded-xl" aria-hidden="true" />}>
               <LoginFeatures />
             </Suspense>
           </section>
-          <Suspense fallback={<Skeleton className="order-1 h-148 w-full max-w-md justify-self-center self-center rounded-xl lg:justify-self-start" aria-label="Loading sign-in form" />}>
+          <Suspense fallback={<Skeleton className="order-1 h-148 w-full max-w-md justify-self-center self-center rounded-xl lg:justify-self-start" aria-label={t("Loading sign-in form")} />}>
             <LoginForm onAuthenticated={handleAuthenticated} />
           </Suspense>
         </div>
@@ -116,12 +121,12 @@ export default function LoginShell() {
       <AlertDialog open={Boolean(sessionNotice || apiErrorNotice)} onOpenChange={(open) => !open && clearCarmenApiFailure()}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{sessionNotice?.title || apiErrorNotice?.title}</AlertDialogTitle>
-            <AlertDialogDescription>{sessionNotice?.message || apiErrorNotice?.message}</AlertDialogDescription>
+            <AlertDialogTitle>{t(sessionNotice?.title || apiErrorNotice?.title)}</AlertDialogTitle>
+            <AlertDialogDescription>{t(sessionNotice?.message || apiErrorNotice?.message)}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogAction onClick={clearCarmenApiFailure}>
-              {sessionNotice?.action || apiErrorNotice?.action}
+              {t(sessionNotice?.action || apiErrorNotice?.action)}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

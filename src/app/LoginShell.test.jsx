@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import LoginShell from './LoginShell.jsx';
 import { clearCarmenApiFailure, reportCarmenApiFailure } from '../lib/carmenApiFailure.js';
 import { clearCarmenSession } from '../features/report/lib/carmenSession.js';
-import { fetchBusinessUnitsByUsername } from '../features/report/lib/reportApi.js';
+import { fetchBusinessUnitsByUsername, loginWithCarmenCredentials } from '../features/report/lib/reportApi.js';
 
 vi.mock('./App.jsx', () => ({
   default: () => <main>Report workspace</main>,
@@ -15,6 +15,7 @@ vi.mock('./App.jsx', () => ({
 vi.mock('../features/report/lib/reportApi.js', async (importOriginal) => ({
   ...(await importOriginal()),
   fetchBusinessUnitsByUsername: vi.fn(),
+  loginWithCarmenCredentials: vi.fn(),
 }));
 
 describe('LoginShell', () => {
@@ -66,11 +67,12 @@ describe('LoginShell', () => {
     container.remove();
   });
 
-  it('selects the business unit marked as default after loading tenants', async () => {
+  it('logs in to the default business unit without showing login dropdowns', async () => {
     fetchBusinessUnitsByUsername.mockResolvedValue([
       { Tenant: 'tenant-a', Description: 'Business Unit A', IsDefault: false },
       { Tenant: 'tenant-b', Description: 'Business Unit B', IsDefault: true },
     ]);
+    loginWithCarmenCredentials.mockResolvedValue({ accessToken: 'token', user: { id: 'admin' } });
     render(<LoginShell />);
 
     const usernameInput = await screen.findByLabelText('Username');
@@ -79,8 +81,12 @@ describe('LoginShell', () => {
     fireEvent.blur(usernameInput);
 
     await waitFor(() => expect(fetchBusinessUnitsByUsername).toHaveBeenCalledWith('admin'));
-    await waitFor(() => {
-      expect(screen.getByRole('combobox', { name: 'Business Unit' })).toHaveTextContent('Business Unit B');
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'test-password' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    await screen.findByText('Report workspace');
+    expect(loginWithCarmenCredentials).toHaveBeenCalledWith({
+      userName: 'admin', password: 'test-password', tenant: 'tenant-b', language: 'EN',
     });
   });
 

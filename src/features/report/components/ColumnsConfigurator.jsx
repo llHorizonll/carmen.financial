@@ -1,3 +1,4 @@
+import { useTranslation } from "@/lib/i18n.js";
 import React from "react";
 import { Copy, Eye, EyeOff, GripVertical, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils.js";
@@ -105,6 +106,7 @@ export default function ColumnsConfigurator({
   handleDeleteCol,
   setConfirmAction,
 }) {
+  const t = useTranslation();
   const [searchQuery, setSearchQuery] = React.useState("");
   const columnElementsRef = React.useRef(new Map());
   const columnsCountRef = React.useRef(activeReport.columns.length);
@@ -294,20 +296,15 @@ export default function ColumnsConfigurator({
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-1.5">
             <CardTitle className="flex flex-wrap items-center gap-2 text-base font-semibold tracking-tight text-foreground">
-              <span>Columns Configurator</span>
+              <span>{t("Columns Configurator")}</span>
               <Badge variant="secondary" className="tabular-nums">
-                {activeReport.columns.length} columns
-              </Badge>
+                {activeReport.columns.length}{" "}{t("columns")}</Badge>
               {hiddenColumnCount > 0 ? (
                 <Badge variant="outline" className="tabular-nums text-muted-foreground">
-                  {hiddenColumnCount} hidden
-                </Badge>
+                  {hiddenColumnCount}{" "}{t("hidden")}</Badge>
               ) : null}
             </CardTitle>
-            <CardDescription className="text-sm text-muted-foreground">
-              Drag for nearby changes, or choose an exact position for long
-              moves.
-            </CardDescription>
+            <CardDescription className="text-sm text-muted-foreground">{t("Drag for nearby changes, or choose an exact position for long moves.")}</CardDescription>
           </div>
           <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
             <div className="w-full sm:w-56">
@@ -315,8 +312,8 @@ export default function ColumnsConfigurator({
                 type="search"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search columns…"
-                aria-label="Search columns by reference, name, type, or formula"
+                placeholder={t("Search columns…")}
+                aria-label={t("Search columns by reference, name, type, or formula")}
               />
             </div>
             <div className="flex items-center gap-2">
@@ -326,13 +323,13 @@ export default function ColumnsConfigurator({
                 </span>
               ) : null}
               <Select value="" onValueChange={(value) => handleAddCol(value)}>
-                <SelectTrigger className="w-full sm:w-44" aria-label="+ Add column">
-                  <SelectValue placeholder="+ Add Column" />
+                <SelectTrigger className="w-full sm:w-44" aria-label={t("+ Add column")}>
+                  <SelectValue placeholder={t("+ Add Column")} />
                 </SelectTrigger>
                 <SelectContent position="popper">
-                  <SelectItem value="data">{logicTypeLabels.get("DATA") || "Data"}</SelectItem>
-                  <SelectItem value="formula">{logicTypeLabels.get("FORMULA") || "Formula"}</SelectItem>
-                  <SelectItem value="percent">{logicTypeLabels.get("MIX") || "Mix %"}</SelectItem>
+                  <SelectItem value="data">{logicTypeLabels.get("DATA") || t("Data")}</SelectItem>
+                  <SelectItem value="formula">{logicTypeLabels.get("FORMULA") || t("Formula")}</SelectItem>
+                  <SelectItem value="percent">{logicTypeLabels.get("MIX") || t("Mix %")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -345,16 +342,11 @@ export default function ColumnsConfigurator({
           {announcement}
         </p>
         {hasUnsupportedColumns && (
-          <div className="border-b bg-amber-500/5 px-4 py-2 text-sm text-amber-700">
-            Unsupported column types may produce incomplete report data.
-          </div>
+          <div className="border-b bg-amber-500/5 px-4 py-2 text-sm text-amber-700">{t("Unsupported column types may produce incomplete report data.")}</div>
         )}
         {brokenColumnReferences.length > 0 && (
-          <div className="border-b bg-destructive/5 px-4 py-2 text-sm text-destructive">
-            Broken column references found. These{" "}
-            {brokenColumnReferences.length} invalid reference(s) may produce
-            incomplete report data.
-          </div>
+          <div className="border-b bg-destructive/5 px-4 py-2 text-sm text-destructive">{t("Broken column references found. These")}{" "}
+            {brokenColumnReferences.length}{t("invalid reference(s) may produce incomplete report data.")}</div>
         )}
 
         <div className="relative w-full overflow-hidden">
@@ -380,15 +372,11 @@ export default function ColumnsConfigurator({
                         <Badge
                           variant="secondary"
                           className="shrink-0 px-2 py-0.5 text-xs font-semibold"
-                        >
-                          Description
-                        </Badge>
+                        >{t("Description")}</Badge>
                         <Badge
                           variant="outline"
                           className="shrink-0 rounded-md bg-muted px-1.5 py-0 text-xs font-medium text-muted-foreground"
-                        >
-                          Label
-                        </Badge>
+                        >{t("Label")}</Badge>
                       </h3>
                       <Button
                         variant="ghost"
@@ -407,13 +395,8 @@ export default function ColumnsConfigurator({
                       />
                     </header>
                     <section className="space-y-2 p-4">
-                      <p className="text-sm font-semibold text-foreground">
-                        Row description
-                      </p>
-                      <p className="text-xs leading-5 text-muted-foreground">
-                        Display-only column. Moving it does not change C
-                        references or calculations.
-                      </p>
+                      <p className="text-sm font-semibold text-foreground">{t("Row description")}</p>
+                      <p className="text-xs leading-5 text-muted-foreground">{t("Display-only column. Moving it does not change C references or calculations.")}</p>
                     </section>
                   </section>
                 );
@@ -457,7 +440,7 @@ export default function ColumnsConfigurator({
                         variant="outline"
                         className={`shrink-0 rounded-md px-1.5 py-0 text-xs font-medium ${colClassy.badgeClass}`}
                       >
-                        {colClassy.label}
+                        {t(colClassy.label)}
                       </Badge>
                       <span
                         className="truncate font-mono text-xs font-medium text-muted-foreground"
@@ -501,8 +484,8 @@ export default function ColumnsConfigurator({
                         title={`Delete column ${col.id}`}
                         onClick={() =>
                           setConfirmAction({
-                            title: `Delete column ${col.id}?`,
-                            msg: `This permanently removes “${col.label || col.id}” and updates affected column references.`,
+                            title: t("Delete column {id}?", { id: col.id }),
+                            msg: t("This permanently removes “{name}” and updates affected column references.", { name: col.label || col.id }),
                             actionLabel: "Delete column",
                             onConfirm: () => handleDeleteCol(col.id),
                           })
@@ -541,17 +524,13 @@ export default function ColumnsConfigurator({
                   {/* Card Content: Inputs and configurations */}
                   <div className="p-4 space-y-4">
                     {columnIssues.length > 0 && (
-                      <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1 text-xs text-destructive">
-                        Broken {columnIssues.map((issue) => issue.field).join(', ')} reference. Check the highlighted field.
-                      </p>
+                      <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1 text-xs text-destructive">{t("Broken")}{" "}{columnIssues.map((issue) => issue.field).join(', ')}{" "}{t("reference. Check the highlighted field.")}</p>
                     )}
                     <div className="space-y-1.5">
                       <label
                         htmlFor={fieldId("logic-type")}
                         className="text-sm font-medium text-foreground"
-                      >
-                        Logic type
-                      </label>
+                      >{t("Logic type")}</label>
                       <Select
                         value={getColumnLogicType(col)}
                         onValueChange={(value) =>
@@ -562,12 +541,12 @@ export default function ColumnsConfigurator({
                           id={fieldId("logic-type")}
                           className="h-9 w-full text-sm"
                         >
-                          <SelectValue placeholder="Logic type" />
+                          <SelectValue placeholder={t("Logic type")} />
                         </SelectTrigger>
                         <SelectContent position="popper">
                           {logicTypeOptions.map((option) => (
                             <SelectItem key={option.id} value={option.id}>
-                              {option.label}
+                              {t(option.label)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -579,16 +558,14 @@ export default function ColumnsConfigurator({
                       <label
                         htmlFor={fieldId("label")}
                         className="text-sm font-medium text-foreground"
-                      >
-                        Column label
-                      </label>
+                      >{t("Column label")}</label>
                       <Textarea
                         id={fieldId("label")}
                         value={col.label}
                         onChange={(e) =>
                           handleUpdateCol(col.id, "label", e.target.value.replace(/\r\n?/g, "\n").split("\n").slice(0, 2).join("\n"))
                         }
-                        placeholder="Column label"
+                        placeholder={t("Column label")}
                         rows={2}
                         className="min-h-16 resize-none text-sm"
                       />
@@ -601,9 +578,7 @@ export default function ColumnsConfigurator({
                           <label
                             htmlFor={fieldId("formula")}
                             className="text-xs font-medium text-muted-foreground"
-                          >
-                            Formula
-                          </label>
+                          >{t("Formula")}</label>
                           <Input
                             id={fieldId("formula")}
                             value={col.formula || ""}
@@ -621,9 +596,7 @@ export default function ColumnsConfigurator({
                           <label
                             htmlFor={fieldId("formula-width")}
                             className="text-xs font-medium text-muted-foreground"
-                          >
-                            Width (px)
-                          </label>
+                          >{t("Width (px)")}</label>
                           <Input
                             id={fieldId("formula-width")}
                             value={col.width || ""}
@@ -631,7 +604,7 @@ export default function ColumnsConfigurator({
                               handleUpdateCol(col.id, "width", e.target.value)
                             }
                             type="number"
-                            placeholder="Auto"
+                            placeholder={t("Auto")}
                             className="h-9 text-center text-sm"
                           />
                         </div>
@@ -649,7 +622,7 @@ export default function ColumnsConfigurator({
                                 )
                               }
                             />
-                            <span>Show as %</span>
+                            <span>{t("Show as %")}</span>
                           </label>
                         </div>
                       </div>
@@ -660,9 +633,7 @@ export default function ColumnsConfigurator({
                           <label
                             htmlFor={fieldId("target-column")}
                             className="text-xs font-medium text-muted-foreground"
-                          >
-                            Target column
-                          </label>
+                          >{t("Target column")}</label>
                           <Input
                             id={fieldId("target-column")}
                             value={col.targetCol || ""}
@@ -683,9 +654,7 @@ export default function ColumnsConfigurator({
                           <label
                             htmlFor={fieldId("percent-width")}
                             className="text-xs font-medium text-muted-foreground"
-                          >
-                            Width (px)
-                          </label>
+                          >{t("Width (px)")}</label>
                           <Input
                             id={fieldId("percent-width")}
                             value={col.width || ""}
@@ -693,7 +662,7 @@ export default function ColumnsConfigurator({
                               handleUpdateCol(col.id, "width", e.target.value)
                             }
                             type="number"
-                            placeholder="Auto"
+                            placeholder={t("Auto")}
                             className="h-9 text-center text-sm"
                           />
                         </div>
@@ -705,9 +674,7 @@ export default function ColumnsConfigurator({
                           <label
                             htmlFor={fieldId("type")}
                             className="text-xs font-medium text-muted-foreground"
-                          >
-                            Type
-                          </label>
+                          >{t("Type")}</label>
                           <Select
                             value={
                               col.type || defaultDataType
@@ -720,12 +687,12 @@ export default function ColumnsConfigurator({
                               id={fieldId("type")}
                               className="h-9 w-full text-sm"
                             >
-                              <SelectValue placeholder="Type" />
+                              <SelectValue placeholder={t("Type")} />
                             </SelectTrigger>
                             <SelectContent position="popper">
                               {columnTypeOptions.map((option) => (
                                 <SelectItem key={option.id} value={option.id}>
-                                  {option.label}
+                                  {t(option.label)}
                                 </SelectItem>
                               ))}
                               {col.type &&
@@ -742,12 +709,12 @@ export default function ColumnsConfigurator({
 
                         {['DAC', 'PTD', 'YTD', 'DACBG', 'PTDBG', 'YTDBG'].includes(String(col.type || '').toUpperCase()) && (
                           <div className="space-y-1.5">
-                            <label htmlFor={fieldId('day-mode')} className="text-xs font-medium text-muted-foreground">Day</label>
+                            <label htmlFor={fieldId('day-mode')} className="text-xs font-medium text-muted-foreground">{t("Day")}</label>
                             <Select value={col.dayMode || 'current'} onValueChange={(value) => handleUpdateCol(col.id, 'dayMode', value)}>
-                              <SelectTrigger id={fieldId('day-mode')} className="h-9 w-full text-sm"><SelectValue placeholder="Day" /></SelectTrigger>
+                              <SelectTrigger id={fieldId('day-mode')} className="h-9 w-full text-sm"><SelectValue placeholder={t("Day")} /></SelectTrigger>
                               <SelectContent position="popper">
-                                <SelectItem value="current">Day (Parameter)</SelectItem>
-                                <SelectItem value="-1">Day -1 (Yesterday)</SelectItem>
+                                <SelectItem value="current">{t("Day (Parameter)")}</SelectItem>
+                                <SelectItem value="-1">{t("Day -1 (Yesterday)")}</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -757,10 +724,10 @@ export default function ColumnsConfigurator({
                           <div className="space-y-1.5">
                             <label htmlFor={fieldId('budget-revision')} className="text-xs font-medium text-muted-foreground">BudRev</label>
                             <Select value={col.budRev || 'REV'} onValueChange={(value) => handleUpdateCol(col.id, 'budRev', value)}>
-                              <SelectTrigger id={fieldId('budget-revision')} className="h-9 w-full text-sm"><SelectValue placeholder="Revision" /></SelectTrigger>
+                              <SelectTrigger id={fieldId('budget-revision')} className="h-9 w-full text-sm"><SelectValue placeholder={t("Revision")} /></SelectTrigger>
                               <SelectContent position="popper">
                                 <SelectItem value="REV">REV (Parameter)</SelectItem>
-                                {['0', '1', '2', '3', '4'].map((revision) => <SelectItem key={revision} value={revision}>Rev {revision}</SelectItem>)}
+                                {['0', '1', '2', '3', '4'].map((revision) => <SelectItem key={revision} value={revision}>{t("Rev")} {revision}</SelectItem>)}
                               </SelectContent>
                             </Select>
                           </div>
@@ -771,9 +738,7 @@ export default function ColumnsConfigurator({
                           <label
                             htmlFor={fieldId("target")}
                             className="text-xs font-medium text-muted-foreground"
-                          >
-                            Target
-                          </label>
+                          >{t("Target")}</label>
                           <Select
                             value={col.targetCol || "__blank__"}
                             onValueChange={(value) =>
@@ -815,9 +780,7 @@ export default function ColumnsConfigurator({
                           <label
                             htmlFor={fieldId("year")}
                             className="text-xs font-medium text-muted-foreground"
-                          >
-                            Year
-                          </label>
+                          >{t("Year")}</label>
                           <Select
                             value={col.yearMode || "current"}
                             onValueChange={(value) =>
@@ -828,12 +791,12 @@ export default function ColumnsConfigurator({
                               id={fieldId("year")}
                               className="h-9 w-full text-sm"
                             >
-                              <SelectValue placeholder="Year" />
+                              <SelectValue placeholder={t("Year")} />
                             </SelectTrigger>
                             <SelectContent position="popper">
                               {yearModeOptions.map((option) => (
                                 <SelectItem key={option.id} value={option.id}>
-                                  {option.label}
+                                  {t(option.label)}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -861,9 +824,7 @@ export default function ColumnsConfigurator({
                           <label
                             htmlFor={fieldId("period")}
                             className="text-xs font-medium text-muted-foreground"
-                          >
-                            Period
-                          </label>
+                          >{t("Period")}</label>
                           <Select
                             value={col.periodMode || "current"}
                             onValueChange={(value) =>
@@ -874,12 +835,12 @@ export default function ColumnsConfigurator({
                               id={fieldId("period")}
                               className="h-9 w-full text-sm"
                             >
-                              <SelectValue placeholder="Period" />
+                              <SelectValue placeholder={t("Period")} />
                             </SelectTrigger>
                             <SelectContent position="popper">
                               {periodModeOptions.map((option) => (
                                 <SelectItem key={option.id} value={option.id}>
-                                  {option.label}
+                                  {t(option.label)}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -891,9 +852,7 @@ export default function ColumnsConfigurator({
                           <label
                             htmlFor={fieldId("data-width")}
                             className="text-xs font-medium text-muted-foreground"
-                          >
-                            Width (px)
-                          </label>
+                          >{t("Width (px)")}</label>
                           <Input
                             id={fieldId("data-width")}
                             value={col.width || ""}
@@ -901,7 +860,7 @@ export default function ColumnsConfigurator({
                               handleUpdateCol(col.id, "width", e.target.value)
                             }
                             type="number"
-                            placeholder="Auto"
+                            placeholder={t("Auto")}
                             className="h-9 text-center text-sm"
                           />
                         </div>

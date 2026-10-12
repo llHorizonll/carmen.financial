@@ -1,3 +1,4 @@
+import { useTranslation } from "@/lib/i18n.js";
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const IDLE_LOAD_TIMEOUT_MS = 30000;
@@ -7,6 +8,7 @@ export default function ConnectivityFeedbackCoordinator({
   children,
   loadOverlay = loadDefaultOverlay,
 }) {
+  const t = useTranslation();
   const [isOnline, setIsOnline] = useState(() => navigator.onLine !== false);
   const [Overlay, setOverlay] = useState(null);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -65,9 +67,7 @@ export default function ConnectivityFeedbackCoordinator({
         <aside
           className="sticky top-0 z-50 border-b border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive print:hidden"
           role="status"
-        >
-          You are offline. Check your internet connection.
-        </aside>
+        >{t("You are offline. Check your internet connection.")}</aside>
       ) : null}
       {children}
     </>

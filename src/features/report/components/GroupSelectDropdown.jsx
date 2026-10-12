@@ -1,3 +1,4 @@
+import { useTranslation } from "@/lib/i18n.js";
 import React, { useMemo, useState } from 'react';
 import { Check, ChevronsUpDown, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
@@ -20,6 +21,7 @@ export default function GroupSelectDropdown({
   onChange,
   value,
 }) {
+  const t = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const selectedGroup = groups.find((group) => String(group.id) === String(value)) || null;
@@ -61,7 +63,7 @@ export default function GroupSelectDropdown({
             aria-label={`Search ${ariaLabel.toLowerCase()}`}
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
-            placeholder="Search by level, code, or name"
+            placeholder={t("Search by level, code, or name")}
             className="h-8 border-0 bg-transparent p-0 shadow-none focus-visible:ring-0"
           />
         </section>
@@ -94,7 +96,7 @@ export default function GroupSelectDropdown({
             );
           })}
           {filteredGroups.length === 0 && (
-            <p className="px-3 py-6 text-center text-sm text-muted-foreground">No matching groups</p>
+            <p className="px-3 py-6 text-center text-sm text-muted-foreground">{t("No matching groups")}</p>
           )}
         </section>
       </PopoverContent>

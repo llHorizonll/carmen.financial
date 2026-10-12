@@ -1,3 +1,4 @@
+import { useTranslation } from "@/lib/i18n.js";
 import React from 'react';
 import { ListOrdered } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
@@ -21,6 +22,7 @@ export default function MoveToPositionDialog({
   onMove,
   triggerSize = 'icon-sm',
 }) {
+  const t = useTranslation();
   const inputId = React.useId();
   const [open, setOpen] = React.useState(false);
   const [position, setPosition] = React.useState(currentPosition);
@@ -58,16 +60,12 @@ export default function MoveToPositionDialog({
       <DialogContent className="max-w-md">
         <form className="grid gap-4" onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>Move {itemLabel}</DialogTitle>
-            <DialogDescription>
-              Current position {currentPosition} of {itemCount}. References will update automatically.
-            </DialogDescription>
+            <DialogTitle>{t("Move")} {itemLabel}</DialogTitle>
+            <DialogDescription>{t("Current position")}{" "}{currentPosition} {t("of")} {itemCount}{t(". References will update automatically.")}</DialogDescription>
           </DialogHeader>
 
           <fieldset className="grid gap-3">
-            <label htmlFor={inputId} className="text-sm font-medium text-foreground">
-              New position
-            </label>
+            <label htmlFor={inputId} className="text-sm font-medium text-foreground">{t("New position")}</label>
             <Input
               id={inputId}
               type="number"
@@ -79,17 +77,17 @@ export default function MoveToPositionDialog({
               inputMode="numeric"
               autoFocus
             />
-            <section className="grid grid-cols-4 gap-2" aria-label="Position shortcuts">
-              <Button type="button" variant="outline" size="sm" onClick={() => setPosition(1)}>First</Button>
+            <section className="grid grid-cols-4 gap-2" aria-label={t("Position shortcuts")}>
+              <Button type="button" variant="outline" size="sm" onClick={() => setPosition(1)}>{t("First")}</Button>
               <Button type="button" variant="outline" size="sm" onClick={() => setClampedPosition(Number(position) - 10)}>−10</Button>
               <Button type="button" variant="outline" size="sm" onClick={() => setClampedPosition(Number(position) + 10)}>+10</Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => setPosition(itemCount)}>Last</Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => setPosition(itemCount)}>{t("Last")}</Button>
             </section>
           </fieldset>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={Number(position) === currentPosition}>Move to position</Button>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>{t("Cancel")}</Button>
+            <Button type="submit" disabled={Number(position) === currentPosition}>{t("Move to position")}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
