@@ -673,7 +673,8 @@ const importRowFormulas = (rows, sourceRowNumbers, cellMatrix, columns, sourceCo
     for (let colIndex = 0; colIndex < columns.length; colIndex += 1) {
       if (columns[colIndex].isFormula || columns[colIndex].isPercent) continue;
       const sourceColumn = sourceColumnIndexes[colIndex];
-      const sourceFormula = cellMatrix[sourceRowNumbers[index] - 1]?.[sourceColumn]?.f;
+      const sourceCell = cellMatrix[sourceRowNumbers[index] - 1]?.[sourceColumn];
+      const sourceFormula = sourceCell?.f;
       if (!sourceFormula) continue;
       let formula = sourceFormula.replace(/^=/, '').replace(/\s/g, '').toUpperCase();
       let valid = true;
@@ -696,6 +697,7 @@ const importRowFormulas = (rows, sourceRowNumbers, cellMatrix, columns, sourceCo
       row.formula = /^SUM\([^()]*\)$/i.test(sourceFormula.replace(/^=/, '')) ? formula.slice(1, -1) : formula;
       row.isTotal = true;
       row.isHeader = false;
+      row.numberFormat = /%/.test((sourceCell.z || '').replace(/"[^"]*"|\\./g, '')) ? 'percent' : 'column';
       row.indent = 0;
       break;
     }
@@ -1168,6 +1170,7 @@ export const parseExcelWorkbook = async (file, mappingCatalogs = {}) => {
   const workbook = XLSX.read(new Uint8Array(await file.arrayBuffer()), {
     cellDates: true,
     cellStyles: true,
+    cellNF: true,
     bookFiles: true,
     dense: true,
     type: "array",

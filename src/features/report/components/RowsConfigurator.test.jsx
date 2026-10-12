@@ -18,7 +18,7 @@ describe('RowsConfigurator', () => {
     const setEditingRow = vi.fn();
     const setConfirmAction = vi.fn();
 
-    render(
+    const configurator = (
       <RowsConfigurator
         activeReport={{
           rows: [
@@ -41,6 +41,7 @@ describe('RowsConfigurator', () => {
               indent: 0,
               isHeader: false,
               isTotal: true,
+              numberFormat: 'percent',
               percentBase: '',
               formula: 'R1',
               dept: '',
@@ -60,6 +61,7 @@ describe('RowsConfigurator', () => {
         setConfirmAction={setConfirmAction}
       />
     );
+    const view = render(configurator);
 
     expect(screen.getByRole('table').className).toMatch(/\[&_td\]:px-2/);
     expect(screen.getByText('Rows Configurator').closest('[data-slot="card-header"]')).toHaveClass('sticky', 'top-14');
@@ -84,6 +86,10 @@ describe('RowsConfigurator', () => {
     fireEvent.click(await screen.findByRole('option', { name: 'Formula' }));
     expect(handleAddRow).toHaveBeenCalledWith('formula');
 
+    fireEvent.click(screen.getByRole('combobox', { name: '+ Add row' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Formula %' }));
+    expect(handleAddRow).toHaveBeenCalledWith('formula-percent');
+
     fireEvent.click(within(screen.getByDisplayValue('Revenue').closest('tr')).getByRole('button', { name: 'Duplicate row r1' }));
     expect(handleDuplicateRow).toHaveBeenCalledWith('r1');
 
@@ -92,14 +98,23 @@ describe('RowsConfigurator', () => {
     expect(handleUpdateRow).toHaveBeenCalledWith('r1', 'desc', 'Room Revenue');
 
     const revenueRow = revenueInput.closest('tr');
-    fireEvent.click(screen.getByRole('combobox', { name: 'Number format R1' }));
-    expect(screen.queryByRole('option', { name: 'Percent (%)' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: 'Number' })).not.toBeInTheDocument();
-    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('combobox', { name: 'Number format R1' })).not.toBeInTheDocument();
+    expect(within(revenueRow).queryByText('ตาม Column')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('combobox', { name: 'Number format R2' }));
-    fireEvent.click(await screen.findByRole('option', { name: 'Percent (%)' }));
-    expect(handleUpdateRow).toHaveBeenCalledWith('r2', 'numberFormat', 'percent');
+    expect(screen.queryByRole('columnheader', { name: 'Number format' })).not.toBeInTheDocument();
+    const formulaType = within(screen.getByDisplayValue('Total Revenue').closest('tr')).getAllByRole('combobox')[0];
+    expect(formulaType).toHaveTextContent('Formula %');
+    fireEvent.click(formulaType);
+    fireEvent.click(await screen.findByRole('option', { name: 'Formula (F)' }));
+    expect(handleUpdateRowMulti).toHaveBeenCalledWith('r2', expect.objectContaining({ isTotal: true, isHeader: false, numberFormat: 'column' }));
+    expect(handleUpdateRowMulti.mock.calls.at(-1)[1]).not.toHaveProperty('formula');
+    view.rerender(React.cloneElement(configurator, {
+      activeReport: { rows: configurator.props.activeReport.rows.map(row => row.id === 'r2' ? { ...row, numberFormat: 'column' } : row) },
+    }));
+    fireEvent.click(within(screen.getByDisplayValue('Total Revenue').closest('tr')).getAllByRole('combobox')[0]);
+    fireEvent.click(await screen.findByRole('option', { name: 'Formula %' }));
+    expect(handleUpdateRowMulti).toHaveBeenCalledWith('r2', expect.objectContaining({ isTotal: true, isHeader: false, numberFormat: 'percent' }));
+    expect(handleUpdateRowMulti.mock.calls.at(-1)[1]).not.toHaveProperty('formula');
 
     fireEvent.click(within(revenueRow).getByRole('button', { name: 'Move row R1 to position' }));
     fireEvent.change(screen.getByLabelText('New position'), { target: { value: '2' } });
@@ -207,6 +222,50 @@ describe('RowsConfigurator', () => {
     expect(editButton).not.toHaveTextContent('Edit');
     expect(editButton.closest('td')).toHaveClass('sticky', 'right-0', 'w-40', 'min-w-40', 'max-w-40');
     expect(screen.getByRole('columnheader', { name: 'Action' })).toHaveClass('sticky', 'right-0', 'w-40', 'min-w-40', 'max-w-40');
+  });
+
+  it.each([
+    { dept: '101', accCodes: '4001', groups: 'FOOD', deptGroup: 'OPERATIONS' },
+    { dim1: 'HOTEL', dim10: 'PHUKET' },
+  ])('requires confirmation before clearing Data mappings: %j', async (mapping) => {
+    const handleUpdateRowMulti = vi.fn();
+    const setConfirmAction = vi.fn();
+    render(<RowsConfigurator
+      activeReport={{ rows: [{ id: 'mapped', desc: 'Revenue', isTotal: false, isHeader: false, formula: '', ...mapping }] }}
+      handleUpdateRowMulti={handleUpdateRowMulti}
+      setConfirmAction={setConfirmAction}
+    />);
+    const type = within(screen.getByDisplayValue('Revenue').closest('tr')).getAllByRole('combobox')[0];
+    fireEvent.click(type);
+    expect(screen.queryByRole('option', { name: 'Formula %' })).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('option', { name: 'Formula (F)' }));
+    expect(handleUpdateRowMulti).not.toHaveBeenCalled();
+    expect(type).toHaveTextContent('Data (D)');
+    const confirmation = setConfirmAction.mock.calls[0][0];
+    expect(confirmation).toMatchObject({ title: 'Change Data row to Formula?', actionLabel: 'Change to Formula' });
+    expect(confirmation.msg).toContain('Revenue');
+    expect(confirmation.msg).toContain('clear these mappings');
+    if (mapping.dim1) expect(confirmation.msg).toContain('dim1, dim10');
+    else expect(confirmation.msg).toContain('Department, Department group, Account codes, Account groups');
+    confirmation.onConfirm();
+    expect(handleUpdateRowMulti).toHaveBeenCalledWith('mapped', expect.objectContaining({
+      isTotal: true, isHeader: false, numberFormat: 'column', dept: '', accCodes: '', groups: '', deptGroup: '', dim1: '', dim10: '',
+    }));
+  });
+
+  it.each([false, true])('allows an unmapped row to become Formula without confirmation (header: %s)', async (isHeader) => {
+    const handleUpdateRowMulti = vi.fn();
+    const setConfirmAction = vi.fn();
+    render(<RowsConfigurator
+      activeReport={{ rows: [{ id: 'empty', desc: 'Unmapped', isTotal: false, isHeader, dept: ' ', formula: '' }] }}
+      handleUpdateRowMulti={handleUpdateRowMulti}
+      setConfirmAction={setConfirmAction}
+    />);
+    fireEvent.click(within(screen.getByDisplayValue('Unmapped').closest('tr')).getAllByRole('combobox')[0]);
+    expect(screen.queryByRole('option', { name: 'Formula %' })).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('option', { name: 'Formula (F)' }));
+    expect(setConfirmAction).not.toHaveBeenCalled();
+    expect(handleUpdateRowMulti).toHaveBeenCalledWith('empty', expect.objectContaining({ isTotal: true, isHeader: false, numberFormat: 'column' }));
   });
 
   it('summarizes and visually distinguishes hidden rows', () => {

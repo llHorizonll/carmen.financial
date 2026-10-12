@@ -27,6 +27,9 @@ export const translate = (text, language = getLanguage(), values) => {
 };
 
 const thai = {
+  "Change Data row to Formula?": "เปลี่ยนแถว Data เป็น Formula?",
+  "Change to Formula": "เปลี่ยนเป็น Formula",
+  "Changing “{name}” to Formula will clear these mappings: {mappings}. The row will use a formula instead of mapped data.": "การเปลี่ยน “{name}” เป็น Formula จะล้าง mapping เหล่านี้: {mappings} โดยแถวนี้จะใช้สูตรแทนข้อมูลจาก mapping",
   "Search reports...": "ค้นหารายงาน...",
   "No matching reports.": "ไม่พบรายงานที่ตรงกัน",
 "Standard (Period : 2026-02)":"มาตรฐาน (งวด : 2026-02)",

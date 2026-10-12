@@ -1234,6 +1234,7 @@ export default function App({ onLogout = null }) {
   };
 
   const handleAddRow = (type) => {
+    const isFormula = type === "formula" || type === "formula-percent";
     const lastRow =
       setupReport.rows.length > 0
         ? setupReport.rows[setupReport.rows.length - 1]
@@ -1243,11 +1244,12 @@ export default function App({ onLogout = null }) {
       desc:
         type === "header"
           ? "HEADER"
-          : type === "formula"
+          : isFormula
             ? "Total"
             : "New Line",
       isActive: true,
-      isTotal: type === "formula",
+      isTotal: isFormula,
+      numberFormat: type === "formula-percent" ? "percent" : "column",
       isHeader: type === "header",
       dept: "",
       deptGroup: "",
@@ -1255,7 +1257,7 @@ export default function App({ onLogout = null }) {
       groupLevel: "L4",
       groups: "",
       percentBase: lastRow ? lastRow.percentBase : "",
-      formula: type === "formula" ? "R1+R2" : "",
+      formula: isFormula ? "R1+R2" : "",
       indent: lastRow ? lastRow.indent : 0,
     };
     updateActiveReport({ rows: [...setupReport.rows, newRow] });

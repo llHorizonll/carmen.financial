@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import * as XLSX from "xlsx";
 import {
   analyzeExcelSheet,
   configureExcelSheetImport,
@@ -7,9 +8,40 @@ import {
   excelIndexToColumn,
   resolveDimensionMapping,
   resolveLinkedMappingValue,
+  parseExcelWorkbook,
 } from "./excelTemplateImport.js";
 
 describe("Excel template import", () => {
+  it("preserves percentage formula row types through workbook parsing, range changes and report persistence", async () => {
+    const worksheet = XLSX.utils.aoa_to_sheet([
+      ['Description', 'Actual', 'Budget'],
+      ['Revenue', 100, 80],
+      ['Cost', 25, 20],
+      ['Margin %', 0.75, 0.75],
+      ['Total', 125, 100],
+      ['Literal percent', 125, 100],
+    ]);
+    worksheet.B4 = { t: 'n', v: 0.75, f: '(B2-B3)/B2', z: '0.00%' };
+    worksheet.B5 = { t: 'n', v: 125, f: 'SUM(B2:B3)', z: '#,##0.00' };
+    worksheet.B6 = { t: 'n', v: 125, f: 'SUM(B2:B3)', z: '0.00"%"' };
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Revenue');
+    const bytes = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' });
+    const parsed = await parseExcelWorkbook({ name: 'percent.xlsx', arrayBuffer: async () => bytes });
+    const sheet = parsed.sheets[0];
+    expect(sheet.detectedRows.find(row => row.desc === 'Margin %')).toMatchObject({
+      isTotal: true, isHeader: false, numberFormat: 'percent', formula: '(R1-R2)/R1',
+    });
+    expect(sheet.detectedRows.find(row => row.desc === 'Total')).toMatchObject({ numberFormat: 'column', formula: 'R1+R2' });
+    expect(sheet.detectedRows.find(row => row.desc === 'Literal percent').numberFormat).toBe('column');
+    const configured = configureExcelSheetImport(sheet, { ...sheet.importConfig, dataStartRow: 3 });
+    expect(configured.detectedRows.find(row => row.desc === 'Margin %')).toMatchObject({ numberFormat: 'percent', formula: '(!REF!-R1)/!REF!' });
+    const reports = createReportsFromExcelSheets(parsed, ['Revenue'], { companyName: 'Hotel', userIds: [], owner: 'admin', idSeed: 1 });
+    localStorage.setItem('imported-percent-report', JSON.stringify(reports));
+    const restored = JSON.parse(localStorage.getItem('imported-percent-report'));
+    expect(restored[0].rows.find(row => row.desc === 'Margin %')).toMatchObject({ isTotal: true, numberFormat: 'percent', formula: '(R1-R2)/R1' });
+    localStorage.removeItem('imported-percent-report');
+  });
   it("starts column labels at the table heading instead of currency and date metadata", () => {
     const matrix = [
       ['CURRENCY', 'THB', 'EXCHANGE RATE', 1, '', '', 'DATE:', '01-Sep-26'],

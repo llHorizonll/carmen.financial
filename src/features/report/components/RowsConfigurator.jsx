@@ -100,7 +100,7 @@ export default function RowsConfigurator({
   const normalizedSearch = searchQuery.trim().toLocaleLowerCase();
   const matchingRows = normalizedSearch
     ? rowEntries.filter(({ row, originalIndex }) => {
-        const rowType = row.isTotal ? "formula total" : row.isHeader ? "header" : "data";
+        const rowType = row.isTotal ? (row.numberFormat === "percent" ? "formula % percent total" : "formula total") : row.isHeader ? "header" : "data";
         const searchableText = [
           `r${originalIndex + 1}`,
           row.id,
@@ -209,6 +209,7 @@ export default function RowsConfigurator({
                 <SelectItem value="data">{t("Data")}</SelectItem>
                 <SelectItem value="header">{t("Header")}</SelectItem>
                 <SelectItem value="formula">{t("Formula")}</SelectItem>
+                <SelectItem value="formula-percent">Formula %</SelectItem>
               </SelectContent>
             </Select>
             </div>
@@ -233,7 +234,6 @@ export default function RowsConfigurator({
                 <TableHead className="w-24 text-center align-middle text-xs font-semibold uppercase tracking-wide text-foreground">{t("Indent")}</TableHead>
                 <TableHead className="w-24 text-center align-middle text-xs font-semibold uppercase tracking-wide text-foreground">{t("Row")}</TableHead>
                 <TableHead className="w-24 text-center align-middle text-xs font-semibold uppercase tracking-wide text-foreground">{t("% Base")}</TableHead>
-                <TableHead className="w-40">{t("Number format")}</TableHead>
                 <TableHead className="w-96 min-w-96 max-w-96 whitespace-normal text-xs font-semibold uppercase tracking-wide text-foreground">{t("Row mapping rules")}</TableHead>
                 <TableHead className="sticky right-0 z-20 w-40 min-w-40 max-w-40 border-l bg-muted text-center align-middle text-xs font-semibold uppercase tracking-wide text-foreground">{t("Action")}</TableHead>
               </TableRow>
@@ -242,7 +242,7 @@ export default function RowsConfigurator({
               {rowEntries.map(({ row, originalIndex: idx }) => {
                 const isHeader = row.isHeader || false;
                 const isTotal = row.isTotal || false;
-                const rowType = isTotal ? "F" : isHeader ? "H" : "D";
+                const rowType = isTotal ? (row.numberFormat === "percent" ? "F%" : "F") : isHeader ? "H" : "D";
                 const rowReferenceIssues =
                   brokenReferencesByRowId.get(row.id) || [];
                 const rowFormulaIssues = rowReferenceIssues.filter(
@@ -281,6 +281,7 @@ export default function RowsConfigurator({
                       <Select
                         value={rowType}
                         onValueChange={(value) => {
+                          if (value === "F%" && !isTotal) return;
                           if (value === "D")
                             handleUpdateRowMulti(row.id, {
                               isTotal: false,
@@ -299,15 +300,28 @@ export default function RowsConfigurator({
                               accCodes: "",
                               groups: "",
                             });
-                          else if (value === "F")
-                            handleUpdateRowMulti(row.id, {
+                          else if (value === "F" || value === "F%") {
+                            const mappingFields = ["dept", "deptGroup", "accCodes", "groups", ...Array.from({ length: 10 }, (_, index) => `dim${index + 1}`)];
+                            const mappedFields = mappingFields.filter((field) => String(row[field] ?? "").trim());
+                            const updates = {
                               isTotal: true,
                               isHeader: false,
-                              dept: "",
-                              deptGroup: "",
-                              accCodes: "",
-                              groups: "",
-                            });
+                              numberFormat: value === "F%" ? "percent" : "column",
+                              ...Object.fromEntries(mappingFields.map((field) => [field, ""])),
+                            };
+                            if (!isHeader && !isTotal && mappedFields.length > 0) {
+                              const mappingLabels = { dept: t("Department"), deptGroup: t("Department group"), accCodes: t("Account codes"), groups: t("Account groups") };
+                              setConfirmAction({
+                                title: t("Change Data row to Formula?"),
+                                msg: t("Changing “{name}” to Formula will clear these mappings: {mappings}. The row will use a formula instead of mapped data.", {
+                                  name: row.desc || row.id,
+                                  mappings: mappedFields.map((field) => mappingLabels[field] || field).join(", "),
+                                }),
+                                actionLabel: "Change to Formula",
+                                onConfirm: () => handleUpdateRowMulti(row.id, updates),
+                              });
+                            } else handleUpdateRowMulti(row.id, updates);
+                          }
                         }}
                       >
                         <SelectTrigger className="mx-auto h-8 w-full max-w-[10rem] rounded-lg text-center">
@@ -317,6 +331,7 @@ export default function RowsConfigurator({
                           <SelectItem value="D">{t("Data (D)")}</SelectItem>
                           <SelectItem value="H">{t("Header (H)")}</SelectItem>
                           <SelectItem value="F">{t("Formula (F)")}</SelectItem>
+                          {isTotal && <SelectItem value="F%">Formula %</SelectItem>}
                         </SelectContent>
                       </Select>
                     </TableCell>
@@ -384,15 +399,6 @@ export default function RowsConfigurator({
                           placeholder="R#"
                         />
                       ) : null}
-                    </TableCell>
-                    <TableCell>
-                      {!isHeader && <Select value={isTotal && row.numberFormat === "percent" ? "percent" : "column"} onValueChange={(value) => handleUpdateRow(row.id, "numberFormat", value)}>
-                        <SelectTrigger aria-label={`Number format R${idx + 1}`}><SelectValue /></SelectTrigger>
-                        <SelectContent position="popper">
-                          <SelectItem value="column">ตาม Column</SelectItem>
-                          {isTotal && <SelectItem value="percent">{t("Percent (%)")}</SelectItem>}
-                        </SelectContent>
-                      </Select>}
                     </TableCell>
                     <TableCell className="w-96 min-w-96 max-w-96 whitespace-normal px-2 py-2 align-middle">
                       {isHeader ? (
