@@ -35,6 +35,12 @@ describe('LoginShell', () => {
     expect(await screen.findByText('Carmen Blue Financial Report Login')).toBeInTheDocument();
     expect(await screen.findByText('Report viewing')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
+    const languageButton = screen.getByRole('button', { name: 'EN' });
+    expect(languageButton.closest('header')).toHaveClass('right-4');
+    expect(languageButton).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'ไทย' }));
+    expect(screen.getByRole('button', { name: 'ไทย' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('ชื่อผู้ใช้')).toBeInTheDocument();
   });
 
   it('hydrates prerendered login markup without mismatch when a session is stored', async () => {

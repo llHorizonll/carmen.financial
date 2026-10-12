@@ -231,6 +231,19 @@ describe('App shell', () => {
     }
   });
 
+  it('opens report navigation below the desktop sidebar breakpoint', async () => {
+    Object.defineProperty(window, 'innerWidth', { value: 900, configurable: true });
+    try {
+      render(<App />);
+      fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
+      const navigation = await screen.findByRole('dialog', { name: 'Reports' });
+      fireEvent.click(within(navigation).getByRole('button', { name: 'Profit and Loss' }));
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Reports' })).not.toBeInTheDocument());
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { value: 1024, configurable: true });
+    }
+  });
+
   it('keeps setup edits as a draft and restores them on Cancel changes', async () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));

@@ -4,9 +4,21 @@ import { Button } from '@/components/ui/button.jsx';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover.jsx';
 import { setCarmenSessionLanguage } from '../features/report/lib/carmenSession.js';
 
-export default function LanguagePreference() {
+export default function LanguagePreference({ compact = false }) {
   const language = useLanguage();
   const t = useTranslation();
+  if (compact) return (
+    <section className="inline-flex gap-1 rounded-lg bg-muted p-1" aria-label={t("Language")}>
+      {['en', 'th'].map((value) => (
+        <Button key={value} type="button" variant="ghost" size="sm"
+          className="text-xs text-muted-foreground aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-sm"
+          aria-pressed={language === value}
+          onClick={() => setCarmenSessionLanguage(value)}>
+          {value === 'en' ? 'EN' : 'ไทย'}
+        </Button>
+      ))}
+    </section>
+  );
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -20,7 +32,6 @@ export default function LanguagePreference() {
         {[
           ['en', 'English'],
           ['th', 'ไทย'],
-          ['vi', 'Vietnamese'],
         ].map(([value, label]) => (
           <Button
             key={value}

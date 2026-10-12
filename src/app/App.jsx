@@ -11,7 +11,6 @@ import {
   FileText,
   FilePlus,
   FileSpreadsheet,
-  Menu,
   PanelLeftClose,
   PanelLeftOpen,
   ChevronDown,
@@ -515,7 +514,7 @@ export default function App({ onLogout = null }) {
   const [editingRow, setEditingRow] = useState(null);
   const [detailSelecting, setDetailSelecting] = useState(null);
   const [modalAccCategory, setModalAccCategory] = useState("ALL");
-  const isMobile = useIsMobile();
+  const isMobile = useIsMobile(1024);
   const gettingStartedStorageKey = `${GETTING_STARTED_STORAGE_PREFIX}${currentUser?.id || "anonymous"}`;
   const accessibleReports = useMemo(
     () => businessUnitsEnabled ? reports.filter((report) => businessUnits.selected.includes(report.tenant)) : getAccessibleReports(reports, currentUser),
@@ -1827,12 +1826,13 @@ export default function App({ onLogout = null }) {
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
               {isMobile ? (
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="icon-sm"
                   onClick={() => setIsSidebarOpen(true)}
                   aria-label={t("Open navigation")}
+                  className="size-8 rounded-lg border-primary/30 text-primary hover:bg-primary/5"
                 >
-                  <Menu className="size-4" />
+                  <PanelLeftOpen className="size-4" />
                 </Button>
               ) : (
                 <Button

@@ -3,7 +3,7 @@ import { useSyncExternalStore } from 'react';
 export const getLanguage = () => {
   if (typeof window === 'undefined') return 'en';
   const value = window.localStorage.getItem('carmen_language');
-  return ['en', 'th', 'vi'].includes(value) ? value : 'en';
+  return ['en', 'th'].includes(value) ? value : 'en';
 };
 const subscribe = (listener) => {
   window.addEventListener('carmen-language-changed', listener);
@@ -13,7 +13,7 @@ const subscribe = (listener) => {
     window.removeEventListener('storage', listener);
   };
 };
-export const getLocale = () => ({ en: 'en-US', th: 'th-TH-u-ca-gregory', vi: 'vi-VN' })[getLanguage()];
+export const getLocale = () => ({ en: 'en-US', th: 'th-TH-u-ca-gregory' })[getLanguage()];
 export const useLanguage = () => useSyncExternalStore(subscribe, getLanguage, () => 'en');
 export const useTranslation = () => {
   const language = useLanguage();

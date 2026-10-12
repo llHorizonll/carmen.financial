@@ -44,6 +44,8 @@ describe('frontend language', () => {
     expect(translate('Custom report title', 'th')).toBe('Custom report title');
     expect(translate('constructor', 'th')).toBe('constructor');
     expect(translate('Reports', 'vi')).toBe('Reports');
+    window.localStorage.setItem('carmen_language', 'vi');
+    expect(getLocale()).toBe('en-US');
     window.localStorage.setItem('carmen_language', 'bad');
     expect(getLocale()).toBe('en-US');
   });

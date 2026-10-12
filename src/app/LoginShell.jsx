@@ -20,6 +20,7 @@ import {
   subscribeToCarmenApiFailure,
 } from '../lib/carmenApiFailure.js';
 import { initializeTheme } from '../lib/theme.js';
+import LanguagePreference from './LanguagePreference.jsx';
 
 
 const App = lazy(() => import('./App.jsx'));
@@ -92,10 +93,13 @@ export default function LoginShell() {
         />
       </Suspense>
   ) : (
-    <main className="min-h-dvh bg-background text-foreground">
-      <div className="mx-auto flex min-h-dvh max-w-5xl items-stretch px-4 py-6 sm:px-6 lg:items-center lg:px-8">
+    <main className="relative min-h-dvh bg-background text-foreground">
+      <header className="absolute top-4 right-4 z-10 sm:right-6">
+        <LanguagePreference compact />
+      </header>
+      <div className="mx-auto flex min-h-dvh max-w-5xl items-center px-4 py-20 sm:px-6 lg:px-8 lg:py-6">
         <div className="grid w-full gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
-          <section className="order-2 flex flex-col justify-center gap-8">
+          <section className="order-2 hidden flex-col justify-center gap-8 lg:flex">
             <header className="login-enter-from-right max-w-2xl space-y-5">
               <Badge variant="outline" className="w-fit rounded-full px-3 py-1"><BarChart3 className="size-3.5" />Carmen Blue Financial Report</Badge>
               <div className="space-y-4">

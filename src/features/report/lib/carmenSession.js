@@ -41,12 +41,12 @@ export const getStoredCarmenSession = () => {
     user = null;
   }
   const storedLanguage = window.localStorage.getItem(SESSION_KEYS.language);
-  const language = ['en', 'th', 'vi'].includes(storedLanguage) ? storedLanguage : 'en';
+  const language = ['en', 'th'].includes(storedLanguage) ? storedLanguage : 'en';
   return { accessToken, username, businessUnit, user, language };
 };
 
 export const setCarmenSessionLanguage = (language) => {
-  if (!['en', 'th', 'vi'].includes(language)) throw new Error('Unsupported Carmen language.');
+  if (!['en', 'th'].includes(language)) throw new Error('Unsupported Carmen language.');
   if (typeof window === 'undefined' || !window.localStorage) return;
   window.localStorage.setItem(SESSION_KEYS.language, language);
   window.dispatchEvent(new Event('carmen-language-changed'));
@@ -70,7 +70,7 @@ export const saveCarmenSession = ({ accessToken, username, businessUnit, user })
   window.localStorage.setItem(SESSION_KEYS.username, username || '');
   window.localStorage.setItem(SESSION_KEYS.businessUnit, JSON.stringify(businessUnit || null));
   window.localStorage.setItem(SESSION_KEYS.user, JSON.stringify(user || null));
-  if (!['en', 'th', 'vi'].includes(window.localStorage.getItem(SESSION_KEYS.language))) {
+  if (!['en', 'th'].includes(window.localStorage.getItem(SESSION_KEYS.language))) {
     window.localStorage.setItem(SESSION_KEYS.language, 'en');
   }
   window.localStorage.removeItem(SESSION_KEYS.selectedBusinessUnits);

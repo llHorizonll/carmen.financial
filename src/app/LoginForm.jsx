@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button.jsx';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card.jsx';
 import { Input } from '@/components/ui/input.jsx';
 import { Label } from '@/components/ui/label.jsx';
-import LanguagePreference from './LanguagePreference.jsx';
 import {
   clearCarmenSession,
   getDefaultBusinessUnit,
@@ -107,7 +106,6 @@ export default function LoginForm({ onAuthenticated }) {
   return (
     <Card className="login-enter-from-left order-1 w-full max-w-md justify-self-center self-center border border-border bg-card shadow-lg ring-0 lg:justify-self-start">
       <CardHeader className="space-y-2">
-        <LanguagePreference />
         <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">{t("Secure sign-in")}</Badge>
         <CardTitle className="text-xl tracking-tight sm:text-2xl">{t("Carmen Blue Financial Report Login")}</CardTitle>
         <CardDescription>{t("Use your Carmen credentials to continue.")}</CardDescription>
