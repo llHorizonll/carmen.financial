@@ -30,7 +30,7 @@ This phase is limited to delivery and rendering performance. It must not change 
 
 ## Baseline
 
-Measured from the production Vite build at `/financial2/` on 2026-08-11:
+Measured from the production Vite build at `/financial/` on 2026-08-11:
 
 | Metric | Current result |
 | --- | ---: |
@@ -72,7 +72,7 @@ Only code and styles required for the active path should be downloaded, parsed, 
 Add scripts that build, serve, and audit the production app at the real Vite base path:
 
 ```text
-/financial2/
+/financial/
 ```
 
 The audit command must:
@@ -185,7 +185,7 @@ The extractor must:
 - inline only above-the-fold login rules;
 - load the remaining stylesheet without blocking first paint;
 - preserve CSP compatibility;
-- preserve the `/financial2/` asset base;
+- preserve the `/financial/` asset base;
 - avoid duplicating large token blocks;
 - produce no flash of incorrect theme;
 - keep print styles external;
@@ -328,7 +328,7 @@ Mitigation: load immediately when the initial state is offline when possible, re
 
 Mitigation: never prune from a single-page crawl; verify source scanning/safelists and run dedicated print and theme smoke tests.
 
-### Cache invalidation under `/financial2/`
+### Cache invalidation under `/financial/`
 
 Mitigation: retain hashed Vite assets, test the deployed base path, and verify that old HTML cannot reference removed chunks after deployment.
 

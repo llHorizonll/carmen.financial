@@ -515,6 +515,17 @@ const filterEngineRows = (row, masterData) => {
   };
 };
 
+export const rowDimensionsOverlap = (left, right) => {
+  const leftSets = filterEngineRows(left, INITIAL_MASTER_DATA).dimensionSets;
+  const rightSets = filterEngineRows(right, INITIAL_MASTER_DATA).dimensionSets;
+  for (const [key, values] of leftSets) {
+    const otherValues = rightSets.get(key);
+    // An unspecified dimension includes all values; one disjoint field separates the rows.
+    if (otherValues?.size && values.size && ![...values].some(value => otherValues.has(value))) return false;
+  }
+  return true;
+};
+
 const matchesReportCategory = ({ reportCategories, dAccType, hasAccMap, dAccCode, accSet }) => {
   if (reportCategories.includes('ALL')) return true;
   const isIncome = ['I', 'E', 'R', 'INC', 'EXP', 'REV', 'COS', 'PL'].some(t => dAccType === t || dAccType.startsWith(t));

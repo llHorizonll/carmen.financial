@@ -13,6 +13,7 @@ import {
   buildReportDrilldown,
   findBrokenReferences,
   findRowMappingConflicts,
+  rowDimensionsOverlap,
   getRowMappingWarnings,
   deleteRowAndRewriteReferences,
   deleteColAndRewriteReferences,
@@ -631,12 +632,22 @@ describe('buildReportData', () => {
     expect(dailyResult[0].results.C1).toBe(100);
   });
 
+  it('allows shared accounts only when at least one dimension has disjoint values', () => {
+    expect(rowDimensionsOverlap({ dim1: 'A' }, { dim1: 'B' })).toBe(false);
+    expect(rowDimensionsOverlap({ dim1: 'A, B' }, { dim1: 'b, C' })).toBe(true);
+    expect(rowDimensionsOverlap({ dim1: '[a]' }, { dimensions: [{ key: 'DIM1', value: 'A' }] })).toBe(true);
+    expect(rowDimensionsOverlap({ dim1: 'A' }, {})).toBe(true);
+    expect(rowDimensionsOverlap({ dim1: 'A' }, { dim2: 'B' })).toBe(true);
+    expect(rowDimensionsOverlap({ dim1: 'A', dim2: 'X' }, { dim1: 'A', dim2: 'Y' })).toBe(false);
+  });
+
   it('supports multiple values per dimension while requiring every dimension field', () => {
     const dimensionResult = buildReportData({
       activeReport: {
         category: ['ALL'],
         rows: [
           { id: 'r1', desc: 'Dim Revenue', isHeader: false, isTotal: false, dept: '101', groupLevel: 'L4', groups: 'FOO', accCodes: '4001', dim1: 'a, b', dim2: 'X', percentBase: '', formula: '', indent: 0 },
+          { id: 'r2', accCodes: '4001', dim1: 'A', dim2: 'Y' },
         ],
         columns: [
           { id: 'C1', label: 'Actual', isActive: true, isFormula: false, isPercent: false, yearMode: 'current', periodMode: 'current', type: 'AC', width: '' },
@@ -656,6 +667,7 @@ describe('buildReportData', () => {
     });
 
     expect(dimensionResult[0].results.C1).toBe(150);
+    expect(dimensionResult[1].results.C1).toBe(999);
   });
 
   it('matches bracketed dimension options to plain ledger dimension values', () => {

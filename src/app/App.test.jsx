@@ -1229,7 +1229,12 @@ describe('App shell', () => {
     expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalled();
   });
 
-  it('persists edited account codes from the mapping modal to the API', async () => {
+  it.each([
+    { otherDimension: 'A', shouldConfirm: true },
+    { otherDimension: 'B', shouldConfirm: false },
+    { otherDimension: 'A, B', shouldConfirm: true },
+    { otherDimension: '', shouldConfirm: true },
+  ])('persists shared account mappings with dimension "$otherDimension" without clearing disjoint rows', async ({ otherDimension, shouldConfirm }) => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.getStoredCarmenSession.mockReturnValue({
       user: {
@@ -1297,8 +1302,9 @@ describe('App shell', () => {
           { id: 'C1', label: 'Actual', isActive: true, isFormula: false, isPercent: false, yearMode: 'current', periodMode: 'current', type: 'AC', width: '' },
         ],
         rows: [
-          { id: 'r1', desc: 'Rooms', isActive: true, isHeader: false, isTotal: false, dept: '', groupLevel: 'L4', groups: '', accCodes: '', percentBase: '', formula: '', indent: 0 },
-          { id: 'r2', desc: 'Duplicate mapping', isActive: true, isHeader: false, isTotal: false, dept: '', groupLevel: 'L4', groups: '', accCodes: '4001', percentBase: '', formula: '', indent: 0 },
+          { id: 'r1', desc: 'Rooms', isActive: true, isHeader: false, isTotal: false, dept: '', groupLevel: 'L4', groups: '', accCodes: '', dim1: 'A', percentBase: '', formula: '', indent: 0 },
+          { id: 'r2', desc: 'Duplicate mapping', isActive: true, isHeader: false, isTotal: false, dept: '', groupLevel: 'L4', groups: '', accCodes: '4001', dim1: otherDimension, percentBase: '', formula: '', indent: 0 },
+          { id: 'r3', desc: 'Separate dimension', isActive: true, isHeader: false, isTotal: false, dept: '', groupLevel: 'L4', groups: '', accCodes: '4001', dim1: 'C', percentBase: '', formula: '', indent: 0 },
         ],
       },
     ]);
@@ -1318,7 +1324,8 @@ describe('App shell', () => {
     fireEvent.change(accTextarea, { target: { value: '4001' } });
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     fireEvent.click(screen.getByRole('button', { name: 'Apply Mapping' }));
-    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('4001'));
+    if (shouldConfirm) expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('4001'));
+    else expect(confirmSpy).not.toHaveBeenCalled();
 
     expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
@@ -1326,8 +1333,9 @@ describe('App shell', () => {
     await waitFor(() => expect(reportApiMocks.saveCarmenReport).toHaveBeenCalledWith(expect.objectContaining({
       id: 'rep-edit-modal',
       rows: [
-        expect.objectContaining({ id: 'r1', accCodes: '4001' }),
-        expect.objectContaining({ id: 'r2', accCodes: '' }),
+        expect.objectContaining({ id: 'r1', accCodes: '4001', dim1: 'A', dimensions: [{ key: 'dim1', value: 'A' }] }),
+        expect.objectContaining({ id: 'r2', accCodes: shouldConfirm ? '' : '4001', dim1: otherDimension }),
+        expect.objectContaining({ id: 'r3', accCodes: '4001', dim1: 'C' }),
       ],
     })));
     confirmSpy.mockRestore();
