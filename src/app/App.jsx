@@ -1648,7 +1648,7 @@ export default function App({ onLogout = null }) {
             data-tour="reports"
           >
             {businessUnitsEnabled ? <BusinessUnitReportList key={currentUser?.id || "anonymous"} storageKey={`carmen_report_navigation:${currentUser?.id || "anonymous"}`} catalog={businessUnits} reports={accessibleReports}
-              currentKey={resolvedCurrentReportId} onSelect={handleReportChange} /> : accessibleReports.map((report) => (
+              currentKey={sharedWorkspaceOpen ? null : resolvedCurrentReportId} onSelect={handleReportChange} /> : accessibleReports.map((report) => (
               <Button
                 key={report.id}
                 variant={

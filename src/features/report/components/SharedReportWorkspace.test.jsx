@@ -24,8 +24,10 @@ async function openTemplate() {
   render(<SharedReportWorkspace units={units} username="admin" onClose={vi.fn()} />);
   fireEvent.click(await screen.findByRole('combobox', { name: 'Shared report' }));
   fireEvent.click(screen.getByRole('option', { name: template.name }));
-  await screen.findByDisplayValue(template.name);
   await waitFor(() => expect(screen.getByRole('button', { name: 'Preview report' })).toBeEnabled());
+  expect(screen.queryByLabelText('Template name')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Edit', exact: true }));
+  await screen.findByDisplayValue(template.name);
 }
 
 describe('SharedReportWorkspace', () => {
@@ -50,9 +52,22 @@ describe('SharedReportWorkspace', () => {
     await openTemplate();
     fireEvent.click(screen.getByRole('button', { name: 'Preview report' }));
     expect(await screen.findByText('180,000.00')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Dashboard', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show dashboard view', exact: true }));
     expect(await screen.findByRole('heading', { name: '180,000.00' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Excel' })).toBeEnabled();
+  });
+  it('uses Edit for setup and the shared view icons for table and dashboard', async () => {
+    await openTemplate();
+    expect(screen.queryByRole('button', { name: 'Setup', exact: true })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Preview report' }));
+    await screen.findByText('180,000.00');
+    expect(screen.queryByLabelText('Template name')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Show table view' })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit', exact: true }));
+    expect(screen.getByLabelText('Template name')).toHaveValue(template.name);
+    fireEvent.click(screen.getByRole('button', { name: 'Show table view' }));
+    expect(screen.queryByLabelText('Template name')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Show table view' })).toHaveLength(1);
   });
   it('blocks consolidated output and export when a BU is missing', async () => {
     sharedReportsApi.data.mockResolvedValue({ ...complete, isComplete: false, warnings: [{ tenant: 'paresa' }], byTenant: { cloud: complete.byTenant.cloud } });

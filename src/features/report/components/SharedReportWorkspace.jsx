@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Copy, History, Pencil, Trash2 } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n.js';
 import { VStack } from '@astryxdesign/core/VStack';
 import { HStack } from '@astryxdesign/core/HStack';
@@ -17,6 +18,7 @@ import EditMappingModal from './EditMappingModal.jsx';
 import DetailSelectorModal from './DetailSelectorModal.jsx';
 import ReportView from './ReportView.jsx';
 import ReportDashboard from './ReportDashboard.jsx';
+import ReportViewModeToggle from './ReportViewModeToggle.jsx';
 import { fetchCarmenMasterData, fetchCarmenDimensions, fetchCarmenReportOptions } from '../lib/reportApi.js';
 import { sharedReportsApi, createSharedReport, calculateSharedReport } from '../lib/sharedReports.js';
 import { THEMES, getIndentClass, moveRowsAndRewriteReferences, deleteRowAndRewriteReferences, deleteColAndRewriteReferences, buildExcelHtml, findBrokenReferences, formatReportCell } from '../lib/reportLogic.js';
@@ -37,7 +39,7 @@ export default function SharedReportWorkspace({ units, username, onClose }) {
   const [masterTenant, setMasterTenant] = useState('');
   const [dimensions, setDimensions] = useState({});
   const [options, setOptions] = useState({});
-  const [tab, setTab] = useState('setup');
+  const [tab, setTab] = useState('table');
   const [result, setResult] = useState(null);
   const [history, setHistory] = useState([]);
   const [editingRow, setEditingRow] = useState(null);
@@ -89,7 +91,7 @@ export default function SharedReportWorkspace({ units, username, onClose }) {
       || JSON.stringify(next.tenants) !== JSON.stringify(report?.tenants)) next = { ...next, overlapConfirmed: false };
     setReport(next); setResult(null); setHistory([]); setMappingWarnings([]); setError('');
   };
-  const setCurrent = (next) => { setReport(next); setSaved(next); setResult(null); setHistory([]); setError(''); setTenant(next?.tenants?.[0] || ''); };
+  const setCurrent = (next) => { setReport(next); setSaved(next); setResult(null); setHistory([]); setError(''); setTenant(next?.tenants?.[0] || ''); setTab(next?.version ? 'table' : 'setup'); };
   const discardGuard = action => dirty ? setConfirm({ title: 'Discard unsaved changes?', msg: 'Your shared template changes have not been saved.', onConfirm: action }) : action();
   const run = async action => {
     setBusy(true); setError('');
@@ -158,24 +160,27 @@ export default function SharedReportWorkspace({ units, username, onClose }) {
       {available === null && !error && <p role="status">Checking shared report availability…</p>}
       {available === false && <p role="status">Shared reports are not enabled on this server yet.</p>}
       {available && <VStack gap={4}>
-        <fieldset disabled={busy} className="print:hidden">
-          <HStack gap={3} wrap="wrap">
-            <Label className="grid gap-1">Shared report<Select value={report?.version ? report.id : ''} onValueChange={id => discardGuard(() => run(async () => { const next = await sharedReportsApi.get(id); if (alive.current) setCurrent(next); }))}>
-              <SelectTrigger><SelectValue placeholder="Select shared report" /></SelectTrigger><SelectContent>{catalog.map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></Label>
-            <Button disabled={!units.some(u => u.permission?.add)} onClick={() => discardGuard(() => {
+        <fieldset disabled={busy} className="min-w-0 rounded-xl border border-border bg-card p-4 print:hidden">
+          <div className="flex flex-wrap items-end gap-3">
+            <Label className="grid w-full min-w-0 gap-2 sm:w-72">Shared report<Select value={report?.version ? report.id : ''} onValueChange={id => discardGuard(() => run(async () => { const next = await sharedReportsApi.get(id); if (alive.current) setCurrent(next); }))}>
+              <SelectTrigger className="w-full"><SelectValue placeholder="Select shared report" /></SelectTrigger><SelectContent>{catalog.map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></Label>
+            <div role="group" aria-label="Template actions" className="flex flex-wrap items-center gap-2 sm:ml-auto">
+            <Button variant="outline" disabled={!units.some(u => u.permission?.add)} onClick={() => discardGuard(() => {
               setCurrent(createSharedReport(units.filter(u => u.permission?.add).map(u => u.id))); setTab('setup');
             })}>New shared template</Button>
             {report && <>
-              <Button disabled={!canEdit} onClick={save}>Save template</Button>
-              <Button variant="outline" disabled={!report.version || !permitted('add')} onClick={() => discardGuard(() => run(async () => {
-                const next = await sharedReportsApi.clone(report.id); if (alive.current) setCurrent(next); await refresh();
-              }))}>Clone template</Button>
-              <Button variant="outline" disabled={!canEdit || !report.version || !permitted('delete')} onClick={() => setConfirm({ title: 'Delete shared template?', msg: 'This removes the template from the catalog and preserves its audit history.', onConfirm: () => run(async () => {
+              {tab !== 'setup' && <Button size="sm" variant="outline" disabled={!canEdit} onClick={() => setTab('setup')}><Pencil />{t('Edit')}</Button>}
+              {tab === 'setup' && <Button disabled={!canEdit} onClick={save}>Save template</Button>}
+              <Button size="sm" variant="outline" className="border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive focus-visible:border-destructive focus-visible:ring-destructive/20" disabled={!canEdit || !report.version || !permitted('delete')} onClick={() => setConfirm({ title: 'Delete shared template?', msg: 'This removes the template from the catalog and preserves its audit history.', onConfirm: () => run(async () => {
                 await sharedReportsApi.delete(report); if (alive.current) setCurrent(null); await refresh();
-              }) })}>Delete template</Button>
-              <Button variant="outline" disabled={!report.version || dirty} onClick={() => run(async () => { const entries = await sharedReportsApi.history(report.id); if (alive.current) setHistory(entries); })}>History</Button>
+              }) })}><Trash2 />{t('Delete')}</Button>
+              <Button size="sm" variant="outline" disabled={!report.version || !permitted('add')} onClick={() => discardGuard(() => run(async () => {
+                const next = await sharedReportsApi.clone(report.id); if (alive.current) setCurrent(next); await refresh();
+              }))}><Copy />{t('Duplicate')}</Button>
+              <Button size="sm" variant="outline" disabled={!report.version || dirty} onClick={() => run(async () => { const entries = await sharedReportsApi.history(report.id); if (alive.current) setHistory(entries); })}><History />{t('Activity')}</Button>
             </>}
-          </HStack>
+            </div>
+          </div>
         </fieldset>
         {busy && <p role="status">Loading shared report…</p>}
         {history.length > 0 && <VStack gap={2} className="print:hidden">{history.map(entry => <HStack key={entry.Version} gap={3} wrap="wrap">
@@ -185,27 +190,38 @@ export default function SharedReportWorkspace({ units, username, onClose }) {
           }) })}>Restore version</Button>
         </HStack>)}</VStack>}
         {report && <>
-          <fieldset disabled={busy} className="min-w-0 print:hidden"><HStack gap={3} wrap="wrap">
-            <Button variant="outline" aria-pressed={tab === 'setup'} onClick={() => setTab('setup')}>Setup</Button>
+          <fieldset disabled={busy} className="min-w-0 rounded-xl border border-border bg-card p-4 print:hidden">
+            {result?.response.isComplete && <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+              {tab === 'setup' && result?.response.isComplete && <ReportViewModeToggle value={tab} onChange={setTab} />}
+              {result?.response.isComplete && <div role="group" aria-label="Report output" className="flex items-center gap-2"><Button variant="outline" onClick={exportExcel}>Excel</Button><Button variant="outline" onClick={() => window.print()}>Print</Button></div>}
+            </div>}
+            <div className="flex flex-wrap items-end gap-3 pt-3 [&_label]:gap-2">
             <Label className="grid gap-1">Year<Input className="w-24" type="number" min="1" max="9999" value={filters.year} onChange={e => { setFilters({ ...filters, year: Number(e.target.value) }); setResult(null); }} /></Label>
             <Label className="grid gap-1">Period<Input className="w-20" type="number" min="1" max="12" value={filters.period} onChange={e => { setFilters({ ...filters, period: Number(e.target.value) }); setResult(null); }} /></Label>
             <Label className="grid gap-1">Budget revision<Input className="w-24" type="number" min="0" max="4" value={filters.revision} onChange={e => { setFilters({ ...filters, revision: Number(e.target.value) }); setResult(null); }} /></Label>
             <Label className="grid gap-1">Day<Input className="w-20" type="number" min="1" max="31" value={filters.day} onChange={e => { setFilters({ ...filters, day: e.target.value }); setResult(null); }} /></Label>
-            <Button disabled={!report.version || dirty} onClick={calculate}>Preview report</Button>
-            {result?.response.isComplete && <><Button variant="outline" onClick={() => setTab('table')}>Table</Button><Button variant="outline" onClick={() => setTab('dashboard')}>Dashboard</Button>
-              <Button variant="outline" onClick={exportExcel}>Excel</Button><Button variant="outline" onClick={() => window.print()}>Print</Button></>}
-          </HStack></fieldset>
+            <Button className="sm:ml-auto" disabled={!report.version || dirty} onClick={calculate}>Preview report</Button>
+            </div>
+          </fieldset>
           {result && <Text role="status">{result.response.isComplete ? 'Complete' : 'Incomplete'} · {names} · {result.response.currency} · Configuration v{report.version}</Text>}
           {result && !result.response.isComplete && <p role="alert">No consolidated output is shown. Missing business units: {result.response.warnings.map(w => w.tenant).join(', ')}</p>}
+          {tab !== 'setup' && !result && <Text role="status">Choose the reporting period and preview the report to view its table or dashboard.</Text>}
           {tab === 'setup' && <fieldset disabled={busy || !canEdit} className="min-w-0 print:hidden"><VStack gap={4}>
-            <HStack gap={3} wrap="wrap"><Label>Template name<Input value={report.name} onChange={e => update({ ...report, name: e.target.value })} /></Label>
+            <Heading level={2}>Template setup</Heading>
+            <div className="flex flex-wrap items-end gap-3 [&_label]:grid [&_label]:gap-2"><Label className="w-full sm:w-72">Template name<Input value={report.name} onChange={e => update({ ...report, name: e.target.value })} /></Label>
               <MultiSelectDropdown label="Participating BUs" showAllLabel={false} options={units.map(u => ({ id: u.id, display: u.name }))} selected={report.tenants}
                 onChange={tenants => { update({ ...report, tenants, compatibilityConfirmed: false }); setTenant(tenants[0] || ''); }} />
               <Label>Mapping BU<Select value={tenant} onValueChange={setTenant}><SelectTrigger><SelectValue placeholder="Choose BU" /></SelectTrigger><SelectContent>{report.tenants.map(id => <SelectItem key={id} value={id}>{units.find(u => u.id === id)?.name || id}</SelectItem>)}</SelectContent></Select></Label>
-            </HStack>
+            </div>
             <Label className="items-start whitespace-normal"><Checkbox checked={report.compatibilityConfirmed === true} onCheckedChange={value => update({ ...report, compatibilityConfirmed: value === true })} /> I confirm the selected BUs use equivalent budget scenarios and the configured signs.</Label>
             {mappingWarnings.length > 0 && <Text>Possible overlaps: {mappingWarnings.join('; ')}</Text>}
             <Label className="items-start whitespace-normal"><Checkbox checked={report.overlapConfirmed === true} onCheckedChange={value => update({ ...report, overlapConfirmed: value === true })} /> Reusing the same source amounts in multiple data rows is intentional.</Label>
+            <ColumnsConfigurator activeReport={report} reportOptions={options} handleAddCol={addCol}
+              handleDuplicateCol={id => update({ ...report, columns: [...report.columns, { ...report.columns.find(c => c.id === id), id: crypto.randomUUID() }] })}
+              handleUpdateCol={(id, key, value) => update({ ...report, columns: report.columns.map(c => c.id === id ? { ...c, [key]: value } : c) })}
+              updateActiveReport={update} handleDeleteCol={id => update(deleteColAndRewriteReferences(report, id))} setConfirmAction={setConfirm} />
+            {report.columns.filter(col => !col.isFormula && !col.isPercent).map(col => <Label key={col.id}>{col.label} source<Select value={col.sourceTenant || 'ALL'} onValueChange={value => update({ ...report, columns: report.columns.map(c => c.id === col.id ? { ...c, sourceTenant: value } : c) })}>
+              <SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="ALL">Combined participating BUs</SelectItem>{report.tenants.map(id => <SelectItem key={id} value={id}>{units.find(u => u.id === id)?.name || id}</SelectItem>)}</SelectContent></Select></Label>)}
             {!mappingReady && <p role="status">Choose a mapping BU and wait for its lookup data.</p>}
             <RowsConfigurator activeReport={mappedReport} masterData={master} handleAddRow={addRow}
               handleDuplicateRow={id => { const row = report.rows.find(r => r.id === id); const newId = crypto.randomUUID(); update({ ...report, rows: [...report.rows, { ...row, id: newId }], mappings: Object.fromEntries(Object.entries(report.mappings).map(([bu, maps]) => [bu, { ...maps, ...(maps[id] ? { [newId]: { ...maps[id] } } : {}) }])) }); }}
@@ -222,17 +238,11 @@ export default function SharedReportWorkspace({ units, username, onClose }) {
               <Label>Sign<Select value={String(report.mappings?.[tenant]?.[row.id]?.sign ?? 1)} onValueChange={value => update({ ...report, compatibilityConfirmed: false, mappings: { ...report.mappings, [tenant]: { ...report.mappings?.[tenant], [row.id]: { ...report.mappings?.[tenant]?.[row.id], sign: Number(value) } } } })}>
                 <SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="1">Keep source sign</SelectItem><SelectItem value="-1">Reverse source sign</SelectItem></SelectContent></Select></Label>
             </HStack>)}
-            <ColumnsConfigurator activeReport={report} reportOptions={options} handleAddCol={addCol}
-              handleDuplicateCol={id => update({ ...report, columns: [...report.columns, { ...report.columns.find(c => c.id === id), id: crypto.randomUUID() }] })}
-              handleUpdateCol={(id, key, value) => update({ ...report, columns: report.columns.map(c => c.id === id ? { ...c, [key]: value } : c) })}
-              updateActiveReport={update} handleDeleteCol={id => update(deleteColAndRewriteReferences(report, id))} setConfirmAction={setConfirm} />
-            {report.columns.filter(col => !col.isFormula && !col.isPercent).map(col => <Label key={col.id}>{col.label} source<Select value={col.sourceTenant || 'ALL'} onValueChange={value => update({ ...report, columns: report.columns.map(c => c.id === col.id ? { ...c, sourceTenant: value } : c) })}>
-              <SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="ALL">Combined participating BUs</SelectItem>{report.tenants.map(id => <SelectItem key={id} value={id}>{units.find(u => u.id === id)?.name || id}</SelectItem>)}</SelectContent></Select></Label>)}
             <Heading level={3}>Dashboard KPIs</Heading>
-            <HStack gap={3} wrap="wrap"><Label>KPI row<Select value={kpiRow} onValueChange={setKpiRow}><SelectTrigger><SelectValue placeholder="Choose row" /></SelectTrigger><SelectContent>{report.rows.filter(r => !r.isHeader).map(r => <SelectItem key={r.id} value={r.id}>{r.desc || r.id}</SelectItem>)}</SelectContent></Select></Label>
+            <div className="flex flex-wrap items-end gap-3 [&_label]:grid [&_label]:gap-2"><Label>KPI row<Select value={kpiRow} onValueChange={setKpiRow}><SelectTrigger><SelectValue placeholder="Choose row" /></SelectTrigger><SelectContent>{report.rows.filter(r => !r.isHeader).map(r => <SelectItem key={r.id} value={r.id}>{r.desc || r.id}</SelectItem>)}</SelectContent></Select></Label>
               <Label>KPI column<Select value={kpiCol} onValueChange={setKpiCol}><SelectTrigger><SelectValue placeholder="Choose column" /></SelectTrigger><SelectContent>{report.columns.map(c => <SelectItem key={c.id} value={c.id}>{c.label || c.id}</SelectItem>)}</SelectContent></Select></Label>
               <Button disabled={!report.rows.some(r => r.id === kpiRow && !r.isHeader) || !report.columns.some(c => c.id === kpiCol)} onClick={() => update({ ...report, kpis: [...(report.kpis || []), { id: crypto.randomUUID(), rowId: kpiRow, columnId: kpiCol }] })}>Add KPI</Button>
-            </HStack>
+            </div>
             {(report.kpis || []).map(kpi => <HStack key={kpi.id} gap={3}><Text>{report.rows.find(r => r.id === kpi.rowId)?.desc || 'Missing row'} / {report.columns.find(c => c.id === kpi.columnId)?.label || 'Missing column'}</Text>
               <Button variant="outline" onClick={() => update({ ...report, kpis: report.kpis.filter(item => item.id !== kpi.id) })}>Remove KPI</Button></HStack>)}
             {(!report.version || report.owner?.toLowerCase() === username?.toLowerCase()) && <>

@@ -6,6 +6,8 @@
 
 ## Readiness ล่าสุด: ยังขาดอะไรในการ consolidate
 
+อัปเดต runtime/UI 14 ตุลาคม: Shared reports เป็น workspace ในพื้นที่หลักแล้ว เก็บ draft ทั้ง shared/รายงานเดี่ยวระหว่างสลับหน้า; authenticated create/save/reload/clone/history/soft-delete และ restore ของ config ที่ mapping ครบผ่านกับ Admin DB จริง ทดสอบ Room Revenue ปี 2026 P1 เทียบ SQL แยกสอง BU ได้ Actual รวม 26,388,737.76 และ Budget Rev0 รวม 28,123,525.00 ตรง UI/KPI/ไฟล์ Excel โอมยืนยัน Rev0 เป็น scenario เดียวกัน แต่ยังไม่มีบัญชีทดสอบ deny/revoke ผลนี้ครอบคลุมหนึ่งแถว/หนึ่ง scenario ไม่ใช่ full acceptance ดู [verification record](shared-report-verification-2026-10-14.md)
+
 ผลตรวจเพิ่มเติม 14 ตุลาคม: DBX read-only ยืนยันว่าตาราง shared ทั้งสองมีอยู่ โครงสร้าง 11 columns และ primary keys ตรง migration และทั้งสองตารางยังว่าง; frontend regression รันใหม่ผ่าน 280 tests / 33 files ส่วน authenticated capability/lifecycle/reconciliation ยังรอ session ที่ใช้งานได้ ดู [verification record](shared-report-verification-2026-10-14.md) ไม่ apply migration ซ้ำ
 
 **มี local implementation ของ shared templates และการรวมยอดระดับ 1 แล้ว โอมแจ้งว่า apply migration ใน Admin DB แล้ววันที่ 14 ตุลาคม แต่ยังไม่ผ่าน reconciliation กับข้อมูลจริง** เปิด shared template ที่กำหนด participating BUs และ mapping จากปุ่ม Shared reports ด้านซ้าย ส่วน full accounting consolidation ยังไม่มี implementation
