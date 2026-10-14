@@ -55,8 +55,12 @@ Minimize unnecessary token and quota consumption while preserving correctness.
 - Do not run build, lint, typecheck, or tests after every small edit.
 - Prefer the smallest relevant test or validation command.
 - Run broader validation only after the implementation is substantially complete.
-- For large tasks, divide work into small logical phases.
-- Before starting a task likely to require broad repository exploration or many iterations, provide a short plan first.
+- For large tasks, divide work into small logical phases. Complete only the current agreed milestone; do not automatically begin the next milestone.
+- Before starting a task likely to require broad repository exploration or many iterations, provide a short plan first. Keep the plan concise and identify a stopping point.
+- Aim for 8-12 model iterations per milestone when practical; this is a guideline, not a hard cap. If substantially more are needed, summarize progress and remaining work before continuing.
+- Separate implementation from extensive browser verification. Use the browser only for affected flows, and avoid repeating successful checks without relevant changes.
+- Limit tool output and file reads to relevant sections. Prefer bounded queries and concise test output.
+- For cross-repository work, inspect only the affected frontend/backend paths, not both entire repositories.
 - Complete only the requested scope. Do not proactively refactor or improve unrelated code.
 - Stop after the requested task and necessary validation are complete.
 
@@ -81,33 +85,13 @@ Apply only the checks relevant to the files or behavior changed by the current t
 - Keep regression coverage in `src/features/report/lib/excelTemplateImport.test.js` and `excelTemplateImport.fixtures.test.js`. When changing import, column-label rendering, row-type handling, or shared setup/view behavior, run those tests plus `src/features/report/lib/reportLogic.test.js` and `src/features/report/components/ReportView.test.jsx`.
 - Do not weaken or remove these expectations to accommodate a UI redesign; a requested change in import behavior must be explicit.
 
-<!-- ASTRYX:START -->
-Astryx v0.1.9 · 153 components
-CLI: run every command as `bunx astryx <cmd>` (shown below as `astryx ...`).
+## Astryx UI Library
 
-SETUP (once, in your app entry e.g. main.tsx) — without these, components render unstyled:
-  import "@astryxdesign/core/reset.css";
-  import "@astryxdesign/core/astryx.css";
-
-WORKFLOW — discover, don't guess. Before writing UI:
-1. `astryx build "<idea>"` — START HERE: returns a kit (closest [page] + [block]s + [component]s). No args = full playbook.
-2. `astryx template <name> [--skeleton]` — scaffold the [page]/[block]s it named, or study their layout. Templates are reference code.
-3. `astryx component <Name>` — props + examples for every component you use.
-
-RULES:
-- No <div> — components do all layout/spacing. Full page → AppShell; sidebar nav → SideNav.
-- Frame first: pick the shell (AppShell / Layout+LayoutPanel) and budget regions in px BEFORE writing content (`astryx docs layout`).
-- Dense data = rows (Table, List/Item) edge-to-edge — never Card-wrapped list items. Card = dashboard widgets, galleries, settings groups only.
-- Status → StatusDot/Token; Badge only for counts and enumerated states, never decoration.
-- Custom styling: component props first; else Tailwind utilities backed by tokens (bg-surface, text-primary, rounded-lg) via tailwind-theme.css. No raw hex/px.
-- Tokens for every value (`astryx docs tokens`). Brand/accent via `astryx theme` — never override --color-* in :root.
-- SELF-CHECK before you finish: re-read the file and replace any style={{…}}, raw <div>/<span> layout, imported .css/@apply, or hardcoded/arbitrary value (e.g. bg-[#fff], p-[13px]) with the component or a token-backed utility. If unsure a component/prop exists, run `astryx component <Name>` / `astryx search "<thing>"`; don't hand-roll CSS.
-
-MORE CLI:
-  search "<query>"   find any component / hook / doc / template / block
-  component --list   153 components by category
-  template --list    page + block recipes
-  docs <topic>       color, elevation, icons, illustrations, internationalization, layout, migration, motion, principles, shape, spacing, styling, theme, tokens, typography
-  swizzle <Name>     eject component source for deep customization
-  upgrade --apply    run after any @astryxdesign/core bump
-<!-- ASTRYX:END -->
+- Astryx is optional for new UI development.
+- Use existing project components and patterns by default.
+- Use Astryx CLI only when explicitly requested or when
+  implementing a new UI that genuinely benefits from it.
+- Do not run Astryx discovery for minor UI fixes.
+- Preserve existing Astryx components and imports.
+- Do not migrate or replace existing UI libraries
+  unless explicitly requested.

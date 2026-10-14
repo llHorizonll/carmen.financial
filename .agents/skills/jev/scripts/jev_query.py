@@ -1,0 +1,783 @@
+#!/usr/bin/env python3
+"""Bundled zero-dependency Jev caller — the skill works with nothing installed.
+
+Standard library only. No ``pip install``, no ``httpx``, no ``orjson``. This is
+what makes the skill usable straight out of an installed skill folder, which is
+the Agent Skills expectation: a skill should carry the scripts it needs.
+
+    # a gate
+    python scripts/jev_query.py --state-file diff.txt \
+      --question-type noul --name breaks_api \
+      --instructions "Does the diff change a public API signature?" \
+      --true-text "A public name or signature changes." \
+      --false-text "Only internals, comments or formatting change."
+
+    # several questions at once (cheaper and far faster than one per call)
+    python scripts/jev_query.py --state-file log.txt --questions '{
+      "owner": {"type":"choice","instructions":"Which module owns this?",
+                "criteria":{"api":"HTTP layer.","db":"Schema.","unclear":"Not enough info."}},
+      "risk":  {"type":"score","instructions":"How risky is this?",
+                "criteria":["Trivial","Low","Moderate","High","Critical"]}}'
+
+    # reduce a big payload, and keep the rejected part retrievable
+    python scripts/jev_query.py --state-file build.log --reduce \
+      --instructions "Does the log line at `L{i}` report a problem worth investigating?"
+
+For the ledger, per-stage statistics and `stats`/`outcome`, install the package
+(``pip install -e .``) and use the full CLI. This script exists so the skill is
+useful without that install.
+
+Exit codes: 0 decided, 2 at least one answer needs review, 3 refused (state over
+budget), 1 error.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+import time
+import urllib.error
+import urllib.request
+import uuid
+from pathlib import Path
+
+DECISIONS_PATH = "/api/alpha/decisions"
+DEFAULT_MODEL = "typesafe/jev-1.13"
+DEFAULT_BASE = "https://openrouter.ai"
+KEY_ENV_VARS = (
+    "JEVSKILL_API_KEY",
+    "OPENROUTER_API_KEY",
+    "OPEN_ROUTER_API_KEY",
+    "JEVUSE_API_KEY",
+)
+RETRYABLE = {0, 429, 500, 502, 503, 504, 520, 522, 524, 529}
+
+#: Two endpoints serve the same model. They differ in URL, model name, key
+#: variable, and whether the response carries a billed cost. Keep this in step
+#: with jevskill/config.py PROVIDERS — this script is the dependency-free copy.
+PROVIDERS = {
+    "openrouter": {
+        "base_url": "https://openrouter.ai",
+        "endpoint": "/api/alpha/decisions",
+        # OpenRouter namespaces the vendor model.
+        "model": "typesafe/jev-1.13",
+        "key_env": ("OPENROUTER_API_KEY", "OPEN_ROUTER_API_KEY", "JEVUSE_API_KEY"),
+        "reports_cost": True,
+    },
+    "typesafe": {
+        "base_url": "https://api.typesafe.ai",
+        "endpoint": "/v1/systemone",
+        "model": "jev-latest",
+        "key_env": ("JEV_API_KEY", "TYPESAFE_API_KEY"),
+        # The vendor returns input/output tokens but no cost, so spend is
+        # computed from the documented $0.042/Mtok rate instead of recorded as 0.
+        "reports_cost": False,
+    },
+}
+DEFAULT_PROVIDER = "openrouter"
+INPUT_PRICE_PER_MTOK = 0.042
+OPENROUTER_KEY_PREFIX = "sk-or-"
+
+# Calibrated against the live API: a prose rule of thumb (3.6 chars/token)
+# under-counted log lines and code by 2.15x. See jevskill/config.py.
+CHARS_PER_TOKEN = 1.68
+
+#: Credential-shaped strings to scrub before state leaves the machine. A compiled
+#: copy of jevskill/redact.py — same rule as PROVIDERS: this script must run with
+#: nothing installed, so it cannot import the package. Ordered most-specific
+#: first, so ``sk-or-v1-…`` is labelled as an OpenRouter key, not a generic one.
+REDACT_PATTERNS = (
+    ("private_key", r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----"),
+    ("openrouter_key", r"\bsk-or-v1-[0-9a-f]{16,}\b"),
+    ("api_key", r"\bsk-[A-Za-z0-9_-]{16,}\b"),
+    ("aws_key", r"\bAKIA[0-9A-Z]{16}\b"),
+    ("github_token", r"\bgh[pousr]_[A-Za-z0-9]{30,}\b"),
+    ("slack_token", r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b"),
+    ("jwt", r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b"),
+    ("bearer", r"\bBearer\s+[A-Za-z0-9._~+/-]{8,}={0,2}"),
+    ("password_param",
+     r"\b(password|passwd|api[_-]?key|secret|auth[_-]?token|access[_-]?token|token)"
+     r"\s*[=:]\s*[\"']?[A-Za-z0-9._~+/-]{6,}"),
+)
+EMAIL_PATTERN = ("email", r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+\.[A-Za-z0-9.-]{2,}\b")
+
+# --------------------------------------------------------------------------- #
+# Blocks: judge a structural unit instead of a line.
+#
+# Compiled copy of jevskill/blocks.py — same rule as REDACT_PATTERNS/PROVIDERS,
+# because the Skill must run with nothing installed. This exists because of a
+# measured loss: gating `yaml_drift` line by line scored 0/3 against a structural
+# filter's 3/3, since "prod differs from default" compares two lines and no single
+# line can match it. Grouping a header with its scalar properties makes it
+# answerable, and keeps the header (the answer) in the reduced output.
+# --------------------------------------------------------------------------- #
+
+
+def indent_of(line: str) -> int:
+    """Leading whitespace width; tabs and spaces each count as one character."""
+    return len(line) - len(line.lstrip())
+
+
+def is_header(line: str) -> bool:
+    """A line that introduces a mapping (`key:` with nothing after the colon)."""
+    return line.rstrip().endswith(":")
+
+
+def split_blocks(text) -> list:
+    """Split text into `(label, lines)` units, one per leaf mapping.
+
+    A header plus its scalar properties; a deeper header starts its own block, so a
+    container like `flags:` stays a one-line block instead of swallowing every flag.
+    Flat text has no headers, so every line stays its own block.
+    """
+    lines = text.splitlines() if isinstance(text, str) else list(text)
+    blocks: list = []
+    index, total = 0, len(lines)
+    while index < total:
+        if not lines[index].strip():
+            index += 1
+            continue
+        head = lines[index]
+        base = indent_of(head)
+        group = [head]
+        cursor = index + 1
+        if is_header(head):
+            while cursor < total:
+                current = lines[cursor]
+                if not current.strip():
+                    cursor += 1
+                    continue
+                if indent_of(current) <= base or is_header(current):
+                    break
+                group.append(current)
+                cursor += 1
+        label = head.strip()
+        if label.endswith(":"):
+            # Match jevskill/blocks.py: the label is the header without its colon.
+            label = label[:-1].rstrip()
+        blocks.append((label, group))
+        index = cursor
+    return blocks
+
+
+def pack_blocks(blocks: list, max_lines: int) -> list:
+    """Windows of blocks that never split one; an oversized block goes alone."""
+    if max_lines < 1:
+        raise SystemExit("error: --window must be at least 1")
+    windows: list = []
+    current: list = []
+    used = 0
+    for block in blocks:
+        if current and used + len(block[1]) > max_lines:
+            windows.append(current)
+            current, used = [], 0
+        current.append(block)
+        used += len(block[1])
+    if current:
+        windows.append(current)
+    return windows
+
+#: Review thresholds. Compiled copy of jevskill/review.py — see REDACT_PATTERNS
+#: for why this script carries its own copy. Both are *illustrative heuristics,
+#: not calibrated guarantees*: tune them on held-out data for your workload.
+DEFAULT_REVIEW_BELOW = 0.75
+DEFAULT_REVIEW_MARGIN = 0.10
+
+
+def needs_review(answer: dict, below: float = DEFAULT_REVIEW_BELOW,
+                 margin: float = DEFAULT_REVIEW_MARGIN) -> bool:
+    """True when one raw answer is too close to call for unattended use."""
+    kind = answer.get("type")
+    if kind == "noul":
+        value = answer.get("noul")
+        if value is None:
+            return True
+        return (1.0 - below) < float(value) < below
+    probabilities = sorted(
+        (float(v) for v in (answer.get("probabilities") or {}).values()), reverse=True)
+    if kind == "choice":
+        if not probabilities:
+            return True
+        second = probabilities[1] if len(probabilities) > 1 else 0.0
+        return probabilities[0] < below or (probabilities[0] - second) < margin
+    if kind == "score":
+        confidence = answer.get("confidence")
+        if confidence is not None:
+            return float(confidence) < below
+        return not probabilities or probabilities[0] < below
+    return True  # an unknown kind is reported, not trusted
+
+
+def review_flags(answers: dict, below: float, margin: float) -> list:
+    """Names of the answers that need a second look, in question order."""
+    return [name for name, answer in (answers or {}).items()
+            if needs_review(answer, below, margin)]
+
+
+def redact_value(data, emails: bool = False, extra=None):
+    """Scrub every string in ``data``. Returns ``(data, labels)``.
+
+    Keys are structure the question may point at, so only values are scrubbed.
+    """
+    import re as _re
+
+    patterns = [(label, _re.compile(raw, _re.IGNORECASE)) for label, raw in REDACT_PATTERNS]
+    if emails:
+        patterns.append((EMAIL_PATTERN[0], _re.compile(EMAIL_PATTERN[1], _re.IGNORECASE)))
+    for i, raw in enumerate(extra or []):
+        try:
+            patterns.append((f"extra_{i}", _re.compile(raw)))
+        except _re.error as exc:
+            raise SystemExit(f"error: bad --redact-extra regex #{i} ({raw!r}): {exc}")
+
+    labels: list = []
+
+    def walk(value):
+        if isinstance(value, str):
+            for label, pattern in patterns:
+                value, hits = pattern.subn(f"[REDACTED:{label}]", value)
+                if hits and label not in labels:
+                    labels.append(label)
+            return value
+        if isinstance(value, dict):
+            return {k: walk(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [walk(v) for v in value]
+        return value
+
+    return walk(data), labels
+
+
+def _registry_env(name: str) -> str:
+    """Read ``HKCU\\Environment`` — `setx` values are not inherited by running shells."""
+    if os.name != "nt":
+        return ""
+    try:
+        import winreg
+
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
+            value, _ = winreg.QueryValueEx(key, name)
+            return str(value).strip() if value else ""
+    except Exception:
+        return ""
+
+
+def provider_intent(explicit: str | None = None) -> str | None:
+    """What the user *stated*: ``--provider``, then ``JEVSKILL_PROVIDER``, then the
+    ``provider`` field of ``~/.jevskill/config.json``. ``None`` when nothing was
+    stated. Mirrors ``jevskill.config.resolve_provider_intent``."""
+    if explicit in PROVIDERS:
+        return explicit
+    from_env = (os.environ.get("JEVSKILL_PROVIDER") or "").strip().lower()
+    if from_env in PROVIDERS:
+        return from_env
+    try:
+        data = json.loads((Path.home() / ".jevskill" / "config.json").read_text("utf-8"))
+        from_file = str(data.get("provider", "")).strip().lower()
+    except Exception:
+        from_file = ""
+    return from_file if from_file in PROVIDERS else None
+
+
+def find_api_key(provider: str | None = None) -> tuple[str, str]:
+    """Resolve ``(provider, key)`` from the environment, registry, or config file.
+
+    Order of business, mirroring ``jevskill.config.Config.from_env``:
+
+    1. the stated provider (flag, ``JEVSKILL_PROVIDER``, config file) is resolved
+       **first**, and if there is one only *its* key variables are consulted — a
+       machine holding both keys must not send the aggregator's key to the vendor
+       (measured: that is a 401);
+    2. with nothing stated, variables are searched **name by name**, vendor names
+       first (``JEV_API_KEY``, ``TYPESAFE_API_KEY``, then the OpenRouter names),
+       each in the environment and then in the Windows user registry — a vendor key
+       set yesterday with ``setx`` beats an aggregator key exported in this shell;
+    3. key *shape* then picks the provider: ``sk-or-...`` is OpenRouter, anything
+       else is the vendor's.
+    """
+    intent = provider_intent(provider)
+    names = (
+        ("JEVSKILL_API_KEY",) + PROVIDERS[intent]["key_env"]
+        if intent
+        else ("JEVSKILL_API_KEY",)
+        + PROVIDERS["typesafe"]["key_env"]
+        + PROVIDERS["openrouter"]["key_env"]
+    )
+    key = ""
+    for name in names:
+        key = (os.environ.get(name) or "").strip() or _registry_env(name)
+        if key:
+            break
+    if not key:
+        try:
+            data = json.loads((Path.home() / ".jevskill" / "config.json").read_text("utf-8"))
+            key = str(data.get("api_key", "")).strip()
+        except Exception:
+            key = ""
+
+    if intent:
+        return intent, key
+    chosen = DEFAULT_PROVIDER
+    if key and not key.startswith(OPENROUTER_KEY_PREFIX):
+        chosen = "typesafe"
+    return chosen, key
+
+
+def model_for(provider: str, model: str | None) -> str:
+    """Translate a model name to the one this endpoint expects."""
+    name = (model or "").strip()
+    if provider == "typesafe":
+        if not name:
+            return PROVIDERS["typesafe"]["model"]
+        return name.split("/", 1)[1] if name.startswith("typesafe/") else name
+    if not name:
+        return PROVIDERS["openrouter"]["model"]
+    return name if "/" in name else f"typesafe/{name}"
+
+
+def cost_of(provider: str, usage: dict) -> float:
+    """Cost in USD, computed when the provider does not report one."""
+    reported = usage.get("cost")
+    if reported is not None:
+        return float(reported)
+    return int(usage.get("input_tokens", 0) or 0) / 1_000_000 * INPUT_PRICE_PER_MTOK
+
+
+def count_tokens(text) -> int:
+    if not isinstance(text, str):
+        text = json.dumps(text, ensure_ascii=False)
+    return max(1, int(len(text) / CHARS_PER_TOKEN))
+
+
+def build_questions(args) -> dict:
+    if args.questions:
+        questions = json.loads(args.questions)
+    elif args.question_type:
+        name = args.name or "q0"
+        instructions = args.instructions or "Answer the question."
+        if args.question_type == "noul":
+            question = {"type": "noul", "instructions": instructions}
+            if args.true_text or args.false_text:
+                criteria = {}
+                if args.true_text:
+                    criteria["true"] = args.true_text
+                if args.false_text:
+                    criteria["false"] = args.false_text
+                question["criteria"] = criteria
+        elif args.question_type == "choice":
+            options = [o for o in (args.options or []) if o]
+            if len(options) < 2:
+                raise SystemExit("error: choice needs at least 2 --options")
+            question = {"type": "choice", "instructions": instructions,
+                        "criteria": {o: o for o in options}}
+        elif args.question_type == "score":
+            levels = [l for l in (args.levels or []) if l]
+            if len(levels) < 2:
+                raise SystemExit("error: score needs at least 2 --levels")
+            question = {"type": "score", "instructions": instructions, "criteria": levels}
+        else:
+            raise SystemExit(f"error: unknown question type {args.question_type!r}")
+        questions = {name: question}
+    else:
+        raise SystemExit("error: pass --questions '<json>' or --question-type {noul,choice,score}")
+
+    for qname, question in questions.items():
+        kind = question.get("type")
+        if kind not in ("noul", "choice", "score"):
+            raise SystemExit(f"error: question {qname!r} has type {kind!r}; "
+                             "must be 'noul', 'choice' or 'score'")
+        if not question.get("instructions"):
+            raise SystemExit(f"error: question {qname!r} is missing 'instructions'")
+    return questions
+
+
+def post(body: bytes, key: str, base_url: str, endpoint: str, retries: int, timeout: float,
+         provider: str = DEFAULT_PROVIDER):
+    """One POST with bounded retries on the transient status family."""
+    url = base_url.rstrip("/") + endpoint
+    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+    if provider == "openrouter":
+        # Attribution headers; meaningless to the vendor endpoint.
+        headers["HTTP-Referer"] = "https://github.com/lazniak/jevskill"
+        headers["X-Title"] = "jevskill"
+    last = None
+    for attempt in range(retries + 1):
+        if attempt:
+            time.sleep(min(0.25 * (2 ** (attempt - 1)), 2.0))
+        request = urllib.request.Request(url, data=body, headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                return json.loads(response.read())
+        except urllib.error.HTTPError as exc:
+            payload = exc.read()
+            status = exc.code
+            detail = payload[:300].decode("utf-8", "replace")
+            last = f"HTTP {status}: {detail}"
+            if status == 422:
+                raise SystemExit(
+                    f"error: {last}\n  The request body failed validation at "
+                    f"{url} — a missing field or a malformed question."
+                )
+            if status == 404:
+                raise SystemExit(
+                    f"error: {last}\n  Wrong endpoint for provider {provider!r}. "
+                    "OpenRouter uses /api/alpha/decisions; TypeSafe uses /v1/systemone. "
+                    "Pass --provider explicitly."
+                )
+            if status not in RETRYABLE:
+                raise SystemExit(f"error: {last}")
+        except Exception as exc:  # transport
+            last = f"transport: {exc}"
+    raise SystemExit(f"error: failed after {retries + 1} attempts — {last}")
+
+
+def render(result: dict) -> list[str]:
+    provider = result.get("_provider", DEFAULT_PROVIDER)
+    lines = [f"JEV decided ({result.get('model')} via {provider}) "
+             f"in {result['_ms']:.0f} ms"]
+    for name, answer in result.get("answers", {}).items():
+        kind = answer.get("type")
+        if kind == "noul":
+            lines.append(f"  {name}: P(true)={answer.get('noul')}")
+        elif kind == "choice":
+            probs = answer.get("probabilities") or {}
+            top = sorted(probs.items(), key=lambda kv: kv[1], reverse=True)[:3]
+            detail = "  ".join(f"{k}={v:.2f}" for k, v in top)
+            lines.append(f"  {name}: {answer.get('choice')!r} "
+                         f"(conf {answer.get('confidence')})  [{detail}]")
+        elif kind == "score":
+            lines.append(f"  {name}: {answer.get('score')} (conf {answer.get('confidence')})")
+        else:
+            lines.append(f"  {name}: {json.dumps(answer)[:120]}")
+    usage = result.get("usage") or {}
+    # The vendor endpoint reports no cost, so it is computed from the published
+    # rate. Say so, rather than presenting a derived number as a billed one.
+    cost = result.get("_cost_usd", 0.0)
+    how = "" if usage.get("cost") is not None else "  (computed from $0.042/Mtok)"
+    lines.append("")
+    lines.append(f"  tokens {usage.get('input_tokens')}  cost ${cost:.8f}{how}")
+    return lines
+
+
+def _units_from(data, args) -> tuple[list, str]:
+    """Normalise the input into `[(text, ...)]` units and the state-key prefix.
+
+    Flat mode takes a JSON array (or a single-key object holding one) and treats each
+    element as one item. Block mode additionally accepts raw text — which is the
+    point: a YAML or log file can be gated directly, without pre-splitting it into a
+    JSON array by hand.
+    """
+    if args.blocks:
+        if isinstance(data, str):
+            text = data
+        elif isinstance(data, dict) and len(data) == 1:
+            inner = list(data.values())[0]
+            text = inner if isinstance(inner, str) else "\n".join(str(x) for x in inner)
+        elif isinstance(data, list):
+            text = "\n".join(str(x) for x in data)
+        else:
+            raise SystemExit("error: --blocks needs text, a list of lines, or a "
+                             "single-key object holding either")
+        units = split_blocks(text)
+        if not units:
+            raise SystemExit("error: no blocks found in the input")
+        return units, "B"
+
+    if isinstance(data, dict):
+        items = list(data.values())[0] if len(data) == 1 else None
+    else:
+        items = data
+    if not isinstance(items, list):
+        raise SystemExit("error: --reduce needs a JSON array (or a single-key object "
+                         "whose value is an array). Pass --blocks to gate a raw text "
+                         "or YAML file instead.")
+    # Same shape in both modes: (label, lines). A flat item is a one-line unit, which
+    # is why block mode is a generalisation rather than a separate code path.
+    return [(str(x), [str(x)]) for x in items], "L"
+
+
+def reduce_state(data, args, key: str, provider: str, model: str) -> dict:
+    """REDUCE: gate each unit, keep the hits, store the rest for retrieval.
+
+    A unit is a line, or — with ``--blocks`` — a header and the lines nested under
+    it. Blocks exist because a line-level gate cannot answer a question that compares
+    two lines, and because keeping the header is what keeps the answer in the output.
+    """
+    spec = PROVIDERS[provider]
+    units, prefix = _units_from(data, args)
+
+    kept, unjudged, calls, cost = [], [], 0, 0.0
+    started = time.perf_counter()
+    # Pack whole units into windows, never slicing one in half: a header separated
+    # from its values is unanswerable for a reason that has nothing to do with the
+    # model, and that is exactly how the line-level version lost.
+    windows = pack_blocks(units, args.window)
+    position = 0
+    for window_number, window in enumerate(windows, start=1):
+        # Carry each unit's index in the whole input, so a kept or rejected unit can
+        # be traced back after the window boundaries have moved it.
+        indexed = [(position + offset, label, lines)
+                   for offset, (label, lines) in enumerate(window)]
+        position += len(window)
+        texts = ["\n".join(lines) for _, _, lines in indexed]
+        instructions = args.instructions or f"Does the block at `{prefix}{{i}}` matter?"
+        questions = {
+            f"keep_{prefix}{i}": {
+                "type": "noul",
+                # Naming the value with a backticked path is load-bearing: without
+                # it the model returns a flat, meaningless answer for every unit.
+                "instructions": instructions.replace("{i}", str(i)),
+                "criteria": {
+                    "true": f"`{prefix}{i}` matches. Other blocks are irrelevant.",
+                    "false": f"`{prefix}{i}` does not match. Other blocks are irrelevant.",
+                },
+            }
+            for i in range(len(indexed))
+        }
+        body = json.dumps({"model": model,
+                           "state": {f"{prefix}{i}": t for i, t in enumerate(texts)},
+                           "questions": questions}).encode()
+        try:
+            result = post(body, key, spec["base_url"], spec["endpoint"],
+                          args.retries, args.timeout, provider)
+        except SystemExit:
+            # Report what the run already spent before dying, so a failed chunk
+            # does not look like a free run.
+            print(f"error: window {window_number} failed after {calls} call(s) "
+                  f"and ${cost:.8f}; nothing was written.", file=sys.stderr)
+            raise
+        calls += 1
+        cost += cost_of(provider, result.get("usage") or {})
+        answers = result.get("answers") or {}
+        for i, (original_index, _label, _lines) in enumerate(indexed):
+            raw = (answers.get(f"keep_{prefix}{i}") or {}).get("noul")
+            if raw is None:
+                # The gate returned no verdict for this unit. Coercing that to 0.0
+                # would file it under `rejected` as though Jev had judged it
+                # unimportant — a silent drop, and the exact failure this pipeline
+                # exists to prevent. Keep it and say so instead.
+                unjudged.append({"index": original_index, "text": texts[i]})
+                continue
+            probability = float(raw)
+            if probability >= 0.5:
+                kept.append({"index": original_index, "p": probability, "text": texts[i]})
+
+    kept.sort(key=lambda row: row["p"], reverse=True)
+    # Unjudged units are never cut by --keep: dropping what could not be evaluated
+    # is the one thing a reduction must not do quietly.
+    selected = unjudged + kept[:args.keep]
+    kept_indexes = {row["index"] for row in selected}
+    rejected = [{"index": i, "text": text}
+                for i, text in enumerate("\n".join(lines) for _, lines in units)
+                if i not in kept_indexes]
+
+    elapsed = (time.perf_counter() - started) * 1000
+    raw_tokens = count_tokens(["\n".join(lines) for _, lines in units])
+    kept_tokens = count_tokens([row["text"] for row in selected])
+
+    handle = None
+    if not args.no_recovery:
+        handle = f"rc_{uuid.uuid4().hex[:12]}"
+        store = recovery_dir(args.recovery_dir)
+        store.mkdir(parents=True, exist_ok=True)
+        record = {
+            "handle": handle,
+            "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "source": args.state_file or "stdin",
+            "total_items": len(units),
+            "kept": selected,
+            "rejected_count": len(rejected),
+            "rejected": rejected,
+            "unjudged": unjudged,
+            "raw_tokens": raw_tokens,
+            "kept_tokens": kept_tokens,
+            "calls": calls,
+            "cost_usd": cost,
+        }
+        (store / f"{handle}.json").write_text(
+            json.dumps(record, ensure_ascii=False), encoding="utf-8")
+
+    return {
+        "ok": True,
+        "mode": "reduce",
+        "provider": provider,
+        "model": model,
+        "handle": handle,
+        "calls": calls,
+        "items": len(units),
+        "kept": len(selected),
+        "rejected": len(rejected),
+        "unjudged_count": len(unjudged),
+        "raw_tokens": raw_tokens,
+        "kept_tokens": kept_tokens,
+        "reduction_pct": round((1 - kept_tokens / raw_tokens) * 100, 1),
+        "ms": round(elapsed, 1),
+        "cost_usd": round(cost, 8),
+        "lines": [row["text"] for row in selected],
+        "recovery_hint": (
+            f"rejected {len(rejected)} items stored; retrieve with: "
+            f"python scripts/jev_recovery.py {handle} --grep <pattern>"
+        ) if handle else None,
+    }
+
+
+def recovery_dir(override: str | None) -> Path:
+    if override:
+        return Path(override)
+    if os.environ.get("JEVSKILL_LEDGER_DIR"):
+        return Path(os.environ["JEVSKILL_LEDGER_DIR"]) / "recovery"
+    return Path.cwd() / ".jevskill" / "recovery"
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="jev_query.py",
+        description="Zero-dependency Jev caller bundled with the skill. "
+                    "Decisions, not text: noul (yes/no), choice (one of N), "
+                    "score (rubric grade).")
+    parser.add_argument("--state")
+    parser.add_argument("--state-file")
+    parser.add_argument("--questions", help="full questions JSON")
+    parser.add_argument("--question-type", choices=["noul", "choice", "score"])
+    parser.add_argument("--name")
+    parser.add_argument("--instructions")
+    parser.add_argument("--true-text")
+    parser.add_argument("--false-text")
+    parser.add_argument("--options", nargs="+")
+    parser.add_argument("--levels", nargs="+")
+    parser.add_argument("--reduce", action="store_true",
+                        help="REDUCE pattern: gate every item, keep the hits, store the rest")
+    parser.add_argument("--keep", type=int, default=8)
+    parser.add_argument("--blocks", action="store_true",
+                        help="gate structural blocks — a header plus the lines nested "
+                             "under it — instead of single lines. Needed when the "
+                             "judgement compares two lines (e.g. 'prod differs from "
+                             "default'). Accepts a raw text/YAML file, not only JSON")
+    parser.add_argument("--window", type=int, default=20)
+    parser.add_argument("--no-recovery", action="store_true")
+    parser.add_argument("--recovery-dir")
+    parser.add_argument("--session-id")
+    parser.add_argument(
+        "--provider", choices=sorted(PROVIDERS), default=None,
+        help=("which endpoint serves the model: 'openrouter' "
+              "(/api/alpha/decisions, model typesafe/jev-1.13) or 'typesafe' "
+              "(the vendor's /v1/systemone, model jev-latest, cost computed from "
+              "the published rate). Default: JEVSKILL_PROVIDER if set, else detected "
+              "from the key shape (vendor-named keys are looked for first)."))
+    parser.add_argument("--model", default=os.environ.get("JEVSKILL_MODEL", ""))
+    parser.add_argument("--base-url", default=os.environ.get("JEVSKILL_BASE_URL", ""))
+    parser.add_argument("--retries", type=int, default=2)
+    parser.add_argument("--timeout", type=float, default=60.0)
+    parser.add_argument("--max-state-tokens", type=int, default=8000)
+    parser.add_argument("--no-redact", action="store_true",
+                        help="send state exactly as given (default: credential-shaped "
+                             "strings are scrubbed and reported)")
+    parser.add_argument("--redact-emails", action="store_true",
+                        help="also scrub email addresses (default off)")
+    parser.add_argument("--redact-extra", nargs="+", default=None, metavar="REGEX",
+                        help="additional regexes to scrub, labelled extra_0, extra_1, ...")
+    parser.add_argument("--review-below", type=float, default=DEFAULT_REVIEW_BELOW,
+                        help=f"confidence floor; below it an answer needs review "
+                             f"(default {DEFAULT_REVIEW_BELOW}, an illustrative heuristic)")
+    parser.add_argument("--review-margin", type=float, default=DEFAULT_REVIEW_MARGIN,
+                        help=f"minimum gap between the top two options for a choice "
+                             f"(default {DEFAULT_REVIEW_MARGIN})")
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args(argv)
+
+    provider, key = find_api_key(args.provider)
+    if not key:
+        spec = PROVIDERS[provider]
+        names = " or ".join(spec["key_env"])
+        print(f"error: no API key for provider {provider!r}. Set {names}, or write "
+              "{'api_key': '...'} to ~/.jevskill/config.json. Use --provider to "
+              "choose an endpoint explicitly.", file=sys.stderr)
+        return 2
+    model = model_for(provider, args.model)
+    base_url = args.base_url or PROVIDERS[provider]["base_url"]
+
+    if args.state_file:
+        text = Path(args.state_file).read_text(encoding="utf-8")
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            data = text
+    elif args.state is not None:
+        data = args.state
+    else:
+        data = sys.stdin.read()
+
+    redactions: list = []
+    if not args.no_redact:
+        # Default-on: state goes to a third party, and a decision rarely needs
+        # live credentials. What was scrubbed is always reported, never silent.
+        data, redactions = redact_value(
+            data, emails=args.redact_emails, extra=args.redact_extra)
+
+    if args.reduce:
+        out = reduce_state(data, args, key, provider, model)
+        out["redactions"] = redactions
+        if args.json:
+            print(json.dumps(out, ensure_ascii=False, indent=2))
+        else:
+            print(f"REDUCE [{provider}] {out['items']} items -> {out['kept']} kept "
+                  f"({out['reduction_pct']}% fewer tokens: "
+                  f"{out['raw_tokens']} -> {out['kept_tokens']})")
+            for line in out["lines"]:
+                print(f"  {line[:150]}")
+            print(f"\n  {out['calls']} calls, {out['ms']:.0f} ms, ${out['cost_usd']:.8f}")
+            if out.get("unjudged_count"):
+                # Louder than a footnote on purpose: the caller must know that
+                # part of the reduction was not a judgement.
+                print(f"  ! {out['unjudged_count']} item(s) got no verdict from the gate "
+                      f"and were KEPT rather than dropped (see 'unjudged' in the record)")
+            if out["recovery_hint"]:
+                print(f"  {out['recovery_hint']}")
+        return 0
+
+    try:
+        questions = build_questions(args)
+    except json.JSONDecodeError as exc:
+        print(f"error: --questions is not valid JSON: {exc}", file=sys.stderr)
+        return 1
+
+    size = count_tokens(data)
+    if size > args.max_state_tokens:
+        print(f"error: state is ~{size} tokens, over the {args.max_state_tokens} budget.\n"
+              "Do not just raise it — accuracy degrades with irrelevant state. "
+              "Use --reduce, or cut the data with code first (grep for the region "
+              "that matters).", file=sys.stderr)
+        return 3
+
+    body = json.dumps({"model": model, "state": data, "questions": questions}).encode()
+    started = time.perf_counter()
+    result = post(body, key, base_url, PROVIDERS[provider]["endpoint"],
+                  args.retries, args.timeout, provider)
+    result["_ms"] = (time.perf_counter() - started) * 1000
+    result["_provider"] = provider
+    result["_cost_usd"] = cost_of(provider, result.get("usage") or {})
+    hesitant = review_flags(result.get("answers") or {}, args.review_below, args.review_margin)
+
+    if args.json:
+        payload = {k: v for k, v in result.items()
+                   if k not in ("_ms", "_provider", "_cost_usd")}
+        payload["redactions"] = redactions
+        payload["needs_review"] = {name: name in hesitant
+                                   for name in (result.get("answers") or {})}
+        payload["review"] = hesitant
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        lines = render(result)
+        if redactions:
+            lines.append(f"  redacted: {', '.join(redactions)}")
+        if hesitant:
+            lines.append(f"  needs review: {', '.join(hesitant)}")
+        print("\n".join(lines))
+    # 0 = decided, 2 = at least one answer needs review, distinct from 1 = error.
+    return 2 if hesitant else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

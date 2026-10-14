@@ -206,6 +206,8 @@ const thai = {
   "Unable to load business units.": "โหลดหน่วยธุรกิจไม่ได้",
   "Login failed.": "เข้าสู่ระบบไม่สำเร็จ",
   "Reports": "รายงาน",
+  "Shared reports": "รายงานส่วนกลาง",
+  "Back to reports": "กลับไปรายงาน",
   "New Report": "รายงานใหม่",
   "New report": "รายงานใหม่",
   "Report Name": "ชื่อรายงาน",

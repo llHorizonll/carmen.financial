@@ -7,6 +7,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { VStack } from '@astryxdesign/core/VStack';
 import {
   FileText,
   FilePlus,
@@ -146,6 +147,7 @@ const ReportView = React.lazy(
 const ReportDashboard = React.lazy(
   () => import("../features/report/components/ReportDashboard.jsx"),
 );
+const SharedReportWorkspace = React.lazy(() => import('../features/report/components/SharedReportWorkspace.jsx'));
 const ReportSetup = React.lazy(
   () => import("../features/report/components/ReportSetup.jsx"),
 );
@@ -389,6 +391,8 @@ export default function App({ onLogout = null }) {
   const storedCarmenSession = apiConfigured ? getStoredCarmenSession() : null;
   const businessUnitsEnabled = apiConfigured && Boolean(storedCarmenSession?.businessUnit?.tenant);
   const [activeTab, setActiveTab] = useState("report");
+  const [sharedWorkspaceOpen, setSharedWorkspaceOpen] = useState(false);
+  const [sharedWorkspaceVisited, setSharedWorkspaceVisited] = useState(false);
   const [tabMotionDirection, setTabMotionDirection] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -832,7 +836,7 @@ export default function App({ onLogout = null }) {
       !activeReport?.id
     )
       return;
-    if (!tenantContextReady) return;
+    if (!tenantContextReady || sharedWorkspaceOpen) return;
     if (
       activeReportUsesDayFilter &&
       String(activeReportDay).trim() &&
@@ -875,6 +879,7 @@ export default function App({ onLogout = null }) {
     activeReport?.id,
     activeTenant,
     tenantContextReady,
+    sharedWorkspaceOpen,
     activeReportDay,
     activeReportUsesDayFilter,
     periodOptions,
@@ -1451,7 +1456,13 @@ export default function App({ onLogout = null }) {
 
   const handleReportChange = (reportId) => {
     if (isSetupSaving || creatingReportRef.current) return;
+    if (sharedWorkspaceOpen && reportId === resolvedCurrentReportId) {
+      setSharedWorkspaceOpen(false);
+      setIsSidebarOpen(false);
+      return;
+    }
     const openReport = () => {
+      setSharedWorkspaceOpen(false);
       latestReportDataRequestRef.current += 1;
       loadedReportDataRef.current = null;
       setEngineData([]); setBudgetData([]);
@@ -1514,6 +1525,7 @@ export default function App({ onLogout = null }) {
     const change = () => {
       latestReportDataRequestRef.current += 1;
       loadedReportDataRef.current = null;
+      setIsLoading(false);
       setCurrentReportId(null); setEngineData([]); setBudgetData([]);
       businessUnits.setSelected(selection);
       applyTabChange("report");
@@ -1619,6 +1631,14 @@ export default function App({ onLogout = null }) {
 
       <ScrollArea className="min-w-0 flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
         <div className="p-3">
+          {businessUnitsEnabled && <Button variant={sharedWorkspaceOpen ? 'secondary' : 'ghost'} className="mb-3 w-full justify-start"
+            aria-current={sharedWorkspaceOpen ? 'page' : undefined} disabled={businessUnits.loading || businessUnits.units.length === 0 || isSetupSaving}
+            onClick={() => {
+              if (creatingReportRef.current) return;
+              setIsSidebarOpen(false);
+              setSharedWorkspaceVisited(true);
+              setSharedWorkspaceOpen(true);
+            }}><FileText className="size-4 shrink-0" />{t("Shared reports")}</Button>}
           <div className="mb-2 flex items-center justify-between gap-2 px-1">
             <div className="text-xs font-medium text-muted-foreground">{t("Reports")}</div>
           </div>
@@ -1722,7 +1742,7 @@ export default function App({ onLogout = null }) {
         </div>
       )}
 
-      <Dialog open={isLoading}>
+      <Dialog open={isLoading && !sharedWorkspaceOpen}>
         <DialogContent
           showCloseButton={false}
           onEscapeKeyDown={(event) => event.preventDefault()}
@@ -1860,7 +1880,7 @@ export default function App({ onLogout = null }) {
                 </Button>
               )}
 
-              {visibleActiveTab !== "report" && (
+              {!sharedWorkspaceOpen && visibleActiveTab !== "report" && (
                 <Button
                   type="button"
                   variant="ghost"
@@ -1871,7 +1891,7 @@ export default function App({ onLogout = null }) {
                 </Button>
               )}
 
-              <div className="hidden flex-wrap items-center gap-2 sm:flex">
+              <div className={`${sharedWorkspaceOpen ? 'hidden' : 'hidden sm:flex'} flex-wrap items-center gap-2`}>
                 {visibleActiveTab === "setup" && (
                   <Badge variant="secondary">{t("Configuration")}</Badge>
                 )}
@@ -1902,7 +1922,7 @@ export default function App({ onLogout = null }) {
             </div>
 
             <div className="flex w-full flex-wrap items-center justify-end gap-2 xl:w-auto">
-              {visibleActiveTab === "report" &&
+              {!sharedWorkspaceOpen && visibleActiveTab === "report" &&
                 reportViewMode !== "dashboard" && (
                   <div className="mr-auto flex items-center gap-1 rounded-lg border border-border bg-card/80 px-2 py-1 shadow-sm xl:mr-0">
                     <Button
@@ -1945,7 +1965,7 @@ export default function App({ onLogout = null }) {
                   </div>
                 )}
 
-              {businessUnitsEnabled && <BusinessUnitSelector catalog={businessUnits} onChange={handleBusinessUnitSelection} />}
+              {businessUnitsEnabled && !sharedWorkspaceOpen && <BusinessUnitSelector catalog={businessUnits} onChange={handleBusinessUnitSelection} />}
 <Button
                 type="button"
                 variant="ghost"
@@ -2128,6 +2148,15 @@ export default function App({ onLogout = null }) {
             </div>
           </div>
         </header>
+
+        {sharedWorkspaceVisited && <VStack as="section" hidden={!sharedWorkspaceOpen}
+          className={!sharedWorkspaceOpen ? 'hidden' : 'min-w-0 flex-1'}>
+          <React.Suspense fallback={<p role="status">{t('Loading shared report…')}</p>}>
+            <SharedReportWorkspace units={businessUnits.units} username={storedCarmenSession?.username}
+              onClose={() => setSharedWorkspaceOpen(false)} />
+          </React.Suspense>
+        </VStack>}
+        <VStack as="section" hidden={sharedWorkspaceOpen} className={sharedWorkspaceOpen ? 'hidden' : 'min-w-0 flex-1'}>
 
         {/* Filter bar: separated below topbar, shown in VIEW mode */}
         {visibleActiveTab === "report" && (
@@ -2558,6 +2587,7 @@ export default function App({ onLogout = null }) {
             )}
           </div>
         </div>
+        </VStack>
       </main>
 
       <Button

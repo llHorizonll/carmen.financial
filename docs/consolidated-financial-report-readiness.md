@@ -1,14 +1,151 @@
 # การเตรียมระบบ Multi-BU / Consolidated Financial Report
 
-อัปเดต 8 ตุลาคม 2026 · Frontend Carmen Financial · Backend Carmen.WebApi
+อัปเดต readiness 14 ตุลาคม 2026 · Frontend Carmen Financial · Backend Carmen.WebApi
 
-ข้อกำหนดล่าสุดของโอมเป็นหลัก: Phase 2 เลือก BU เพื่อดูรายงานแยกกัน; Phase 3 เพิ่ม `view all` และ report templates ที่เก็บแยกจากทุก BU ไม่มี combine report ในทั้งสองระยะ
+ขอบเขตเดิม: Phase 2 เลือก BU เพื่อดูรายงานแยกกัน; Phase 3 เพิ่ม `view all` และ report templates ส่วนกลาง งานใหม่วันที่ 12 ตุลาคมเพิ่ม consolidated management reporting ระดับ 1 บน branch แยก ตามแนวทาง storage/mapping ที่โอมยืนยัน
+
+## Readiness ล่าสุด: ยังขาดอะไรในการ consolidate
+
+ผลตรวจเพิ่มเติม 14 ตุลาคม: DBX read-only ยืนยันว่าตาราง shared ทั้งสองมีอยู่ โครงสร้าง 11 columns และ primary keys ตรง migration และทั้งสองตารางยังว่าง; frontend regression รันใหม่ผ่าน 280 tests / 33 files ส่วน authenticated capability/lifecycle/reconciliation ยังรอ session ที่ใช้งานได้ ดู [verification record](shared-report-verification-2026-10-14.md) ไม่ apply migration ซ้ำ
+
+**มี local implementation ของ shared templates และการรวมยอดระดับ 1 แล้ว โอมแจ้งว่า apply migration ใน Admin DB แล้ววันที่ 14 ตุลาคม แต่ยังไม่ผ่าน reconciliation กับข้อมูลจริง** เปิด shared template ที่กำหนด participating BUs และ mapping จากปุ่ม Shared reports ด้านซ้าย ส่วน full accounting consolidation ยังไม่มี implementation
+
+### การปรับล่าสุดวันที่ 14 ตุลาคม 2026
+
+- เอา `view all` ออกจาก BU dropdown และย้ายปุ่ม **Shared reports** ไป sidebar เหนือรายการ Reports; เมนู mobile ใช้ sidebar panel เดียวกัน
+- เปิด shared workspace โดยไม่เปลี่ยน BU selection หรือทิ้ง draft รายงานเดี่ยว เมื่อเลือก carmencloud/paresa อยู่ก็เปิด Shared reports ได้โดยตรง
+- Participating BUs ของรายงานยังมาจาก stored template และตรวจสิทธิ์ทุก BU; การเปิดเมนูไม่ทำให้เลือกทุก BU หรือรวมยอดอัตโนมัติ
+- โอมยืนยันว่า apply Admin DB migration แล้ว ไม่ apply ซ้ำจาก agent; ยังไม่ได้ตรวจ schema/lifecycle/reconciliation จริงในรอบนี้ Backend capability gate คงตรวจ schema ตาม admin scope ของ session
+- Verification ของ UI รอบนี้: affected tests 58 เคสผ่าน และทดสอบ sidebar case เพิ่มให้ยืนยัน BU selection สองรายการกับ unsaved draft ไม่เปลี่ยน; frontend build และ diff check ผ่าน
+
+### Implementation วันที่ 12 ตุลาคม 2026
+
+- Frontend/backend อยู่บน `codex/consolidated-financial-report`; shared storage/API แยกจาก tenant reports ไม่มีการย้าย `glhis`/`jv`
+- Shared lifecycle รองรับ create/save/clone/delete/history/restore พร้อม owner/ACL, BU permissions, transaction และ version conflict; delete เป็น soft delete เก็บ audit historyไว้
+- Admin migration อยู่ backend `App_Data/SharedReports/001-create-admin-shared-reports.sql` พร้อม rollback แยก; ต้องเลือก Admin DB ตาม signed admin scope และ backup ก่อน apply ไม่มี auto migration ตอน startup
+- `GET /api/shared-reports/capabilities` ตรวจ schema availability; frontend ไม่สร้าง shared template ใน localStorage เมื่อ backend/schema ยังไม่พร้อม
+- API ใหม่: `/api/shared-reports` สำหรับ catalog/create, `/{id}` สำหรับ read/save/delete (delete ส่ง `version`), `/{id}/clone`, `/{id}/history`, `/{id}/history/{version}/restore` (body `version` ปัจจุบัน), `/{id}/data` (POST filters) และ `/validate` สำหรับตรวจ definition/possible overlaps ไม่ส่ง `useTenant` กับ shared APIs
+- Shared config เพิ่ม `tenants`, `mappings[tenant][stableRowId]`, column `sourceTenant` (`ALL` หรือ tenant เดียว), `version`, `compatibilityConfirmed`, `overlapConfirmed` และ `kpis` ที่อ้าง stable row/column IDs; mapping ใช้ GL conditions โดยตรง ไม่ต้องสร้าง source report แยกก่อน
+- Group selections ใน setup ขยายเป็น account/department codes แบบ snapshot เมื่อ Apply; ต้อง reapply หลังสมาชิก group เปลี่ยน ไม่ถือว่า group membership sync อัตโนมัติ
+- Backend ใช้ query เดิมกับ explicit tenant DB contexts ครั้งละไม่เกินสอง BU ตรวจ currency, fiscal ranges ของปีที่ต้องใช้ และ unknown source codes; client reuse calculation engine เดิมเพื่อรวม mapped base amounts ก่อน row/column formulas และ percentages
+- Dashboard KPI/report ใช้ calculated result เดียวกัน; missing BU ไม่แสดง consolidated output และไม่เปิด export/print ยอดครบถ้วน ข้อมูลเก่าถูกล้างเมื่อ preview ใหม่ล้มเหลว
+- Source queries มี timeout 60 วินาทีต่อ query; cancellation ตรวจระหว่าง BU batches แต่ query ที่เริ่มแล้วรอจบหรือ timeout ตาม provider ยังไม่ใช่ immediate SQL cancellation
+- ยังไม่รองรับ FX/elimination/ownership, การ remap budget revision ข้าม BU หรือ reporting store; budget scenario/sign equivalence ต้องยืนยันใน config ไม่อ้างว่าระบบพิสูจน์ accounting semantics อัตโนมัติ
+
+Verification: frontend 280 tests / 33 files ผ่านด้วย Node 25.6.1 และ `--maxWorkers=4 --testTimeout=15000` (ค่าเดิม 5 วินาทีเกิด timeout ต่างเคสระหว่าง full suite; API setup tests ปรับให้รอปุ่ม Edit หลัง loading จบก่อนกด) Backend 77 policy/query/language tests และ frontend/backend builds ผ่าน Browser fixture แสดง Room Revenue 180,000 และ Total Revenue 230,000, KPI 180,000, export เปิดอ่านยอดได้, print PDF หนึ่งหน้า และ mobile viewport 390px ไม่มี body overflow ผลนี้ใช้ข้อมูลจำลอง ไม่ใช่ authenticated DB reconciliation
+
+React Doctor ใช้ scanner รุ่นปัจจุบันได้ 75/100 มี warnings เดิมและ complexity ของ shared workspace; loading reset ใน shared workspaceอยู่ใน finally แล้ว ไม่เปลี่ยน engine เพื่อไล่คะแนน ยังไม่ตรวจ migration/lifecycle/revoke end-to-end กับ database จริง, p95/load หรือ production deployment
+
+แยกเป้าหมายสองระดับ: (1) รวมยอดหลาย BU สกุลเงินเดียวสำหรับ management reporting และ (2) full accounting consolidation ที่เพิ่มกติกา FX, intercompany, ownership และ adjustments ระดับแรกไม่ควรถูกนำเสนอว่าเป็นงบ consolidated ทางบัญชีที่ครบถ้วน
+
+### สิ่งที่มีแล้วและขอบเขตหลักฐาน
+
+| ความสามารถ | สถานะ | หลักฐาน / ข้อจำกัด |
+|---|---|---|
+| BU selection และ catalog แยก BU | มีแล้ว | `useBusinessUnitReports` โหลด catalog แยก tenant จำกัดครั้งละสอง BU และใช้ key `(tenant, reportId)` |
+| อ่าน report data หนึ่ง BU ต่อ request | มีแล้ว | `reportApi.js` ส่ง owner tenant; `ReportV2Controller.GetReportData` และ `FncReportV2.GetReportDataAsync` อ่าน actual/budget ใน tenant context เดียว |
+| Calculation ของรายงานเดี่ยว / shared base values | มี local implementation | `reportLogic.js` reuse row/column formulas และ percentages หลังรวม mapped base values |
+| Central templates / source binding / consolidated API | มี local implementation; โอมแจ้งว่า migration แล้ว | มี lifecycle/data APIs และ UI; schema/lifecycle/reconciliation กับ DB จริงยังต้องตรวจ |
+| End-to-end deny/revoke, write routing และ DB reconciliation | ยังไม่ตรวจ runtime ครบ | ผลเดิมและข้อจำกัดอยู่หัวข้อ 10 ไม่ใช่ผล verification ใหม่วันที่ 12 ตุลาคม |
+
+### ระดับ 1: รวมยอดหลาย BU สกุลเงินเดียว
+
+| งานที่ยังขาด | สิ่งที่ต้องทำ / ตัดสินใจ | เกณฑ์พร้อมใช้ |
+|---|---|---|
+| Central configuration | เก็บ report definition และ source binding ใน admin scope พร้อม permissions, version/history/audit และ migration/rollback; localStorage ไม่เป็น authoritative storage | Save/reload/version/restore ได้ และผู้ไม่มีสิทธิ์อ่านหรือแก้ไม่ได้ |
+| Mapping ต่อ BU | กำหนด source report และ mapping COA/departments/dimensions เข้าความหมายกลางแบบมี version; ไม่จับคู่ด้วย label/index/reportId อย่างเดียว | ตรวจพบ unmapped/ambiguous mapping และตามกลับถึง source BU ได้ |
+| Currency และ filter compatibility | ยืนยันสกุลเงินเดียว, sign policy, actual date ranges/fiscal calendar, day/YTD และ budget scenario ต่อ BU | Mixed currency หรือ filters ที่เทียบกันไม่ได้ถูก block พร้อมเหตุผล |
+| Backend aggregation | เพิ่ม orchestration ที่ตรวจสิทธิ์ทุก BU ใช้ independent tenant DB contexts และรวม base measures ก่อนคำนวณ row formulas → column formulas → percentages | ยอด reconcile กับ source ต่อ BU; ไม่ SUM/average percentages หรือ nonlinear final cells |
+| Completeness และ traceability | แยก missing mapping/data, failed BU และ true zero; ระบุ requested/included BUs, asOf, mappingVersion, warnings และ totals/byTenant | Unauthorized BU ถูก reject; timeout/unavailable ไม่กลายเป็นศูนย์หรือถูกตัดออกเงียบ ๆ |
+| UI / Excel / Print | ให้เลือก consolidated configuration และ BUs พร้อมแสดง breakdown, warnings และความครบถ้วนในหน้ารายงานและ output | ข้อมูลไม่ครบไม่ถูก export/print เป็นผล complete; พฤติกรรมรายงานเดี่ยวและ import เดิมไม่เสีย |
+| Verification และ performance | ทำ reconciliation, tenant isolation/revoke และ load/concurrency checks; ตกลง SLA จากจำนวน BU และขนาดข้อมูลจริง | ผ่าน acceptance ด้านล่างและ SLA ที่ยืนยันก่อน release |
+
+ระดับนี้ยังต้องตกลงขอบเขตรายงานเริ่มต้น, BU ที่เข้าร่วม, source mapping, currency/period/scenario/sign policy และ SLA ก่อน implement ตารางนี้เป็น readiness checklist ไม่ใช่การอนุมัติกติกาบัญชีหรือ API schema ใหม่
+
+### แนวทางที่โอมยืนยัน: Shared storage และแหล่งข้อมูล
+
+Shared template เก็บใน **Carmen Admin DB ภายใต้ admin scope ของกลุ่ม BU** โดยไม่เป็นเจ้าของอยู่ใน BU ใด BU หนึ่ง Frontend อ่าน/บันทึกผ่าน Carmen.WebApi; backend ตรวจสิทธิ์ template ส่วนกลางและสิทธิ์ BU ที่อ้างอิงแยกกัน มี local schema/API implementation แล้ว แต่ต้องตรวจ migration กับ Admin DB จริงก่อน apply
+
+| ข้อมูล | ที่เก็บ |
+|---|---|
+| Shared template: metadata, rows, columns, formulas และรูปแบบ | Admin DB |
+| BUs ที่เข้าร่วม, source bindings และ mapping ต่อ BU | Admin DB ผูก template และ tenant identifier |
+| Template permissions, mapping/config versions และ history/audit | Admin DB |
+| `glhis`, `jv` และ budget ต้นทาง | Tenant DB ของแต่ละ BU ตามเดิม |
+
+**ไม่ต้องย้ายหรือทำสำเนา `glhis` และ `jv` มา Admin DB สำหรับ implementation เริ่มต้น** Backend อ่านข้อมูลจากแต่ละ Tenant DB ตาม mapping และ filters โดย aggregate/filter ที่ต้นทางก่อนนำ base amounts มารวม ใช้ independent DB contexts และ bounded concurrency; ไม่ดึง transactions ทั้งหมดมาไว้ใน memory เพื่อรวมรายงาน
+
+เลือกใช้ `glhis` หรือ transaction aggregation จาก `jv` ตามชนิดรายงานและ business rules เดิม ต้องตรวจช่วงวันที่/สถานะรายการและ reconcile ให้ชัด ไม่บวกทั้งสองแหล่งซ้ำสำหรับยอดเดียวกัน หากภายหลังวัดแล้วไม่ถึง SLA ค่อยประเมิน central reporting store สำหรับยอดสรุป พร้อม refresh/invalidation และ reconciliation; ยังไม่เพิ่ม store หรือ sync pipeline ใน scope เริ่มต้น
+
+### แนวทางที่โอมยืนยัน: Mapping กำหนด source; สูตรใช้ `R#` / `C#`
+
+เปิดหรือสร้าง shared template ส่วนกลางจาก **Shared reports** ใน sidebar โดยไม่เปลี่ยน BU selection Template สำหรับ consolidate กำหนด BUs ที่เข้าร่วมชัดเจน ไม่เปลี่ยนตาม permitted inventory ของผู้เปิดโดยเงียบ ๆ หากผู้ใช้ไม่มีสิทธิ์ BU ที่จำเป็น ต้องแจ้งว่าเปิด consolidated report ไม่ได้
+
+- Data rows มีความหมายกลาง เช่น Room Revenue และ mapping accounts/departments/groups/dimensions แยกต่อ BU ใช้ lookup ของ BU ที่กำลังตั้งค่า; code หรือ label เหมือนกันไม่ถือว่า mapping เหมือนกัน
+- Mapping ผูก stable row ID และ tenant ID; `R#` / `C#` ใช้ในสูตรตามระบบเดิมพร้อม reference syncing เมื่อย้ายแถว/คอลัมน์ ไม่ใส่ชื่อ BU ลงใน formula text
+- Formula/Total rows ใช้สูตรกลางของ template; รวม base measures ของ source ที่เลือกก่อนคำนวณ row formulas → column formulas → percentages ไม่รวม percentages สำเร็จรูป
+- คอลัมน์ข้อมูลกำหนด source scope ชัดว่าอ่าน BU เดียวหรือยอดรวมของ BUs ที่กำหนด; Formula columns อ้างคอลัมน์ผ่าน `C#` ป้องกันการนำ combined column มาบวกกับ per-BU columns ของยอดเดียวกันซ้ำ
+- ทุก Data row ของ BU ที่เข้าร่วมต้องมี mapping หรือระบุชัดว่าไม่มีรายการนี้ใน BU นั้น; mapping ว่างถือว่ายังตั้งค่าไม่ครบ ต้องกำหนดกติกาตรวจ overlapping mappings เพื่อป้องกันยอดซ้ำโดยยังรองรับแถวที่ตั้งใจแสดง source ซ้ำ
+- Preview แสดงยอดแยก BU และยอดรวมเพื่อ reconcile ก่อน save/version; currency, period, scenario และ signs ต้องเทียบกันได้ตาม checklist ระดับ 1
+
+ตัวอย่าง Room Revenue: mapping ของ CarmenCloud ให้ยอด 100,000 และ mapping ของ paresa ให้ยอด 80,000 แถวกลางแบบ combined ได้ 180,000 หากต้องการแสดงแยก BU และใช้ column formula ให้ตั้งดังนี้ (ตัวเลขเป็นตัวอย่าง ไม่ใช่ข้อมูลจริง):
+
+| แถวกลาง | CarmenCloud (`C1`: BU เดียว) | paresa (`C2`: BU เดียว) | รวม (`C3`: Formula) |
+|---|---:|---:|---|
+| Room Revenue (`R1`) | 100,000 | 80,000 | `C1+C2` = 180,000 |
+| F&B Revenue (`R2`) | 20,000 | 30,000 | `C1+C2` = 50,000 |
+| Total Revenue (`R3`: Formula `R1+R2`) | 120,000 | 110,000 | 230,000 |
+
+เลือกแสดง combined source column หรือ per-BU columns + formula ตามรูปแบบรายงาน ไม่ใช้สองวิธีเพื่อบวก source เดียวกันซ้ำ Dashboard KPI อ้างผล cell ของ template เช่น Room Revenue รวม พร้อม participating BUs/completeness/warnings ใช้ผลคำนวณชุดเดียวกับรายงาน ไม่สร้าง calculation rules อีกชุด Source scope ข้าม BU และ stable KPI binding มี local implementation และ fixtures แล้ว
+
+### ระดับ 2: Full accounting consolidation
+
+| งานเพิ่มเติมจากระดับ 1 | สิ่งที่ต้องยืนยันกับผู้รับผิดชอบบัญชี |
+|---|---|
+| Consolidation perimeter / ownership / method | บริษัทที่อยู่ในกลุ่ม, effective dates, สัดส่วนถือหุ้น, consolidation method และ NCI ตามกรณี |
+| FX | Reporting currency, rate source/date/version, average/closing/historical rates ตามประเภทบัญชี, rounding และ translation differences |
+| Intercompany | Counterparty mapping, matching/reconciliation ของยอดระหว่างบริษัท และ elimination rules |
+| Adjustments และ control | Consolidation journals, approval, audit trail, period controls และการย้อนกลับรายการ |
+| Accounting acceptance | Reconcile source balances, FX, eliminations และ adjustments ถึงยอด consolidated พร้อมการยืนยันจากผู้รับผิดชอบบัญชี |
+
+ยังไม่มี implementation ของความสามารถระดับ 2 ในขอบเขต source ที่ตรวจ และยังไม่มี accounting policy ที่ยืนยันในเอกสารนี้
+
+### ลำดับงานที่แนะนำและ API ที่ต้องเพิ่ม
+
+1. ยืนยันเป้าหมายระดับ 1 และกติกา currency/period/scenario/sign พร้อมตัวอย่างรายงานและ expected totals ที่ฝ่ายบัญชีตรวจได้
+2. ออกแบบ central configuration, source binding และ mapping version พร้อม authorization และ migration/rollback
+3. เพิ่ม consolidated backend capability โดย reuse data queries และ business rules เดิม; API หนึ่ง BU ปัจจุบันยังคง contract เดิม ไม่ส่ง tenants array ให้ `useTenant`
+4. เพิ่ม UI และ output พร้อม per-BU breakdown, completeness และ warnings
+5. ตรวจ reconciliation/security/performance แล้วจึง release; ระดับ 2 ต้องยืนยัน accounting policies และ acceptance แยกก่อนเริ่ม
+
+Consolidated data API ปัจจุบันคือ `POST /api/shared-reports/{id}/data` รับ filters และอ่าน stored configuration โดยคืน requested/included BUs, isComplete, asOf, configVersion/mappingVersion, currency, warnings และ normalized sources ใน byTenant; frontend สร้าง per-BU/combined base values และ final cells ด้วย engine เดิม จึงยังไม่ใช่ API ของ final decimal cells ที่คำนวณทั้งหมดบน backend
+
+**เงื่อนไข branch ที่โอมยืนยัน:** งาน source สำหรับ consolidation อยู่บน branch `codex/consolidated-financial-report` ทั้ง frontend (`C:\source\carmen.financial`) และ backend (`C:\dotnet\Carmen4\Carmen.WebApi`) ซึ่งสร้างก่อน implementation ไม่รวม changes ที่ไม่เกี่ยวข้องโดยอัตโนมัติ
+
+### Acceptance ที่ต้องเพิ่มสำหรับ consolidation
+
+- ยอด additive measures เท่ากับผลรวม source BU หลัง mapping/sign policy และ rounding ที่ตกลง; ตรวจทั้ง actual และ budget
+- สูตรและ ratios คำนวณจาก base measures รวม เช่น กำไร 10/รายได้ 100 และกำไร 90/รายได้ 300 ได้ margin 25%; ไม่รวมเปอร์เซ็นต์สำเร็จรูป
+- Code/label/reportId ซ้ำข้าม BU ไม่ทำให้ mapping หรือข้อมูลปะปน; missing mapping ถูกแสดงเป็นปัญหา
+- Mixed currency, incompatible periods และ budget scenarios ถูกตรวจพบก่อนแสดงผลที่อ้างว่าเทียบกันได้
+- BU timeout/data missing แสดงผล incomplete พร้อม missing BUs; true zero แยกได้; Excel/print คง warnings และสถานะ
+- Unauthorized/revoked BU ถูก reject แม้ยังอยู่ใน frontend selection; request ข้าม admin scope อ่านข้อมูลไม่ได้
+- Configuration/mapping version ตรวจย้อนหลังได้ และ pending/stale requests ไม่แทนผลจาก configuration หรือ filters ใหม่
+- Shared template บันทึกใน Admin DB ภายใต้ admin scope ที่ถูกต้อง; ย้ายแถวแล้ว mapping ตาม stable row ID ไม่หลุด และสูตร reference syncing ยังคงถูกต้อง
+- Room Revenue จากสอง BU รวมเป็น 180,000 ตาม fixture ตัวอย่าง ทั้ง combined-source และ per-BU `C1+C2`; row formula `R1+R2` ให้ Total Revenue 230,000 โดยไม่บวก source ซ้ำ
+- Dashboard และ report cell ให้ผลเดียวกันและแสดง completeness ตรงกัน; การอ่าน `glhis`/`jv` ไม่ double count และไม่ต้อง replicate transactions เข้า Admin DB
+- รายงานเดี่ยว, Excel import/formulas/multiline labels และ export เดิมผ่าน regression ที่เกี่ยวข้อง; วัด load/concurrency/p95 เทียบ SLA ที่ต้องยืนยัน
+
+### Verification ของการอัปเดตเอกสาร
+
+วันที่ 12 ตุลาคม 2026 ตรวจ source แบบ targeted ของ BU hook, report API/controller, tenant data function และ calculation helpers เพื่อยืนยันขอบเขตปัจจุบัน ไม่ได้รัน tests/build, query database, ตรวจ runtime, accounting reconciliation หรือ performance ใหม่ ผล verification วันที่ 8–9 ตุลาคมด้านล่างคงเป็นหลักฐานย้อนหลัง
 
 | Phase | ขอบเขต | สถานะ |
 |---|---|---|
 | 1 | Default-BU login, EN login และ Language preferences | Implement ใน local checkout แล้ว |
 | 2 | BU multiselect, Reports แยกกลุ่ม BU, เปิด/จัดการรายงานใน BU เดียว | Implement ใน local checkout; tests/build ผ่าน การตรวจ runtime ยังไม่ครบ |
-| 3 | `view all`, Shared reports และ central templates | แผนเท่านั้น ยังไม่ implement |
+| 3 | Shared reports จาก sidebar และ central templates | Local implementation แบบ capability gate; โอมแจ้งว่า apply Admin migration แล้ว |
+| 4 | Consolidated management reporting ระดับ 1 | Local implementation + fixtures ผ่าน; DB reconciliation/load ยังไม่ผ่าน acceptance |
 
 ## 1. ข้อสรุปและขอบเขตที่เลือก
 
@@ -103,10 +240,10 @@ Token/session invalid ให้ 401; BU ไม่มี active membership หร
 3. เลือก default ตัวแรกที่ IsDefault/isDefault เป็น 1/true/string true; ไม่มี default ใช้ BU แรก
 4. Empty/error/invalid tenant ไม่เรียก login; ทิ้ง stale response เมื่อ Username เปลี่ยน ไม่ login ด้วย Tenant ว่าง
 5. Login ส่ง Tenant ที่ resolve และ `Language: "EN"`; คง tenant-bound token/session ตามเดิม
-6. Preferences บน title bar เพิ่ม Language คู่ Theme: English, Thai, Vietnamese UI ยัง English เปลี่ยนเฉพาะภาษา API
+6. Preferences บน title bar เพิ่ม Language คู่ Theme: English, Thai UI ยัง English เปลี่ยนเฉพาะภาษา API
 7. เก็บ preference ระหว่าง session/reload; logout/login ใหม่เริ่ม English
 
-Authenticated requests ส่ง Accept-Language: en/th/vi; pending request key รวมภาษา Requests ที่เริ่มแล้วคงภาษา ณ ตอนส่ง
+Authenticated requests ส่ง Accept-Language: en/th; pending request key รวมภาษา Requests ที่เริ่มแล้วคงภาษา ณ ตอนส่ง
 
 Backend เปลี่ยน request Language claim หลังตรวจ token/session สำเร็จ ไม่ออก tokenใหม่หรือเปลี่ยน permissions/tenant/session Header absent/unsupported คง token language
 
@@ -114,7 +251,6 @@ Backend เปลี่ยน request Language claim หลังตรวจ to
 |---|---|---|
 | en / en-US | EN | US |
 | th / th-TH | TH | TH |
-| vi / vi-VN | VI | VN |
 
 Normalize case/whitespace รองรับ single language tag; ไม่เพิ่ม q-values negotiation ข้อความ hardcode/resource missing ใช้ fallback เดิม ยังไม่รับประกันว่าทุกข้อความ API เปลี่ยนภาษา
 
@@ -139,17 +275,17 @@ Deploy backend header support ก่อน frontend และตรวจ CORS/p
 
 ไม่เปิด cross-admin-scope access และไม่ข้าม financial report/view/access/write checks การเพิ่ม scoped endpoints อื่นในอนาคตต้องตรวจ callers/authorization ก่อน
 
-### Phase 3: view all / Shared reports — ยังไม่ implement
+### Phase 3: view all / Shared reports — ขอบเขตเดิมก่อน implementation
 
 - เพิ่ม option `view all` ใน BU dropdown ให้แสดง Reports ของ permitted BUs ทั้งหมดพร้อมกลุ่ม Shared reports
 - New Report ใน view all เก็บ central template ใน admin scope แยกจากทุก BU; regular BU selection ยังสร้างใน destination BU เดียว
 - Central template เก็บ configuration เท่านั้น ไม่มีการ SUM, FX, elimination, ownership หรือ consolidated dashboard totals
 - ก่อน implement ต้องกำหนด central storage migration, template permissions, version/history และ source binding ของ shared template; ไม่ใช้ localStorage เป็น authoritative storage
-- ไม่มี consolidated API ใน Phase 2/3 ปัจจุบัน ข้อกำหนด accounting ด้านล่างเป็นข้อมูลสำหรับงานอนาคต ไม่ใช่ implementation ที่เลือกในรอบนี้
+- Phase 2 APIs คง single-BU contract; งาน shared/consolidated ใหม่ใช้ `/api/shared-reports` ตาม implementation status ด้านบน
 
 ## 6. ข้อกำหนด accounting สำหรับงานรวมยอดในอนาคต (นอก Phase 2/3)
 
-ยังไม่ implement combine/consolidated API ใน scope ล่าสุด รายละเอียดนี้เก็บเป็น readiness reference เพื่อไม่เสีย accounting requirements เดิม
+รายละเอียดนี้เป็น accounting readiness reference งานระดับ 1 มี local implementation ตาม status ด้านบน แต่ full consolidation/FX/elimination ยังอยู่นอกขอบเขต
 
 | เรื่อง | กติกาที่ต้องตกลงก่อนรวมยอด |
 |---|---|
@@ -187,7 +323,7 @@ Future performance: วัด cold/warm p50/p95, query/authorization/serializati
 |---|---|---|
 | 1 | Default-BU login + Language | default/fallback/stale/Enter/autofill; API language + reload/reset |
 | 2 | BU multiselect + grouped Reports + useTenant request context | tenant isolation, reportId collision, per-BU permissions, explicit destination, stale response และ regression ผ่าน |
-| 3 | view all + Shared central templates | storage/permissions/version/history/source-binding contract ยืนยัน และ migration/rollback พร้อม |
+| 3 | Shared reports จาก sidebar + central templates | storage/permissions/version/history/source-binding contract ยืนยัน และ migration/rollback พร้อม |
 
 Deploy backend support ก่อน frontend; Phase 2 ไม่มี database migration API ที่ไม่มี useTenant คง token context ตัว client เก่าที่ส่ง useTenant ตรงกับ token BU ยังคงอ่าน BU เดิม แต่ได้รับ membership/permission validation เพิ่มใน report endpoints
 
@@ -198,7 +334,7 @@ Deploy backend support ก่อน frontend; Phase 2 ไม่มี database m
 | Login UI/default/fallback | ไม่มี BU/Language dropdown; default flag รองรับ 1/true/string; ไม่มี default ใช้ BU แรก; Language EN |
 | Empty/error tenant list | ไม่ login ด้วย Tenant ว่าง แสดง error |
 | Stale username lookup / Enter / autofill / double submit | resolve user ปัจจุบันและ login ครั้งเดียว |
-| Language English/Thai/Vietnamese, reload/login ใหม่ | API language preference persists reload; login ใหม่ EN; UI English |
+| Language English/Thai, reload/login ใหม่ | API language preference persists reload; login ใหม่ EN; UI English |
 | Accept-Language absent/unsupported | คงภาษา token; token/tenant/session เดิม |
 | BU inventory | เฉพาะ active membership + Financial Report View ใน admin scope เดียว |
 | Dropdown BU | options เฉพาะ permitted BUs; ไม่มี Combine report/view all |
@@ -214,7 +350,7 @@ Deploy backend support ก่อน frontend; Phase 2 ไม่มี database m
 | New Report หลาย BU | destination ชัดเจน สร้างในหนึ่ง BU เท่านั้น |
 | Dirty draft / pending save/create | confirm discard และป้องกันเปลี่ยน context ระหว่าง write |
 | Excel import/formulas/labels/report view | classification/formula references/multiline labels และ view/export behavior คงเดิม |
-| Phase 3 | ยังไม่มี view all หรือ Shared storage ใน implementation |
+| Phase 3 / ระดับ 1 | Shared reports ใน sidebar เปิด workspace โดยคง BU selection/draft; schema ไม่พร้อมให้ capability gate; mapping/formulas/KPI และ incomplete output ผ่าน fixtures |
 
 ## 10. Verification และข้อจำกัด
 
@@ -232,7 +368,7 @@ New Report เปิด destination dialog ที่มีสอง BU โดย
 
 ยังไม่ได้สร้าง/แก้/ลบ/restore รายงานจริงหรือ revoke membership ใน runtime; write routing, destination, reportId collision, stale responses และ invalid tenant parameters ตรวจด้วย automated tests สิทธิ์ deny/revoke แบบ end-to-end กับผู้ใช้จำกัดสิทธิ์, DB reconciliation และ load/concurrency/p95/EXPLAIN ยังต้องตรวจตาม release acceptance ไม่มี deploy production
 
-งาน Phase 3 / combine / FX / elimination ยังไม่ implement ตาม scope ล่าสุดของโอม
+ข้อความ verification ในหัวข้อ 10 บันทึกผลวันที่ 8–9 ตุลาคมก่อนงาน shared/consolidated; สถานะใหม่วันที่ 12 ตุลาคมอยู่ต้นเอกสาร ส่วน FX/elimination ยังไม่ implement
 
 
 Contract compatibility: tenantListIn ก่อน login คง behavior เดิม; dropdown หลัง login ใช้ UserName endpoint เดิม ไม่มี financialReport=true หรือ me/business-units endpoint; แต่ละ report request ใช้ useTenant และผ่าน authorization ที่ backend

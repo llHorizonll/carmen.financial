@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "jev": {
+      "source": "lazniak/jevskill",
+      "sourceType": "github",
+      "skillPath": "skills/jev/SKILL.md",
+      "computedHash": "a6426f39f895efdc34c018d2d7948c36d75d71418b888d4677266d75fc9c3cff"
+    }
+  }
+}

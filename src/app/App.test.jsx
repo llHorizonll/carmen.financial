@@ -21,6 +21,7 @@ const reportApiMocks = vi.hoisted(() => ({
   saveCarmenReports: vi.fn(() => Promise.resolve()),
   cloneCarmenReport: vi.fn(),
   deleteCarmenReport: vi.fn(),
+  requestCarmenJson: vi.fn(),
 }));
 
 describe('report visibility', () => {
@@ -106,6 +107,8 @@ describe('App shell', () => {
     vi.stubGlobal('localStorage', mockLocalStorage);
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(false);
     reportApiMocks.getStoredCarmenSession.mockReturnValue(null);
+    reportApiMocks.requestCarmenJson.mockReset();
+    reportApiMocks.requestCarmenJson.mockResolvedValue({ available: false });
     
     reportApiMocks.fetchCarmenMasterData.mockReset();
     reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
@@ -512,6 +515,51 @@ describe('App shell', () => {
     await waitFor(() => expect(onLogout).toHaveBeenCalledOnce());
   });
 
+  it('opens shared reports from the sidebar without changing two selected BUs and pauses background financial loading', async () => {
+    reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
+    reportApiMocks.getStoredCarmenSession.mockReturnValue({ accessToken: 'token', username: 'admin', businessUnit: { tenant: 'a' }, user: { id: 'admin', role: 'Admin' } });
+    reportApiMocks.fetchCarmenBusinessUnits.mockResolvedValue([
+      { Tenant: 'a', Description: 'Unit A', financialReport: { view: true, setup: true, add: true } },
+      { Tenant: 'b', Description: 'Unit B', financialReport: { view: true, setup: true, add: true } },
+      { Tenant: 'c', Description: 'Unit C', financialReport: { view: true, setup: true, add: true } },
+    ]);
+    const definition = { ...getDefaultReports()[0], id: 'same', name: 'P&L',
+      rows: [{ id: 'r1', desc: 'Sales', accCodes: '4001', isActive: true }],
+      columns: [{ id: 'C1', label: 'Actual', type: 'AC', isActive: true }] };
+    reportApiMocks.fetchCarmenReports.mockResolvedValue([definition]);
+    reportApiMocks.fetchCarmenReportData.mockImplementation(async ({ year, period }) => ({ actualRows: [{ year, acccode: '4001', [`amt${period}`]: 100 }], budgetRows: [] }));
+    render(<App />);
+    await screen.findByText('100.00');
+    fireEvent.click(screen.getByRole('button', { name: /BU.*Unit A/ }));
+    expect(screen.queryByText('View all / Shared reports')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Unit B', exact: true }));
+    fireEvent.keyDown(screen.getByPlaceholderText('Search business units...'), { key: 'Escape' });
+    await screen.findByRole('button', { name: 'Unit B (1)', exact: true });
+    const initialCalls = reportApiMocks.fetchCarmenReportData.mock.calls.length;
+    fireEvent.click(screen.getByRole('button', { name: 'Shared reports', exact: true }));
+    await screen.findByRole('region', { name: 'Shared reports', exact: true });
+    expect(screen.queryByRole('dialog', { name: 'Shared reports', exact: true })).not.toBeInTheDocument();
+    await screen.findByText('Shared reports are not enabled on this server yet.');
+    expect(screen.queryByRole('dialog', { name: 'Loading report data' })).not.toBeInTheDocument();
+    expect(reportApiMocks.fetchCarmenReportData.mock.calls.length).toBe(initialCalls);
+    fireEvent.click(screen.getByRole('button', { name: 'Back to reports', exact: true }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Unit B (1)', exact: true }));
+    await screen.findByRole('region', { name: 'Reports in b' });
+    expect(screen.queryByRole('button', { name: 'Unit C (1)', exact: true })).not.toBeInTheDocument();
+    expect(reportApiMocks.requestCarmenJson).toHaveBeenCalledWith('/api/shared-reports/capabilities', expect.objectContaining({ useTenant: false }));
+    expect(JSON.parse(window.localStorage.getItem('carmen_selected_business_units'))).toEqual(['a', 'b']);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit', exact: true }));
+    const name = await screen.findByDisplayValue('P&L');
+    fireEvent.change(name, { target: { value: 'Unsaved single-BU draft' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Shared reports', exact: true }));
+    await screen.findByRole('region', { name: 'Shared reports', exact: true });
+    expect(screen.queryByRole('dialog', { name: 'Shared reports', exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to reports', exact: true }));
+    expect(await screen.findByDisplayValue('Unsaved single-BU draft')).toBeInTheDocument();
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+  });
+
   it('browses identical report IDs in separate BUs and creates in one explicit destination', async () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.getStoredCarmenSession.mockReturnValue({ accessToken: 'token', businessUnit: { tenant: 'a' }, user: { id: 'admin', role: 'Admin' } });
@@ -646,7 +694,7 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Broken Report').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     await screen.findByText('Rows Configurator');
 
     await waitFor(() => expect(screen.getByText(/Broken row references found/i)).toBeInTheDocument());
@@ -898,7 +946,7 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Daily Invalid').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
 
     await waitFor(() => expect(screen.getByText('Columns Configurator')).toBeInTheDocument());
     expect(screen.queryByText(/unsupported column types/i)).not.toBeInTheDocument();
@@ -974,7 +1022,7 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Duplicate Mapping').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     const reportName = await screen.findByDisplayValue('Duplicate Mapping');
     fireEvent.change(reportName, { target: { value: 'Duplicate Mapping Edit' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
@@ -1052,7 +1100,7 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Invalid Master Data Mapping').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     await screen.findByText('Rows Configurator');
 
     await waitFor(() => expect(screen.getByText(/Unknown department code\(s\): 999/i)).toBeInTheDocument());
@@ -1258,7 +1306,7 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Edit Modal Report').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument());
     await screen.findByText('Rows Configurator');
 
@@ -1370,7 +1418,7 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Setup Edits').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument());
 
     fireEvent.change(screen.getByDisplayValue('Setup Edits'), { target: { value: 'Setup Edits Updated' } });
@@ -1656,7 +1704,7 @@ describe('App shell', () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Options Report').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument());
 
     expect(screen.queryByText('Report Theme')).not.toBeInTheDocument();

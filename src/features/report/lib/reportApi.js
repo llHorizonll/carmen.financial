@@ -331,7 +331,7 @@ export const fetchCarmenBusinessUnits = async () => {
   }));
 };
 
-const requestCarmenJson = async (path, options = {}) => {
+export const requestCarmenJson = async (path, options = {}) => {
   const session = getStoredCarmenSession();
   if (!session?.accessToken) throw new Error('Carmen session is missing.');
   const method = options.method || 'GET';

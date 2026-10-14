@@ -705,7 +705,7 @@ const applyFormulaRows = (rows, columns, rowRefMap) => {
     // regardless of where the referenced row appears in the report.
     const resolveRow = (row) => {
       if (!row) return 0;
-      if (!row.isTotal) return rowRefMap[row.id][col.id] || 0;
+      if (!row.isTotal) return rowRefMap[row.id][col.id] === null ? null : rowRefMap[row.id][col.id] || 0;
       if (resolved.has(row.id)) return rowRefMap[row.id][col.id];
       if (resolving.has(row.id)) throw new Error('Circular row formula');
       resolving.add(row.id);
@@ -742,6 +742,12 @@ const applyPercentRows = (rows, columns, rowRefMap) => {
         rowRefMap[row.id][col.id] = 0;
         return;
       }
+      const basePosition = /^R(\d+)$/i.exec(String(row.percentBase || ''));
+      const baseRowId = basePosition ? rows[Number(basePosition[1]) - 1]?.id : null;
+      if (rowRefMap[row.id][targetColId] === null || (baseRowId && rowRefMap[baseRowId][targetColId] === null)) {
+        rowRefMap[row.id][col.id] = null;
+        return;
+      }
       const numerator = Number(rowRefMap[row.id][targetColId]) || 0;
       let denominator = 0;
       if (row.percentBase && !row.percentBase.includes('!REF!')) {
@@ -770,6 +776,7 @@ export const buildReportData = ({
   appliedRevision,
   periodOptions = [],
   masterData,
+  baseValues,
 }) => {
   if (!activeReport) return [];
   const { rows, columns } = activeReport;
@@ -781,6 +788,12 @@ export const buildReportData = ({
   const preparedBudgetRows = prepareSourceRows(budgetData, masterData);
 
   rows.filter(r => !r.isTotal && !r.isHeader).forEach((row) => {
+    if (baseValues) {
+      columns.filter(col => !col.isFormula && !col.isPercent).forEach(col => {
+        rowRefMap[row.id][col.id] = baseValues[row.id]?.[col.id] ?? null;
+      });
+      return;
+    }
     const rowConfig = filterEngineRows(row, masterData);
 
     if (rowConfig.depts.length === 0 && rowConfig.accs.length === 0 && rowConfig.grps.length === 0) {
