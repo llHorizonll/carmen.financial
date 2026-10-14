@@ -395,10 +395,7 @@ const detectColumns = (
   const firstDataRow = matrix.findIndex(
     (row) =>
       isUsableText(row[descriptionColumn]) &&
-      row.filter(
-        (value, columnIndex) =>
-          columnIndex !== descriptionColumn && isNumericValue(value),
-      ).length >= 2,
+      reportCandidates.filter(({ columnIndex }) => isNumericValue(row[columnIndex])).length >= 2,
   );
   const headerEnd =
     firstDataRow >= 0 ? firstDataRow : Math.min(12, matrix.length);
@@ -522,26 +519,46 @@ const detectColumns = (
     sourceColumnIndexes.map((sourceIndex, index) => [sourceIndex, columns[index].id]),
   );
   columns.forEach((column, index) => {
-    if (!/\bvariance\b/i.test(column.label) || column.isPercent) return;
+    if (column.isPercent) return;
     const sourceIndex = sourceColumnIndexes[index];
-    const excelFormula = cellMatrix.slice(startRowIndex, endRowIndex + 1)
-      .map((row) => row?.[sourceIndex]?.f)
-      .find((formula) => typeof formula === "string" && formula.trim());
-    const match = excelFormula?.replace(/^=/, "").match(
-      /^\s*\$?([A-Z]{1,3})\$?(\d+)\s*([+-])\s*\$?([A-Z]{1,3})\$?(\d+)\s*$/i,
-    );
-    const leftId = match && match[2] === match[5]
-      ? columnIdsBySourceIndex.get(excelColumnToIndex(match[1]))
-      : "";
-    const rightId = match && match[2] === match[5]
-      ? columnIdsBySourceIndex.get(excelColumnToIndex(match[4]))
-      : "";
+    // Only same-row arithmetic belongs to a column; vertical totals belong to rows.
+    for (let rowIndex = Math.max(startRowIndex, headerEnd); rowIndex <= endRowIndex; rowIndex += 1) {
+      const sourceFormula = cellMatrix[rowIndex]?.[sourceIndex]?.f;
+      if (!sourceFormula) continue;
+      let valid = true;
+      let hasReference = false;
+      let formula = sourceFormula.replace(/^=/, "").replace(/\s/g, "").toUpperCase();
+      formula = formula.replace(/SUM\(([^()]*)\)/g, (_, args) => {
+        const terms = args.split(",").map(arg => {
+          const range = arg.match(/^\$?([A-Z]+)\$?(\d+):\$?([A-Z]+)\$?(\d+)$/);
+          if (!range) return arg;
+          const start = excelColumnToIndex(range[1]);
+          const end = excelColumnToIndex(range[3]);
+          if (range[2] !== range[4] || start > end) { valid = false; return ""; }
+          return Array.from({ length: end - start + 1 }, (_, offset) => `${excelIndexToColumn(start + offset)}${range[2]}`).join("+");
+        });
+        return `(${terms.join("+")})`;
+      });
+      formula = formula.replace(/\$?([A-Z]+)\$?(\d+)/g, (_, reference, rowNumber) => {
+        hasReference = true;
+        const referenceIndex = excelColumnToIndex(reference);
+        if (Number(rowNumber) !== rowIndex + 1 || referenceIndex === sourceIndex) valid = false;
+        return columnIdsBySourceIndex.get(referenceIndex) || "!REF!";
+      });
+      if (!valid || !hasReference || !/^(?:C\d+|!REF!|[\d.+\-*/()])+$/.test(formula)) continue;
+      columns[index] = {
+        id: column.id, label: column.label, isActive: column.isActive,
+        isFormula: true, isPercent: false, formatAsPercent: false,
+        formula: /^SUM\([^()]*\)$/i.test(sourceFormula.replace(/^=/, "").replace(/\s/g, "")) ? formula.slice(1, -1) : formula,
+        width: column.width,
+      };
+      return;
+    }
+    if (!/\bvariance\b/i.test(column.label)) return;
     const previousDataColumns = columns.slice(0, index).filter((candidate) =>
       !candidate.isFormula && !candidate.isPercent && !/\bvariance\b/i.test(candidate.label),
     );
-    const formula = leftId && rightId && leftId !== column.id && rightId !== column.id
-      ? `${leftId}${match[3]}${rightId}`
-      : previousDataColumns.length >= 2
+    const formula = previousDataColumns.length >= 2
         ? `${previousDataColumns.at(-2).id}-${previousDataColumns.at(-1).id}`
         : "";
     if (!formula) return;

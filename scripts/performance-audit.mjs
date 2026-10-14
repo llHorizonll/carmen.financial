@@ -7,7 +7,7 @@ import { gzipSync } from 'node:zlib';
 
 const root = resolve(import.meta.dirname, '..');
 const distDir = join(root, 'dist');
-const auditUrl = process.env.PERF_URL || 'http://127.0.0.1:4173/financial2/';
+const auditUrl = process.env.PERF_URL || 'http://127.0.0.1:4173/financial/';
 const args = new Set(process.argv.slice(2));
 const quick = args.has('--quick');
 const bundleOnly = args.has('--bundle-only');

@@ -7,7 +7,7 @@ const htmlPath = resolve(distDir, 'index.html');
 const html = await readFile(htmlPath, 'utf8');
 const processor = new Critters({
   path: distDir,
-  publicPath: '/financial2/',
+  publicPath: '/financial/',
   compress: true,
   fonts: false,
   keyframes: 'critical',

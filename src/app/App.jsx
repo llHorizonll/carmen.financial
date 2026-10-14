@@ -130,6 +130,7 @@ import {
   buildExcelHtml,
   findBrokenReferences,
   findRowMappingConflicts,
+  rowDimensionsOverlap,
   getLatestCreatedReport,
 } from "../features/report/lib/reportLogic.js";
 import { mergeCarmenMasterData } from "../features/report/lib/reportAdapters.js";
@@ -2600,8 +2601,12 @@ export default function App({ onLogout = null }) {
               .map((code) => code.trim())
               .filter(Boolean);
             const selectedCodes = new Set(nextAccCodes.map(normalizeAccLookupCode));
+            const nextDimensions = dimensionDefinitions
+              .map(({ key }) => ({ key, value: String(editingRow[key] || "").trim() }))
+              .filter(({ value }) => value);
             const conflictingRows = setupReport.rows.filter((row) =>
               row.id !== editingRow.id &&
+              rowDimensionsOverlap({ ...editingRow, dimensions: nextDimensions }, row) &&
               String(row.accCodes || "")
                 .split(/[;,\n]/)
                 .some((code) => selectedCodes.has(normalizeAccLookupCode(code.trim()))),
@@ -2623,6 +2628,7 @@ export default function App({ onLogout = null }) {
               accCodes: nextAccCodes.join(", "),
               groupLevel: editingRow.groupLevel,
               groups: editingRow.groups,
+              dimensions: nextDimensions,
               ...Object.fromEntries(
                 dimensionDefinitions.map(({ key }) => [key, editingRow[key]]),
               ),
@@ -2630,7 +2636,7 @@ export default function App({ onLogout = null }) {
             updateActiveReport({
               rows: setupReport.rows.map((row) => row.id === editingRow.id
                 ? { ...row, ...updates }
-                : conflictingCodes.length
+                : conflictingRows.some((conflict) => conflict.id === row.id)
                   ? {
                       ...row,
                       accCodes: String(row.accCodes || "")

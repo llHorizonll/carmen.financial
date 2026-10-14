@@ -12,6 +12,28 @@ import {
 } from "./excelTemplateImport.js";
 
 describe("Excel template import", () => {
+  it("imports only same-row column arithmetic and keeps vertical totals as row formulas", () => {
+    const matrix = [
+      ["Description", "Actual", "Budget", "TOTAL", "Difference", "Unsupported", "Self"],
+      ["Rooms", 100, 80, 180, 20, 0, 0],
+      ["Food", 50, 40, 90, 10, 0, 0],
+      ["Grand Total", 150, 120, 270, 30, 0, 0],
+    ];
+    const cells = matrix.map(() => []);
+    cells[1][3] = { f: "SUM($B$2:$C$2)" };
+    cells[2][3] = { f: "SUM(B3:C3)" };
+    cells[1][4] = { f: "($B2-C$2)/C$2" };
+    cells[1][5] = { f: "IF(B2>0,B2,0)" };
+    cells[1][6] = { f: "G2+B2" };
+    cells[3][1] = { f: "SUM(B2:B3)" };
+    const sheet = analyzeExcelSheet("Revenue", matrix, cells, new Map(), { descriptionColumn: "A" });
+    expect(sheet.detectedColumns[0].isFormula).toBe(false);
+    expect(sheet.detectedColumns[2]).toMatchObject({ isFormula: true, formula: "C1+C2" });
+    expect(sheet.detectedColumns[3]).toMatchObject({ isFormula: true, formula: "(C1-C2)/C2" });
+    expect(sheet.detectedColumns[4].isFormula).toBe(false);
+    expect(sheet.detectedColumns[5].isFormula).toBe(false);
+    expect(sheet.detectedRows.find(row => row.desc === "Grand Total")).toMatchObject({ isTotal: true, formula: "R1+R2" });
+  });
   it("preserves percentage formula row types through workbook parsing, range changes and report persistence", async () => {
     const worksheet = XLSX.utils.aoa_to_sheet([
       ['Description', 'Actual', 'Budget'],

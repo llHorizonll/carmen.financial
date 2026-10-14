@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseExcelWorkbook } from "./excelTemplateImport.js";
+import { configureExcelSheetImport, createReportsFromExcelSheets, parseExcelWorkbook } from "./excelTemplateImport.js";
 
 const fixtureDirectory = path.resolve(
   "test-fixtures/excel-template-import",
@@ -32,6 +32,31 @@ const expectValidIndents = (workbook) => {
 };
 
 describe("Excel template import fixtures", () => {
+  it("preserves daily revenue and F&B headers and column totals from the real workbook", async () => {
+    const workbook = await parseFixture("Example - Daily Revenue Report (2).xlsx");
+    const revenue = workbook.sheets.find(sheet => sheet.name === "DRR REVENUE");
+    const food = workbook.sheets.find(sheet => sheet.name === "DAILY F&B");
+    expect(revenue.detectedColumns.map(column => column.label)).toEqual(
+      ["TODAY", "M-T-D", "Y-T-D"].flatMap(period =>
+        ["Actual", "forecast", "Variance", "Last Year"].map(label => `${period}\n${label}`)),
+    );
+    expect(food.detectedColumns.map(column => column.label)).toEqual([
+      ...["TODAY", "M-T-D"].flatMap(period =>
+        ["BREAKFAST", "LUNCH", "DINNER", "SUPPER", "TOTAL", "BUDGET", "LAST YEAR"].map(label => `${period}\n${label}`)),
+      "Y-T-D\nActual", "Y-T-D\nBudget", "Y-T-D\nLast Year",
+    ]);
+    expect(food.detectedColumns[4]).toMatchObject({ isFormula: true, formula: "C1+C2+C3+C4" });
+    expect(food.detectedColumns[11]).toMatchObject({ isFormula: true, formula: "C8+C9+C10+C11" });
+    expect(revenue.detectedRows.find(row => row.desc === "Total Room Revenue")).toMatchObject({ isTotal: true, isHeader: false, formula: "R2+R3+R4" });
+    const configured = configureExcelSheetImport(food, { ...food.importConfig, reportStartColumn: "C", reportEndColumn: "R", dataStartRow: 8 });
+    expect(configured.detectedColumns[3]).toMatchObject({ label: "TODAY\nTOTAL", isFormula: true, formula: "!REF!+C1+C2+C3" });
+    expect(configured.detectedColumns[10]).toMatchObject({ label: "M-T-D\nTOTAL", isFormula: true, formula: "C7+C8+C9+C10" });
+    const reports = createReportsFromExcelSheets(workbook, [food.name], { companyName: "Hotel", userIds: [], owner: "admin", idSeed: 1 });
+    localStorage.setItem("imported-daily-food", JSON.stringify(reports));
+    const restored = JSON.parse(localStorage.getItem("imported-daily-food"));
+    expect(restored[0].columns[4]).toMatchObject({ label: "TODAY\nTOTAL", isFormula: true, formula: "C1+C2+C3+C4" });
+    localStorage.removeItem("imported-daily-food");
+  });
   it("parses the Homm workbook and skips non-report sheets", async () => {
     const workbook = await parseFixture(
       "Homm 34 - Financial Report_Master.xlsx",
