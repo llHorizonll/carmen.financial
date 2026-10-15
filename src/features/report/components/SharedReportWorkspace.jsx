@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, History, Pencil, Trash2 } from 'lucide-react';
-import { useTranslation } from '@/lib/i18n.js';
+import { getLocale, useTranslation } from '@/lib/i18n.js';
 import { VStack } from '@astryxdesign/core/VStack';
 import { HStack } from '@astryxdesign/core/HStack';
 import { Heading } from '@astryxdesign/core/Heading';
@@ -25,6 +25,13 @@ import { THEMES, getIndentClass, moveRowsAndRewriteReferences, deleteRowAndRewri
 
 const EMPTY_MASTER = { depts: [], accCodes: [], accountGroups: [], deptGroups: [], groups: {}, users: [] };
 const escapeHtml = (value) => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
+const parseAuditTime = (value) => {
+  const raw = String(value ?? '').trim();
+  if (!raw) return null;
+  // Admin DB stores UTC in a timezone-less DATETIME column.
+  const date = new Date(/(?:Z|[+-]\d{2}:\d{2})$/i.test(raw) ? raw : `${raw}Z`);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
 
 export default function SharedReportWorkspace({ units, username, onClose }) {
   const t = useTranslation();
@@ -183,12 +190,15 @@ export default function SharedReportWorkspace({ units, username, onClose }) {
           </div>
         </fieldset>
         {busy && <p role="status">Loading shared report…</p>}
-        {history.length > 0 && <VStack gap={2} className="print:hidden">{history.map(entry => <HStack key={entry.Version} gap={3} wrap="wrap">
-          <Text>v{entry.Version} · {entry.ChangeType} · {entry.ChangedBy} · {entry.ChangedAt}</Text>
-          <Button variant="outline" disabled={busy || !canEdit || dirty} onClick={() => setConfirm({ title: `Restore version ${entry.Version}?`, msg: 'The current access list will be preserved.', onConfirm: () => run(async () => {
-            const next = await sharedReportsApi.restore(report, entry.Version); if (alive.current) setCurrent(next); await refresh();
-          }) })}>Restore version</Button>
-        </HStack>)}</VStack>}
+        {history.length > 0 && <VStack gap={2} className="print:hidden">{history.map(entry => {
+          const changedAt = parseAuditTime(entry.ChangedAt);
+          return <HStack key={entry.Version} gap={3} wrap="wrap">
+            <Text>v{entry.Version} · {entry.ChangeType} · {entry.ChangedBy} · <time dateTime={changedAt?.toISOString()}>{changedAt ? changedAt.toLocaleString(getLocale(), { dateStyle: 'medium', timeStyle: 'short' }) : t('Time unavailable')}</time></Text>
+            <Button variant="outline" disabled={busy || !canEdit || dirty} onClick={() => setConfirm({ title: `Restore version ${entry.Version}?`, msg: 'The current access list will be preserved.', onConfirm: () => run(async () => {
+              const next = await sharedReportsApi.restore(report, entry.Version); if (alive.current) setCurrent(next); await refresh();
+            }) })}>Restore version</Button>
+          </HStack>;
+        })}</VStack>}
         {report && <>
           <fieldset disabled={busy} className="min-w-0 rounded-xl border border-border bg-card p-4 print:hidden">
             {result?.response.isComplete && <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">

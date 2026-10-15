@@ -41,12 +41,20 @@ Downloaded `consolidated-report.xls` (1,551 bytes) contains both exact displayed
 
 ## Remaining release gates
 
-1. Authenticated version-conflict/atomicity, ACL, cross-admin isolation and denied/revoked BU membership with controlled test accounts. Do not alter business-user permissions.
+1. ACL, cross-admin isolation, concurrent delete/restore conflicts and denied/revoked BU membership with controlled test accounts. Do not alter business-user permissions.
 2. Broader financial acceptance: rows/formulas/percentages, departments/dimensions, other periods/year boundaries/revisions and actual Excel/print rendering. Fixture coverage does not replace source reconciliation.
 3. Failure/load acceptance: incomplete data, timeout/stale response, representative uncached p95/concurrency and agreed shared-report SLA.
 4. Serving backend identity, retained frontend/backend artifacts/configuration, rollback rehearsal and separate release decision.
 
 Passing fixtures and this limited live reconciliation do not establish all accounting/security/release gates. No p95 success is claimed. History timestamps appear to encode UTC clock values with +07:00 in the UI; timezone serialization requires a focused follow-up before relying on audit display times.
+
+## Optimistic concurrency and atomicity — 2026-10-15
+
+- Opened the same verification template in two authenticated browser tabs at version 7.
+- The first tab saved a temporary name change as version 8. The second tab then attempted to save its stale version 7 draft and received HTTP 409: `Shared report changed. Reload before saving.` The stale draft remained visible and preview/history actions stayed disabled while dirty.
+- The first tab restored the original template name in a normal save as version 9. No source mapping, access, financial data or permissions were changed.
+- DBX `dev` read-only verification confirmed the current `bi_shared_report` row is version 9 with the original name. `bi_shared_report_history` contains versions 7, 8 and 9 only; there is no history row or current-definition mutation from the rejected stale save.
+- This closes the authenticated save conflict/atomic-history case for one Admin DB and one user. Concurrent delete/restore conflicts, cross-admin isolation and denied/revoked BU membership remain release gates.
 
 ## Local login blocker resolved
 

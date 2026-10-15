@@ -86,6 +86,14 @@ describe('SharedReportWorkspace', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Reload before saving');
     expect(screen.getByDisplayValue('Edited template')).toBeInTheDocument();
   });
+  it('treats timezone-less Admin DB audit timestamps as UTC', async () => {
+    sharedReportsApi.history.mockResolvedValue([{ Version: 1, ChangeType: 'create', ChangedBy: 'admin', ChangedAt: '2026-10-15T10:00:00' }]);
+    await openTemplate();
+    fireEvent.click(screen.getByRole('button', { name: 'Activity' }));
+    await screen.findByText(/v1 · create · admin/);
+    expect(document.querySelector('time')).toHaveAttribute('datetime', '2026-10-15T10:00:00.000Z');
+    expect(screen.queryByText('2026-10-15T10:00:00')).not.toBeInTheDocument();
+  });
   it('clears the old complete result when a new preview is denied', async () => {
     await openTemplate();
     fireEvent.click(screen.getByRole('button', { name: 'Preview report' }));
