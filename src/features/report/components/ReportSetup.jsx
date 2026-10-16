@@ -1,3 +1,4 @@
+import BuMappingReview from './BuMappingReview.jsx';
 import { useTranslation } from "@/lib/i18n.js";
 import React, { forwardRef, useImperativeHandle, useState } from 'react';
 import { ArrowLeft, LoaderCircle, RotateCcw, Save, Undo2 } from 'lucide-react';
@@ -72,6 +73,7 @@ const ReportSetup = forwardRef(function ReportSetup(props, ref) {
         <section data-tour="setup-configurator" className="grid gap-5 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-xl data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary">
           <section className="w-full min-w-0 overflow-hidden"><ColumnsConfigurator {...props} /></section>
           <section className="w-full min-w-0"><RowsConfigurator {...props} /></section>
+          {props.buComparison && <BuMappingReview report={props.activeReport} comparison={props.buComparison} updateActiveReport={props.updateActiveReport} reportOptions={props.reportOptions} disabled={props.isSaving} />}
         </section>
       </div>
       <GettingStartedTour

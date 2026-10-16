@@ -47,6 +47,10 @@ export default function EditMappingModal({
   onOpenDetailSelector,
   onApply,
   onClose,
+  onMarkNotApplicable,
+  mappingError,
+  mappingContext,
+  mappingWarning,
 }) {
   const t = useTranslation();
   if (!isOpen || !editingRow) return null;
@@ -76,13 +80,13 @@ export default function EditMappingModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings2 className="size-4" />{t("Edit Mapping")}</DialogTitle>
-          <DialogDescription>{t("Adjust row mapping details and detail selectors.")}</DialogDescription>
+          <DialogDescription>{mappingContext || t("Adjust row mapping details and detail selectors.")}</DialogDescription>
         </DialogHeader>
 
         <section className="grid min-h-0 flex-1 gap-4 overflow-y-auto pr-1">
           <section className="space-y-2">
             <Label>{t("Description")}</Label>
-            <Input value={editingRow.desc} onChange={(e) => setEditingRow({ ...editingRow, desc: e.target.value })} />
+            <Input value={editingRow.desc} readOnly={Boolean(mappingContext)} onChange={(e) => setEditingRow({ ...editingRow, desc: e.target.value })} />
           </section>
 
           <Accordion.Root type="multiple" defaultValue={['department', 'account']} className="grid gap-3">
@@ -245,6 +249,9 @@ export default function EditMappingModal({
         </section>
 
         <DialogFooter className="shrink-0 flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          {mappingWarning && <p role="status" className="text-sm text-muted-foreground">{mappingWarning}</p>}
+          {mappingError && <p role="alert" className="text-sm text-destructive">{mappingError}</p>}
+          {onMarkNotApplicable && <Button variant="outline" size="sm" onClick={onMarkNotApplicable}>{t("Mark not applicable")}</Button>}
           <Button variant="outline" size="sm" className={`w-full sm:w-auto ${friendlyButtonClassName}`} onClick={onClose}>{t("Cancel")}</Button>
           <Button size="sm" className="w-full sm:w-auto" onClick={onApply}>{t("Apply Mapping")}</Button>
         </DialogFooter>

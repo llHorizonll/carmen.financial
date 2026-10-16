@@ -274,7 +274,7 @@ export default function RowsConfigurator({
                       isHeader && "bg-muted/10",
                       (isPctBroken || isFormulaBroken || rowWarnings.length > 0) && "border-l-2 border-l-destructive/70",
                       row.isActive === false && "opacity-60",
-                      normalizedSearch && matchingRowIds.has(row.id) && "ring-2 ring-inset ring-primary/40",
+                      normalizedSearch && matchingRowIds.has(row.id) && "relative outline-2 -outline-offset-2 outline-primary/40",
                     )}
                   >
                     <TableCell className="px-2 py-2 align-middle">

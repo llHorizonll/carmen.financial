@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/popover.jsx';
 import { cn } from '@/lib/utils.js';
 
-export default function MultiSelectDropdown({ options, selected, onChange, label, testIdPrefix, normalizeValue = normalizeDeptLookupCode, searchPlaceholder = 'Search department...', emptyLabel = 'All', noDataLabel = 'No options available', showAllLabel = true }) {
+export default function MultiSelectDropdown({ options, selected, onChange, label, testIdPrefix, normalizeValue = normalizeDeptLookupCode, searchPlaceholder = 'Search department...', emptyLabel = 'All', noDataLabel = 'No options available', showAllLabel = true, ariaLabel }) {
   const t = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -77,6 +77,7 @@ export default function MultiSelectDropdown({ options, selected, onChange, label
           variant="outline"
           className={`h-9 w-full justify-between gap-2 px-3 text-left ${friendlyButtonClassName}`}
           data-testid={`dropdown-${testIdPrefix}`}
+          aria-label={ariaLabel ? t(ariaLabel) : undefined}
         >
           <span className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
             <span className="shrink-0 text-xs font-medium text-muted-foreground">{t(label)}</span>

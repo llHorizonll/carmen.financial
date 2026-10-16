@@ -781,6 +781,7 @@ export const buildReportData = ({
   appliedRevision,
   periodOptions = [],
   masterData,
+  baseValues,
 }) => {
   if (!activeReport) return [];
   const { rows, columns } = activeReport;
@@ -792,6 +793,10 @@ export const buildReportData = ({
   const preparedBudgetRows = prepareSourceRows(budgetData, masterData);
 
   rows.filter(r => !r.isTotal && !r.isHeader).forEach((row) => {
+    if (baseValues) {
+      columns.forEach((col) => { rowRefMap[row.id][col.id] = baseValues[row.id]?.[col.id] ?? 0; });
+      return;
+    }
     const rowConfig = filterEngineRows(row, masterData);
 
     if (rowConfig.depts.length === 0 && rowConfig.accs.length === 0 && rowConfig.grps.length === 0) {
@@ -1038,7 +1043,7 @@ export const formatReportCell = (row, col) => {
   return value < 0 ? `(${text})` : text;
 };
 
-export const buildExcelHtml = ({ activeReport, activeCols, displayCompanyLabel, displayDateLabel, displayPeriodLabel, reportData, themeColors }) => {
+export const buildExcelHtml = ({ activeReport, activeCols, displayCompanyLabel, displayDateLabel, displayPeriodLabel, reportData, themeColors, columnGroups }) => {
   const displayColumns = getReportDisplayColumns(activeReport, activeCols);
   let tableHtml = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"></head><body>`;
   tableHtml += `<table border="1" cellpadding="5" cellspacing="0" style="font-family: Arial, sans-serif; font-size: 12px; border-collapse: collapse;">`;
@@ -1047,6 +1052,10 @@ export const buildExcelHtml = ({ activeReport, activeCols, displayCompanyLabel, 
   tableHtml += `<tr><td colspan="${displayColumns.length}" style="text-align:center; font-size: 12px; border:none;">${displayDateLabel}</td></tr>`;
   tableHtml += `<tr><td colspan="${displayColumns.length}" style="text-align:center; font-size: 12px; border:none;">${displayPeriodLabel}</td></tr>`;
   tableHtml += `<tr><td colspan="${displayColumns.length}" style="border:none;"></td></tr>`;
+  if (columnGroups) {
+    const escape = (value) => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    tableHtml += `<tr><th></th>${columnGroups.map((group) => `<th colspan="${group.count}" style="background-color: ${themeColors.hexHeader}; color: white; text-align:center;">${escape(group.label)}</th>`).join('')}</tr>`;
+  }
   tableHtml += `<tr>`;
   displayColumns.forEach(col => {
     tableHtml += col.isDescription

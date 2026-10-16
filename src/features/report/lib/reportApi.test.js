@@ -76,6 +76,59 @@ describe('reportApi helpers', () => {
     await restoreCarmenReportHistoryVersion('same', 7, 'version', { tenant: 'b' });
     expect(fetchMock.mock.lastCall[0]).toContain('/api/reports/same/history/7/restore?useTenant=b');
   });
+  it('requests comparison through the owner tenant and adapts scoped source reports', async () => {
+    createSessionStorageMock({ accessToken: 'token', businessUnit: { tenant: 'a' } });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ datasets: [{
+      tenant: 'b', actualRows: [], budgetRows: [], report: { id: 'owner-report', columns: [], rows: [{ id: 'r1', accCodes: '5100' }] },
+      masterData: { periods: [{ id: '2', month: 2, date: '2026-02-01' }] },
+    }] }) });
+    vi.stubGlobal('fetch', fetchMock);
+    const result = await fetchCarmenReportData({ tenant: 'a', reportId: 'owner-report', year: 2026, period: 2, revision: 0, sourceTenants: ['a', 'b'], departmentsByTenant: { b: ['01'] } });
+    const url = new URL(fetchMock.mock.calls[0][0]);
+    expect(url.searchParams.get('useTenant')).toBe('a');
+    expect(url.searchParams.get('sourceTenants')).toBe('a,b');
+    expect(JSON.parse(url.searchParams.get('departmentsByTenant'))).toEqual({ b: ['01'] });
+    expect(result.datasets[0].report.rows[0].accCodes).toBe('5100');
+    expect(result.datasets[0].masterData.periods[0].periodNo).toBe(2);
+  });
+
+  it('loads comparison mapping groups with report View permission without maintenance calls', async () => {
+    createSessionStorageMock({ accessToken: 'token', businessUnit: { tenant: 'a' } });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      companyProfile: {}, depts: [], accCodes: [],
+      accountGroups: [{ AccGroupCode: 'REV', AccGroupName: 'Revenue', Level: 'L4', Account: [{ AccCode: '4100' }] }],
+      deptGroups: [{ DeptCateCode: 'OPS', Description: 'Operations', Departments: [{ DeptCode: '01' }] }],
+    }) });
+    vi.stubGlobal('fetch', fetchMock);
+    const master = await fetchCarmenMasterData({ year: 2026, tenant: 'b', includeMappingGroups: true });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(new URL(fetchMock.mock.calls[0][0]).searchParams.get('includeMappingGroups')).toBe('true');
+    expect(master.accountGroups[0].accountIds).toEqual(['4100']);
+    expect(master.deptGroups[0].deptIds).toEqual(['1']);
+  });
+
+  it('blocks mapping writes against an older backend before sending any mutation', async () => {
+    createSessionStorageMock({ accessToken: 'token', businessUnit: { tenant: 'a' } });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    vi.stubGlobal('fetch', fetchMock);
+    const report = { id: 'pnl', rows: [{ id: 'r1', buMappings: [{ tenant: 'b', status: 'confirmed', accCodes: '5100' }] }], columns: [] };
+    await expect(saveCarmenReport(report, { tenant: 'a' })).rejects.toThrow('Update the Carmen backend');
+    await expect(saveCarmenReports([report], { tenant: 'a' })).rejects.toThrow('Update the Carmen backend');
+    await expect(createCarmenReport(report, { tenant: 'a' })).rejects.toThrow('Update the Carmen backend');
+    expect(fetchMock.mock.calls.every(([, init]) => init.method === 'GET')).toBe(true);
+  });
+
+  it('saves multi-BU mappings only after the backend advertises support', async () => {
+    createSessionStorageMock({ accessToken: 'token', businessUnit: { tenant: 'a' } });
+    const fetchMock = vi.fn().mockImplementation(async (url) => ({ ok: true, json: async () => url.includes('report-options') ? { multiBuComparison: true } : { lastModified: 'v2' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const report = { id: 'pnl', lastModified: 'v1', rows: [{ id: 'r1', buMappings: [{ tenant: 'b', status: 'confirmed', accCodes: '5100' }] }], columns: [] };
+    await saveCarmenReport(report, { tenant: 'a' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][1].method).toBe('PUT');
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).rows[0].buMappings[0].tenant).toBe('b');
+  });
+
   it('loads financial report master data without separately denied group lookups', async () => {
     createSessionStorageMock({ accessToken: 'token', businessUnit: { tenant: 'a' } });
     const fetchMock = vi.fn().mockImplementation(async (url) => url.includes('report-master-data')

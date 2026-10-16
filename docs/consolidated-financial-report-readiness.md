@@ -1,5 +1,7 @@
 # การเตรียมระบบ Multi-BU / Consolidated Financial Report
 
+> ข้อกำหนดใหม่ 15 ตุลาคม 2026: เพิ่ม **Multi-BU Financial Comparison** ใช้ report ต้นทางชุดเดียว เปรียบเทียบหลาย BU ข้างกัน พร้อม optional Total และ mapping review แบบยืนยันเป็นชุด Implement บน local branch `codex/multi-bu-financial-comparison` ทั้ง frontend/backend; ยังไม่ deploy ดู [แผนและ checklist ล่าสุด](plans/2026-10-15-multi-bu-financial-comparison.md) ขอบเขต Phase 2/3 ด้านล่างเป็นบันทึกการตัดสินใจก่อนงานใหม่นี้
+
 อัปเดต 8 ตุลาคม 2026 · Frontend Carmen Financial · Backend Carmen.WebApi
 
 ข้อกำหนดล่าสุดของโอมเป็นหลัก: Phase 2 เลือก BU เพื่อดูรายงานแยกกัน; Phase 3 เพิ่ม `view all` และ report templates ที่เก็บแยกจากทุก BU ไม่มี combine report ในทั้งสองระยะ

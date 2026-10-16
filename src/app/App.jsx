@@ -1,3 +1,6 @@
+import useBuComparison from '../features/report/hooks/useBuComparison.js';
+import BuComparisonControls from '../features/report/components/BuComparisonControls.jsx';
+import { comparisonExportData, groupBuDepartments, normalizeTenant } from '../features/report/lib/buComparison.js';
 import { useTranslation, getLocale } from "@/lib/i18n.js";
 import React, {
   useCallback,
@@ -141,6 +144,7 @@ import {
   getAccessibleReports,
 } from "./reportAccess.js";
 
+const BuComparisonView = React.lazy(() => import('../features/report/components/BuComparisonView.jsx'));
 const ReportView = React.lazy(
   () => import("../features/report/components/ReportView.jsx"),
 );
@@ -600,6 +604,17 @@ export default function App({ onLogout = null }) {
   const activeReportDay = activeReportUsesDayFilter
     ? (currentDayFilter?.appliedDay ?? defaultReportDay)
     : "";
+  const [comparisonDepartments, setComparisonDepartments] = useState([]);
+  const comparisonOwnerMaster = useMemo(() => tenantContextReady ? { ...masterData, periods: periodOptions,
+    dimensionDefinitions: apiDimensions.definitions || [], dimensionOptions: apiDimensions } : null, [tenantContextReady, masterData, periodOptions, apiDimensions]);
+  const comparison = useBuComparison({ report: activeReport, units: businessUnits.units, selectedUnits: businessUnits.selected,
+    enabled: businessUnitsEnabled, year: globalYear, userId: currentUser?.id, sessionToken: storedCarmenSession?.accessToken,
+    ownerMaster: comparisonOwnerMaster, reuseOwnerMaster: true });
+  const needsComparison = businessUnitsEnabled && (comparison.selected.length !== 1 || normalizeTenant(comparison.selected[0]) !== normalizeTenant(activeTenant));
+  const comparisonLabels = comparison.snapshot ? {
+    displayDateLabel: activeReport?.overrideDateDisplay || activeReport?.customDateLabel || `As of ${formatAutoPeriod(comparison.snapshot.filters.appliedYear, comparison.snapshot.filters.appliedPeriod, 'end_of_month')}${comparison.snapshot.filters.appliedDay ? ` / Day ${comparison.snapshot.filters.appliedDay}` : ''}`,
+    displayPeriodLabel: activeReport?.overridePeriodDisplay || activeReport?.customPeriodLabel || formatAutoPeriod(comparison.snapshot.filters.appliedYear, comparison.snapshot.filters.appliedPeriod, activeReport?.periodFormat),
+  } : {};
   const activeReportUsesBudget = useMemo(
     () =>
       Boolean(
@@ -992,6 +1007,12 @@ export default function App({ onLogout = null }) {
   const handleCancelSetup = () => confirmDiscardSetup();
 
   const handleApplyFilters = async () => {
+    if (needsComparison) {
+      const departmentsByTenant = groupBuDepartments(comparisonDepartments, comparison.selected);
+      await comparison.apply({ appliedYear: globalYear, appliedPeriod: globalPeriod, appliedRevision: activeReportUsesBudget ? globalRevision : '0',
+        appliedDay: activeReportUsesDayFilter ? String(globalDay).trim() : '', departmentsByTenant });
+      return;
+    }
     const nextDepts = [...globalDepts];
     const nextRevision = activeReportUsesBudget ? globalRevision : "0";
     const nextDay = activeReportUsesDayFilter ? String(globalDay).trim() : "";
@@ -1024,6 +1045,7 @@ export default function App({ onLogout = null }) {
         deptIds: nextDepts,
         day: nextDay,
       });
+      comparison.clearSnapshot();
     } catch (error) {
       setAlertMsg(error.message || "Unable to load Carmen report data.");
     }
@@ -1384,6 +1406,8 @@ export default function App({ onLogout = null }) {
       displayPeriodLabel,
       reportData,
       themeColors,
+      ...(comparison.groups ? comparisonExportData(comparison.snapshot.report, comparison.groups) : {}),
+      ...comparisonLabels,
     });
     const blob = new Blob([tableHtml], { type: "application/vnd.ms-excel" });
     const url = URL.createObjectURL(blob);
@@ -1822,7 +1846,7 @@ export default function App({ onLogout = null }) {
       ) : null}
 
       <main
-        className={`flex min-w-0 flex-1 flex-col ${visibleActiveTab === "setup" ? "overflow-visible" : "overflow-hidden"}`}
+        className={`flex min-w-0 flex-1 flex-col print:overflow-visible ${visibleActiveTab === "setup" ? "overflow-visible" : "overflow-hidden"}`}
       >
         <header className="w-full border-b border-border bg-card/95 backdrop-blur print:hidden">
           <div className="flex flex-col gap-3 px-4 py-2.5 xl:flex-row xl:items-center xl:justify-between">
@@ -1904,7 +1928,7 @@ export default function App({ onLogout = null }) {
 
             <div className="flex w-full flex-wrap items-center justify-end gap-2 xl:w-auto">
               {visibleActiveTab === "report" &&
-                reportViewMode !== "dashboard" && (
+                reportViewMode !== "dashboard" && !comparison.groups && (
                   <div className="mr-auto flex items-center gap-1 rounded-lg border border-border bg-card/80 px-2 py-1 shadow-sm xl:mr-0">
                     <Button
                       type="button"
@@ -2212,11 +2236,12 @@ export default function App({ onLogout = null }) {
             </section>
             <Card data-tour="report-filters" className="border border-border bg-card/95 shadow-none ring-0 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary">
               <CardContent className="p-3">
+                {businessUnitsEnabled && activeReport && comparison.available.length > 1 && <BuComparisonControls comparison={comparison} report={activeReport} departments={comparisonDepartments} onDepartmentsChange={setComparisonDepartments} />}
                 <div className="flex flex-col gap-2 2xl:flex-row 2xl:items-end 2xl:justify-between">
                   <div
                     className={`grid gap-2 sm:grid-cols-2 sm:items-end md:grid-cols-3 lg:grid-cols-4 2xl:flex-none ${activeReportUsesDayFilter ? "2xl:grid-cols-[180px_110px_180px_120px_88px_88px]" : "2xl:grid-cols-[180px_110px_180px_88px_88px]"}`}
                   >
-                    <div className="min-w-0">
+                    <div className={needsComparison ? 'hidden' : 'min-w-0'}>
                       <MultiSelectDropdown
                         testIdPrefix="dept"
                         label="DEPT"
@@ -2323,12 +2348,12 @@ export default function App({ onLogout = null }) {
                       size="sm"
                       className="h-9 w-full self-end px-3 text-sm sm:w-auto sm:min-w-24 sm:justify-self-start"
                       onClick={handleApplyFilters}
-                      disabled={isLoading}
+                      disabled={isLoading || comparison.loading}
                     >
-                      {isLoading ? (
+                      {isLoading || comparison.loading ? (
                         <LoaderCircle className="animate-spin motion-reduce:animate-none" />
                       ) : null}
-                      {isLoading ? t("Loading...") : t("Apply")}
+                      {isLoading || comparison.loading ? t("Loading...") : t("Apply")}
                     </Button>
                   </div>
 
@@ -2361,7 +2386,7 @@ export default function App({ onLogout = null }) {
         )}
 
         <div
-          className={`min-h-0 flex-1 ${visibleActiveTab === "setup" ? "overflow-visible" : "overflow-hidden"} ${mainContentPaddingClass}`}
+          className={`min-h-0 flex-1 print:overflow-visible ${visibleActiveTab === "setup" ? "overflow-visible" : "overflow-hidden"} ${mainContentPaddingClass}`}
         >
           <div className={`${mainContentWidthClass} ${activeTabMotionClass}`}>
             {visibleActiveTab === "report" && (masterDataError || reportCatalogError) && reports.length === 0 ? (
@@ -2396,7 +2421,11 @@ export default function App({ onLogout = null }) {
                       </Card>
                     }
                   >
-                    {reportViewMode === "dashboard" ? (
+                    {comparison.groups ? (
+                      <BuComparisonView activeReport={comparison.snapshot.report} groups={comparison.groups}
+                        displayCompanyLabel={displayCompanyLabel} displayDateLabel={displayDateLabel} displayPeriodLabel={displayPeriodLabel}
+                        currentTheme={currentTheme} getIndentClass={getIndentClass} appliedFilters={comparison.snapshot.filters} {...comparisonLabels} />
+                    ) : reportViewMode === "dashboard" ? (
                       <ReportDashboard
                         activeReport={activeReport}
                         displayCompanyLabel={displayCompanyLabel}
@@ -2487,6 +2516,7 @@ export default function App({ onLogout = null }) {
                         isDirty={isSetupDirty}
                         isSaving={isSetupSaving}
                         apiConfigured={apiConfigured}
+                        buComparison={businessUnitsEnabled ? comparison : null}
                         onHistoryRestored={(restored) => {
                           const scopedRestored = activeReport.tenant ? { ...restored, tenant: activeReport.tenant } : restored;
                           setReports((currentReports) =>

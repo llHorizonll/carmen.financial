@@ -383,6 +383,7 @@ export const fetchCarmenReportOptions = async (context = {}) => {
 
   const options = await requestCarmenJson('/api/report-options', context);
   return {
+    multiBuComparison: options?.multiBuComparison === true,
     themes: Array.isArray(options?.themes) ? options.themes : [],
     periodFormats: Array.isArray(options?.periodFormats) ? options.periodFormats : [],
     accountCategories: Array.isArray(options?.accountCategories) ? options.accountCategories : [],
@@ -586,6 +587,12 @@ export const buildReportDefinitionPayload = (report) => ({
       : [],
 });
 
+const requireBuMappingSupport = async (payloads, context) => {
+  if (!payloads.some((payload) => payload.rows?.some((row) => row.buMappings?.length))) return;
+  const options = await requestCarmenJson('/api/report-options', context);
+  if (options?.multiBuComparison !== true) throw new Error('Update the Carmen backend before saving multi-BU mappings. Your draft has not been saved.');
+};
+
 export const createCarmenReport = async (report, context = {}) => {
   if (!isCarmenApiConfigured()) {
     throw new Error('Carmen API session is not configured.');
@@ -595,6 +602,7 @@ export const createCarmenReport = async (report, context = {}) => {
   if (!payload.id) {
     throw new Error('Report id is required before creating a report.');
   }
+  await requireBuMappingSupport([payload], context);
   const response = await requestCarmenJson('/api/reports', {
     ...context,
     method: 'POST',
@@ -644,6 +652,7 @@ export const saveCarmenReport = async (report, context = {}) => {
   }
 
   const payload = buildReportDefinitionPayload(report);
+  await requireBuMappingSupport([payload], context);
   const method = report?.id ? 'PUT' : 'POST';
   const path = report?.id
     ? `/api/reports/${encodeURIComponent(report.id)}`
@@ -663,11 +672,13 @@ export const saveCarmenReports = async (reports, context = {}) => {
     throw new Error('Carmen API session is not configured.');
   }
   if (!Array.isArray(reports) || reports.length === 0) return [];
+  const payloads = reports.map(buildReportDefinitionPayload);
+  await requireBuMappingSupport(payloads, context);
 
   return requestCarmenJson('/api/reports/batch', {
     ...context,
     method: 'POST',
-    body: reports.map(buildReportDefinitionPayload),
+    body: payloads,
   });
 };
 
@@ -696,7 +707,7 @@ export const cloneCarmenReport = async (id, context = {}) => {
   return adaptCarmenReportDefinition(report);
 };
 
-export const fetchCarmenMasterData = async ({ year, tenant }) => {
+export const fetchCarmenMasterData = async ({ year, tenant, includeMappingGroups = false }) => {
   if (!isCarmenApiConfigured()) {
     throw new Error('Carmen API session is not configured.');
   }
@@ -711,10 +722,10 @@ export const fetchCarmenMasterData = async ({ year, tenant }) => {
   };
   try {
     const [masterData, users, accountGroups, deptGroups] = await Promise.all([
-      requestCarmenJson(`/api/report-master-data?year=${encodeURIComponent(year)}`, context),
+      requestCarmenJson(`/api/report-master-data?year=${encodeURIComponent(year)}${includeMappingGroups ? '&includeMappingGroups=true' : ''}`, context),
       usersPromise,
-      tenant ? fetchCarmenAccountGroups(context).catch(optionalGroupLookup) : fetchCarmenAccountGroups().catch(() => []),
-      tenant ? fetchCarmenDepartmentGroups(context).catch(optionalGroupLookup) : fetchCarmenDepartmentGroups().catch(() => []),
+      includeMappingGroups ? Promise.resolve([]) : tenant ? fetchCarmenAccountGroups(context).catch(optionalGroupLookup) : fetchCarmenAccountGroups().catch(() => []),
+      includeMappingGroups ? Promise.resolve([]) : tenant ? fetchCarmenDepartmentGroups(context).catch(optionalGroupLookup) : fetchCarmenDepartmentGroups().catch(() => []),
     ]);
     const currentUser = masterData?.currentUser || session?.user || null;
     return {
@@ -725,8 +736,8 @@ export const fetchCarmenMasterData = async ({ year, tenant }) => {
       companyProfile: adaptCarmenCompany(masterData?.companyProfile),
       depts: adaptCarmenDepartments(masterData?.depts),
       accCodes: adaptCarmenAccountCodes(masterData?.accCodes),
-      accountGroups,
-      deptGroups,
+      accountGroups: includeMappingGroups ? adaptCarmenAccountGroups(masterData?.accountGroups) : accountGroups,
+      deptGroups: includeMappingGroups ? adaptCarmenDepartmentGroups(masterData?.deptGroups) : deptGroups,
       periods: adaptCarmenGlPeriods(masterData?.periods),
       budgetRevisions: adaptCarmenBudgetRevisions(masterData?.budgetRevisions),
       groups: {
@@ -782,7 +793,7 @@ export const fetchCarmenMasterData = async ({ year, tenant }) => {
   }
 };
 
-export const fetchCarmenReportData = async ({ reportId = '', year, period, revision, deptIds = [], day = '', tenant }) => {
+export const fetchCarmenReportData = async ({ reportId = '', year, period, revision, deptIds = [], day = '', tenant, sourceTenants, departmentsByTenant }) => {
   if (!isCarmenApiConfigured()) {
     throw new Error('Carmen API session is not configured.');
   }
@@ -797,12 +808,17 @@ export const fetchCarmenReportData = async ({ reportId = '', year, period, revis
       revision,
       day,
       deptIds: Array.isArray(deptIds) ? deptIds.join(',') : deptIds,
+      ...(sourceTenants ? { sourceTenants: sourceTenants.join(','), departmentsByTenant: JSON.stringify(departmentsByTenant || {}) } : {}),
     },
   });
 
   return {
     actualRows: Array.isArray(response?.actualRows) ? response.actualRows : [],
     budgetRows: Array.isArray(response?.budgetRows) ? response.budgetRows : [],
+    ...(Array.isArray(response?.datasets) ? { datasets: response.datasets.map((dataset) => ({ ...dataset,
+      report: adaptCarmenReportDefinition(dataset.report),
+      masterData: { ...dataset.masterData, periods: adaptCarmenGlPeriods(dataset.masterData?.periods) },
+    })) } : {}),
     raw: response,
   };
 };

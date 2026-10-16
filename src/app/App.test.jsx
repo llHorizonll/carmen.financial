@@ -151,7 +151,7 @@ describe('App shell', () => {
     expect(document.documentElement.dataset.shellTemplate).toBe('classic-calm');
     expect(screen.queryByText('Compare')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     expect(screen.queryByText('Compare')).not.toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument(), { timeout: 5000 });
   });
@@ -172,7 +172,7 @@ describe('App shell', () => {
     expect(within(screen.getByRole('region', { name: 'Report title and actions' })).getByRole('button', { name: 'Profit and Loss' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
 
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument(), { timeout: 5000 });
   });
@@ -246,7 +246,7 @@ describe('App shell', () => {
 
   it('keeps setup edits as a draft and restores them on Cancel changes', async () => {
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
 
     const reportName = await screen.findByDisplayValue('Profit and Loss');
     fireEvent.change(reportName, { target: { value: 'Draft report name' } });
@@ -374,7 +374,7 @@ describe('App shell', () => {
   it('does not show report color theme controls in setup', async () => {
     render(<App />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
 
     await screen.findByText('Report Details', {}, { timeout: 5000 });
     expect(screen.queryByText('Report Theme')).not.toBeInTheDocument();
@@ -512,6 +512,42 @@ describe('App shell', () => {
     await waitFor(() => expect(onLogout).toHaveBeenCalledOnce());
   });
 
+  it('compares source BUs without source report copies and recalculates optional Total', async () => {
+    reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
+    reportApiMocks.getStoredCarmenSession.mockReturnValue({ accessToken: 'token', businessUnit: { tenant: 'a' }, user: { id: 'admin', role: 'Admin' } });
+    window.localStorage.setItem('carmen_selected_business_units', JSON.stringify(['a', 'b']));
+    reportApiMocks.fetchCarmenBusinessUnits.mockResolvedValue([
+      { Tenant: 'a', Description: 'Unit A', financialReport: { view: true, setup: true } },
+      { Tenant: 'b', Description: 'Unit B', financialReport: { view: true, setup: false } },
+    ]);
+    const definition = { id: 'comparison', name: 'Comparison P&L', isActive: true, category: ['ALL'], owner: 'admin',
+      columns: [{ id: 'c1', label: 'Actual', type: 'AC', isActive: true }],
+      rows: [{ id: 'r1', desc: 'Revenue', accCodes: '4001', buMappings: [{ tenant: 'b', status: 'confirmed', accCodes: '5001' }] }] };
+    reportApiMocks.fetchCarmenMasterData.mockResolvedValue({ currentUser: { id: 'admin', role: 'Admin' }, companyProfile: {},
+      accCodes: [{ id: '4001', name: 'Revenue', type: 'I' }, { id: '5001', name: 'Revenue', type: 'I' }], depts: [], periods: [], budgetRevisions: [], groups: {} });
+    reportApiMocks.fetchCarmenReports.mockImplementation(async ({ tenant }) => tenant === 'a' ? [definition] : []);
+    reportApiMocks.fetchCarmenReportData.mockImplementation(async ({ sourceTenants, year, period }) => sourceTenants ? {
+      datasets: sourceTenants.map((tenant) => ({ tenant, currency: 'THB', budgetRows: [], masterData: { periods: [] },
+        actualRows: [{ year, acccode: tenant === 'a' ? '4001' : '5001', [`amt${period}`]: tenant === 'a' ? 100 : 200 }] })),
+    } : { actualRows: [{ year, acccode: '4001', [`amt${period}`]: 100 }], budgetRows: [] });
+    render(<App />);
+    await screen.findByText('100.00');
+    fireEvent.click(screen.getByTestId('dropdown-comparison-bu'));
+    fireEvent.click(screen.getByRole('button', { name: 'Select all', exact: true }));
+    fireEvent.click(screen.getByTestId('dropdown-comparison-bu'));
+    await waitFor(() => expect(reportApiMocks.fetchCarmenDimensions).toHaveBeenCalledWith({ tenant: 'b' }));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Apply', exact: true })); });
+    const results = await screen.findByRole('region', { name: 'Comparison results' });
+    expect(within(results).getByText('100.00')).toBeInTheDocument();
+    expect(within(results).getByText('200.00')).toBeInTheDocument();
+    expect(reportApiMocks.fetchCarmenReportData).toHaveBeenCalledWith(expect.objectContaining({ tenant: 'a', sourceTenants: ['a', 'b'] }));
+    const requests = reportApiMocks.fetchCarmenReportData.mock.calls.length;
+    fireEvent.click(screen.getByRole('button', { name: 'Show Total', exact: true }));
+    expect(within(results).getByText('300.00')).toBeInTheDocument();
+    expect(reportApiMocks.fetchCarmenReportData.mock.calls.length).toBe(requests);
+    expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalled();
+  });
+
   it('browses identical report IDs in separate BUs and creates in one explicit destination', async () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.getStoredCarmenSession.mockReturnValue({ accessToken: 'token', businessUnit: { tenant: 'a' }, user: { id: 'admin', role: 'Admin' } });
@@ -646,7 +682,7 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Broken Report').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     await screen.findByText('Rows Configurator');
 
     await waitFor(() => expect(screen.getByText(/Broken row references found/i)).toBeInTheDocument());
@@ -898,7 +934,7 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Daily Invalid').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
 
     await waitFor(() => expect(screen.getByText('Columns Configurator')).toBeInTheDocument());
     expect(screen.queryByText(/unsupported column types/i)).not.toBeInTheDocument();
@@ -1052,7 +1088,7 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Invalid Master Data Mapping').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     await screen.findByText('Rows Configurator');
 
     await waitFor(() => expect(screen.getByText(/Unknown department code\(s\): 999/i)).toBeInTheDocument());
@@ -1264,7 +1300,7 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Edit Modal Report').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument());
     await screen.findByText('Rows Configurator');
 
@@ -1378,7 +1414,7 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Setup Edits').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument());
 
     fireEvent.change(screen.getByDisplayValue('Setup Edits'), { target: { value: 'Setup Edits Updated' } });
@@ -1392,7 +1428,7 @@ describe('App shell', () => {
       name: 'Setup Edits Updated',
     }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     fireEvent.change(await screen.findByDisplayValue('Setup Edits Updated'), { target: { value: 'Setup Edits Again' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(reportApiMocks.saveCarmenReport).toHaveBeenCalledTimes(2));
@@ -1664,7 +1700,7 @@ describe('App shell', () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Options Report').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument());
 
     expect(screen.queryByText('Report Theme')).not.toBeInTheDocument();

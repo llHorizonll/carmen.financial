@@ -7,7 +7,14 @@ export default defineConfig({
   plugins: [tailwindcss(), react()],
   base: '/financial/',
   server: {
+    host: '127.0.0.1',
+    port: 5174,
+    strictPort: true,
     proxy: {
+      '/Carmen.WebApi': {
+        target: 'http://localhost',
+        changeOrigin: true,
+      },
       '/Carmen.Api2': {
         target: 'https://dev.carmen4.com',
         changeOrigin: true,
