@@ -352,7 +352,7 @@ export default function ColumnsConfigurator({
         <div className="relative w-full overflow-hidden">
           <div
             ref={containerRef}
-            className="flex gap-4 overflow-x-auto px-4 scrollbar-thin scrollbar-thumb-muted-foreground/20 pb-6 w-full"
+            className="flex gap-4 overflow-x-auto px-4 pt-1 scrollbar-thin scrollbar-thumb-muted-foreground/20 pb-6 w-full"
           >
             {displayColumns.map((col, visualIndex) => {
               if (col.isDescription) {

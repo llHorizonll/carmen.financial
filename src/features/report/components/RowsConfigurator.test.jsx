@@ -71,7 +71,7 @@ describe('RowsConfigurator', () => {
     fireEvent.change(screen.getByRole('searchbox', { name: /Search rows/i }), { target: { value: 'Total Revenue' } });
     expect(screen.getByText('1 match')).toBeInTheDocument();
     expect(screen.getAllByRole('row')).toHaveLength(3);
-    expect(screen.getAllByRole('row')[2]).toHaveClass('ring-2');
+    expect(screen.getAllByRole('row')[2]).toHaveClass('outline-2', '-outline-offset-2', 'outline-primary/40');
     fireEvent.change(screen.getByRole('searchbox', { name: /Search rows/i }), { target: { value: '' } });
 
     fireEvent.click(screen.getByRole('combobox', { name: '+ Add row' }));
