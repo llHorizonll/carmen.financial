@@ -64,7 +64,7 @@ describe('RowsConfigurator', () => {
     const view = render(configurator);
 
     expect(screen.getByRole('table').className).toMatch(/\[&_td\]:px-2/);
-    expect(screen.getByText('Rows Configurator').closest('[data-slot="card-header"]')).toHaveClass('sticky', 'top-14');
+    expect(screen.getByText('Rows Configurator').closest('[data-slot="card-header"]')).toHaveClass('sticky', 'top-40', 'lg:top-14');
     expect(screen.getByRole('columnheader', { name: 'Type' }).className).toMatch(/w-32/);
     expect(screen.getByRole('columnheader', { name: 'Description' }).className).toMatch(/w-48/);
 

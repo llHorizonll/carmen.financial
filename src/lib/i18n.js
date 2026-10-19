@@ -27,6 +27,18 @@ export const translate = (text, language = getLanguage(), values) => {
 };
 
 const thai = {
+  "Scrollable columns": "เลื่อนดูคอลัมน์",
+  "Filters": "ตัวกรอง",
+  "Filters changed. Select Apply to update the report.": "ตัวกรองมีการเปลี่ยนแปลง กด Apply เพื่ออัปเดตรายงาน",
+  "Setup sections": "ส่วนการตั้งค่า",
+  "Mapping changes preview": "ตรวจสอบผลการเปลี่ยน mapping",
+  "Move accounts to {name}": "ย้ายบัญชีไปยัง {name}",
+  "Remove accounts": "นำบัญชีออก",
+  "Other mappings stay unchanged. Changes remain a draft until saved.": "Mapping อื่นยังคงเดิม การเปลี่ยนแปลงจะเป็นฉบับร่างจนกว่าจะบันทึก",
+  "Review mapping changes": "ตรวจสอบการเปลี่ยน mapping",
+  "Move accounts": "ย้ายบัญชี",
+  "These accounts overlap another row's department and dimensions. Moving them will remove them from the rows below.": "บัญชีเหล่านี้ซ้ำกับ department และ dimension ของแถวอื่น การย้ายจะนำบัญชีออกจากแถวด้านล่าง",
+
   "Change Data row to Formula?": "เปลี่ยนแถว Data เป็น Formula?",
   "Change to Formula": "เปลี่ยนเป็น Formula",
   "Changing “{name}” to Formula will clear these mappings: {mappings}. The row will use a formula instead of mapped data.": "การเปลี่ยน “{name}” เป็น Formula จะล้าง mapping เหล่านี้: {mappings} โดยแถวนี้จะใช้สูตรแทนข้อมูลจาก mapping",

@@ -54,7 +54,7 @@ export default function ReportView({
   const descriptionIsFirst = displayColumns[0]?.isDescription;
 
   return (
-    <Card className="flex h-full min-h-0 flex-col gap-0 border border-border shadow-none ring-0">
+    <Card data-report-surface className="flex h-full min-h-0 flex-col gap-0 border border-border shadow-none ring-0">
       <CardHeader className="relative border-b px-4 pt-4 sm:px-5">
         <CardTitle className="text-center text-2xl font-semibold text-balance text-foreground sm:px-20 lg:text-3xl">
           {displayCompanyLabel}
@@ -84,6 +84,7 @@ export default function ReportView({
                   {displayColumns.map((col) => col.isDescription ? (
                     <TableHead
                       key={col.id}
+                      data-description-cell
                       className={`${descriptionIsFirst ? 'sticky left-0 z-30 shadow-[1px_0_0_0_var(--border)]' : ''} min-w-[240px] border-r text-center text-xs font-semibold sm:min-w-[300px] ${currentTheme.header}`}
                     >{t("Description")}</TableHead>
                   ) : (
@@ -115,6 +116,7 @@ export default function ReportView({
                           return (
                             <TableCell
                               key={col.id}
+                              data-description-cell
                               className={`${descriptionIsFirst ? 'sticky left-0 z-10' : ''} border-r px-3 py-2.5 text-sm leading-6 sm:px-4 ${currentTheme.cellBorder} ${isTotal || isHeader ? '' : 'bg-background font-semibold'}`}
                             >
                               <span className={`block ${indentClass}`}>{row.desc}</span>

@@ -142,6 +142,9 @@ import {
   getAccessibleReports,
 } from "./reportAccess.js";
 
+import ReportFiltersPanel from '../features/report/components/ReportFiltersPanel.jsx';
+import MappingConflictPreview from '../features/report/components/MappingConflictPreview.jsx';
+
 const ReportView = React.lazy(
   () => import("../features/report/components/ReportView.jsx"),
 );
@@ -955,9 +958,9 @@ export default function App({ onLogout = null }) {
     setReportCatalogError(null);
   };
 
-  const requestConfirmation = ({ title, msg, actionLabel, onConfirm }) => {
+  const requestConfirmation = ({ title, msg, details, actionLabel, onConfirm }) => {
     confirmActionRef.current = onConfirm;
-    setConfirmAction({ title, msg, actionLabel });
+    setConfirmAction({ title, msg, details, actionLabel });
   };
 
   const closeConfirmation = () => {
@@ -1786,6 +1789,7 @@ export default function App({ onLogout = null }) {
               {t(confirmAction?.msg || "")}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {confirmAction?.details}
           <AlertDialogFooter>
             <AlertDialogCancel onClick={closeConfirmation}>{t("Cancel")}</AlertDialogCancel>
             <AlertDialogAction
@@ -2203,8 +2207,9 @@ export default function App({ onLogout = null }) {
                 </div>
               )}
             </section>
-            <Card data-tour="report-filters" className="border border-border bg-card/95 shadow-none ring-0 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary">
-              <CardContent className="p-3">
+            <ReportFiltersPanel isMobile={isMobile}
+              summary={`${appliedYear} · P${appliedPeriod}${activeReportUsesDayFilter ? ` · ${t("Day")} ${activeReportDay}` : ''} · ${appliedDepts.length ? `${t("Department")}: ${appliedDepts.join(', ')}` : t("All departments")}`}
+              pending={String(globalYear) !== String(appliedYear) || String(globalPeriod) !== String(appliedPeriod) || String(globalRevision) !== String(appliedRevision) || (activeReportUsesDayFilter && String(globalDay) !== String(activeReportDay)) || [...globalDepts].sort().join(',') !== [...appliedDepts].sort().join(',')}>
                 <div className="flex flex-col gap-2 2xl:flex-row 2xl:items-end 2xl:justify-between">
                   <div
                     className={`grid gap-2 sm:grid-cols-2 sm:items-end md:grid-cols-3 lg:grid-cols-4 2xl:flex-none ${activeReportUsesDayFilter ? "2xl:grid-cols-[180px_110px_180px_120px_88px_88px]" : "2xl:grid-cols-[180px_110px_180px_88px_88px]"}`}
@@ -2348,8 +2353,7 @@ export default function App({ onLogout = null }) {
                     </Button>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+            </ReportFiltersPanel>
           </div>
         )}
 
@@ -2585,10 +2589,6 @@ export default function App({ onLogout = null }) {
                 .map((code) => code.trim())
                 .filter((code) => selectedCodes.has(normalizeAccLookupCode(code))),
             ))];
-            if (conflictingCodes.length && !window.confirm(
-              `Account code ${conflictingCodes.join(", ")} is already used in another row. Replace its current mapping?`,
-            )) return;
-
             const updates = {
               desc: editingRow.desc,
               dept: editingRow.dept,
@@ -2601,23 +2601,38 @@ export default function App({ onLogout = null }) {
                 dimensionDefinitions.map(({ key }) => [key, editingRow[key]]),
               ),
             };
-            updateActiveReport({
-              rows: setupReport.rows.map((row) => row.id === editingRow.id
-                ? { ...row, ...updates }
-                : conflictingRows.some((conflict) => conflict.id === row.id)
-                  ? {
-                      ...row,
-                      accCodes: String(row.accCodes || "")
-                        .split(/[;,\n]/)
-                        .map((code) => code.trim())
-                        .filter((code) => !conflictingCodes.some((conflict) =>
-                          normalizeAccLookupCode(conflict) === normalizeAccLookupCode(code),
-                        ))
-                        .join(", "),
-                    }
-                  : row),
-            });
-            setEditingRow(null);
+            const applyMapping = () => {
+              updateActiveReport({
+                rows: setupReport.rows.map((row) => row.id === editingRow.id
+                  ? { ...row, ...updates }
+                  : conflictingRows.some((conflict) => conflict.id === row.id)
+                    ? {
+                        ...row,
+                        accCodes: String(row.accCodes || "")
+                          .split(/[;,\n]/)
+                          .map((code) => code.trim())
+                          .filter((code) => !conflictingCodes.some((conflict) =>
+                            normalizeAccLookupCode(conflict) === normalizeAccLookupCode(code),
+                          ))
+                          .join(", "),
+                      }
+                    : row),
+              });
+              setEditingRow(null);
+            };
+            if (conflictingCodes.length) {
+              requestConfirmation({
+                title: "Review mapping changes",
+                msg: "These accounts overlap another row's department and dimensions. Moving them will remove them from the rows below.",
+                actionLabel: "Move accounts",
+                details: <MappingConflictPreview targetName={editingRow.desc} rows={conflictingRows.map(row => ({
+                  row,
+                  reference: `R${setupReport.rows.findIndex(item => item.id === row.id) + 1}`,
+                  codes: String(row.accCodes || '').split(/[;,\n]/).map(code => code.trim()).filter(code => selectedCodes.has(normalizeAccLookupCode(code))),
+                }))} />,
+                onConfirm: applyMapping,
+              });
+            } else applyMapping();
           }}
           onClose={() => setEditingRow(null)}
         />

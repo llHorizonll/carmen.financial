@@ -46,6 +46,7 @@ const ReportSetup = forwardRef(function ReportSetup(props, ref) {
         <section aria-label={t("Report navigation and save status")} className="flex flex-wrap items-center gap-3">
           <Button size="sm" type="button" variant="outline" onClick={props.onBack} disabled={props.isSaving}>
             <ArrowLeft />{t("Back")}</Button>
+          <p className="hidden max-w-64 truncate text-sm font-semibold lg:block" title={props.activeReport?.name}>{props.activeReport?.name}</p>
           <p className="flex items-center gap-2 text-sm" aria-live="polite">
             <span className={cn('size-2 rounded-full', props.isDirty ? 'bg-amber-500' : 'bg-emerald-500')} />
             <span className={props.isDirty ? 'font-medium text-foreground' : 'text-muted-foreground'}>
@@ -65,13 +66,17 @@ const ReportSetup = forwardRef(function ReportSetup(props, ref) {
         </nav>
       </section>
 
+      <nav aria-label={t("Setup sections")} className="sticky top-28 z-20 flex gap-2 border-b border-border bg-background px-4 py-2 lg:hidden">
+        {[["details", "Details"], ["columns", "Columns"], ["rows", "Rows"]].map(([id, label]) =>
+          <Button asChild key={id} size="sm" variant="ghost"><a href={`#report-setup-${id}`}>{t(label)}</a></Button>)}
+      </nav>
       <div className="flex flex-col gap-4 px-4 pb-6">
-        <section data-tour="setup-details" className="data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-xl data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary">
+        <section id="report-setup-details" data-tour="setup-details" className="scroll-mt-48 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-xl data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary">
           <ReportDetailsPanel {...props} />
         </section>
         <section data-tour="setup-configurator" className="grid gap-5 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-xl data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary">
-          <section className="w-full min-w-0 overflow-hidden"><ColumnsConfigurator {...props} /></section>
-          <section className="w-full min-w-0"><RowsConfigurator {...props} /></section>
+          <section id="report-setup-columns" className="w-full min-w-0 scroll-mt-48 overflow-hidden"><ColumnsConfigurator {...props} /></section>
+          <section id="report-setup-rows" className="w-full min-w-0 scroll-mt-48"><RowsConfigurator {...props} /></section>
         </section>
       </div>
       <GettingStartedTour

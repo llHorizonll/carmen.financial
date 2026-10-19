@@ -1,5 +1,7 @@
 import { useTranslation } from "@/lib/i18n.js";
 import React from "react";
+import { ScrollArea as ScrollAreaPrimitive } from "radix-ui";
+import { ScrollBar } from "@/components/ui/scroll-area.jsx";
 import { Copy, Eye, EyeOff, GripVertical, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils.js";
 import { Button } from "@/components/ui/button.jsx";
@@ -349,11 +351,9 @@ export default function ColumnsConfigurator({
             {brokenColumnReferences.length}{t("invalid reference(s) may produce incomplete report data.")}</div>
         )}
 
-        <div className="relative w-full overflow-hidden">
-          <div
-            ref={containerRef}
-            className="flex gap-4 overflow-x-auto px-4 pt-1 scrollbar-thin scrollbar-thumb-muted-foreground/20 pb-6 w-full"
-          >
+        <ScrollAreaPrimitive.Root type="always" role="region" aria-label={t("Scrollable columns")} className="relative w-full overflow-hidden">
+          <ScrollAreaPrimitive.Viewport ref={containerRef} data-slot="columns-scroll-viewport" tabIndex={0} className="w-full outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <section className="flex w-max min-w-full gap-4 px-4 pt-1 pb-6">
             {displayColumns.map((col, visualIndex) => {
               if (col.isDescription) {
                 return (
@@ -870,8 +870,10 @@ export default function ColumnsConfigurator({
                 </section>
               );
             })}
-          </div>
-        </div>
+          </section>
+          </ScrollAreaPrimitive.Viewport>
+          <ScrollBar orientation="horizontal" className="rounded-full bg-muted data-horizontal:h-3 [&_[data-slot=scroll-area-thumb]]:bg-muted-foreground/60" />
+        </ScrollAreaPrimitive.Root>
       </CardContent>
     </Card>
   );

@@ -1278,10 +1278,17 @@ describe('App shell', () => {
 
     const accTextarea = screen.getByPlaceholderText('e.g. 4001, 4002');
     fireEvent.change(accTextarea, { target: { value: '4001' } });
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     fireEvent.click(screen.getByRole('button', { name: 'Apply Mapping' }));
-    if (shouldConfirm) expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('4001'));
-    else expect(confirmSpy).not.toHaveBeenCalled();
+    if (shouldConfirm) {
+      const preview = screen.getByRole('alertdialog', { name: 'Review mapping changes' });
+      expect(within(preview).getByText('Remove accounts', { exact: false })).toHaveTextContent('4001');
+      expect(within(preview).getByText('R2 · Duplicate mapping')).toBeInTheDocument();
+      fireEvent.click(within(preview).getByRole('button', { name: 'Cancel', exact: true }));
+      expect(screen.getByRole('dialog', { name: 'Edit Mapping' })).toBeInTheDocument();
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Apply Mapping' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Move accounts', exact: true }));
+    } else expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
 
     expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
@@ -1294,7 +1301,6 @@ describe('App shell', () => {
         expect.objectContaining({ id: 'r3', accCodes: '4001', dim1: 'C' }),
       ],
     })));
-    confirmSpy.mockRestore();
   });
 
   it('saves consecutive setup edits through the API payload', async () => {

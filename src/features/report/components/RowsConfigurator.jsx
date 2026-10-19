@@ -170,7 +170,7 @@ export default function RowsConfigurator({
 
   return (
     <Card className="min-h-0 gap-0 overflow-visible border border-border bg-card/95 pb-0 shadow-none ring-0 pt-0">
-      <CardHeader className="sticky top-14 z-20 border-b bg-card px-4 py-4 shadow-sm sm:px-5">
+      <CardHeader className="sticky top-40 z-20 lg:top-14 border-b bg-card px-4 py-4 shadow-sm sm:px-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-1.5">
             <CardTitle className="flex flex-wrap items-center gap-2 text-base font-semibold tracking-tight text-foreground">
