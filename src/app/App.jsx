@@ -1450,10 +1450,12 @@ export default function App({ onLogout = null }) {
   const handleReportChange = (reportId) => {
     if (isSetupSaving || creatingReportRef.current) return;
     const openReport = () => {
-      latestReportDataRequestRef.current += 1;
-      loadedReportDataRef.current = null;
-      setEngineData([]); setBudgetData([]);
-      setCurrentReportId(reportId);
+      if (reportId !== resolvedCurrentReportId) {
+        latestReportDataRequestRef.current += 1;
+        loadedReportDataRef.current = null;
+        setEngineData([]); setBudgetData([]);
+        setCurrentReportId(reportId);
+      }
       applyTabChange("report");
       setIsSidebarOpen(false);
     };

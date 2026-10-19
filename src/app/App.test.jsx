@@ -528,11 +528,18 @@ describe('App shell', () => {
     render(<App />);
     await screen.findByRole('region', { name: 'Reports in a' });
     await screen.findByText('100.00');
+    const callsBeforeReselect = reportApiMocks.fetchCarmenReportData.mock.calls.length;
+    fireEvent.click(within(screen.getByRole('region', { name: 'Reports in a' })).getByRole('button', { name: 'P&L' }));
+    expect(screen.getByText('100.00')).toBeInTheDocument();
+    expect(reportApiMocks.fetchCarmenReportData).toHaveBeenCalledTimes(callsBeforeReselect);
     fireEvent.click(screen.getByRole('combobox', { name: 'BU' }));
     fireEvent.click(await screen.findByRole('option', { name: 'Unit B', exact: true }));
     const groupB = await screen.findByRole('region', { name: 'Reports in b' });
     expect(await within(groupB).findByRole('button', { name: 'P&L' })).toHaveAttribute('aria-current', 'page');
     await screen.findByText('200.00');
+    fireEvent.click(within(groupB).getByRole('button', { name: 'P&L' }));
+    fireEvent.click(within(groupB).getByRole('button', { name: 'P&L' }));
+    expect(screen.getByText('200.00')).toBeInTheDocument();
     expect(reportApiMocks.fetchCarmenMasterData).toHaveBeenCalledWith(expect.objectContaining({ tenant: 'b' }));
     fireEvent.click(screen.getByRole('button', { name: 'New Report', exact: true }));
     await waitFor(() => expect(reportApiMocks.createCarmenReport).toHaveBeenCalledWith(expect.objectContaining({ id: expect.any(String) }), { tenant: 'b' }));
