@@ -25,7 +25,7 @@ export default function useBusinessUnitReports({ enabled, session, setReports })
       const initial = allowed.find((unit) => unit.id.toLowerCase() === String(defaultTenant).toLowerCase()) || allowed[0];
       const stored = getStoredBusinessUnitSelection();
       const restored = stored?.map((tenant) => allowed.find((unit) => unit.id.toLowerCase() === tenant.toLowerCase())?.id).filter(Boolean);
-      const selection = restored ? [...new Set(restored)] : initial ? [initial.id] : [];
+      const selection = restored?.length ? [restored[0]] : initial ? [initial.id] : [];
       setSelected(selection);
       saveBusinessUnitSelection(selection);
       if (!allowed.length) setError('No business units assigned to this user.');
@@ -57,8 +57,9 @@ export default function useBusinessUnitReports({ enabled, session, setReports })
     return () => { cancelled = true; };
   }, [enabled, selectionKey, setReports]);
   const selectBusinessUnits = (selection) => {
-    saveBusinessUnitSelection(selection);
-    setSelected(selection);
+    const singleSelection = selection.slice(0, 1);
+    saveBusinessUnitSelection(singleSelection);
+    setSelected(singleSelection);
   };
   return { units, selected, setSelected: selectBusinessUnits, loading, error, statuses };
 }

@@ -41,13 +41,8 @@ describe('ReportView', () => {
     const columnLabel = screen.getAllByRole('columnheader')[1].firstElementChild;
     expect(columnLabel).toHaveTextContent('Actual\nThis Month', { normalizeWhitespace: false });
     expect(columnLabel).toHaveClass('whitespace-pre-line');
-    const tableButton = screen.getByRole('button', { name: 'Show table view' });
-    const dashboardButton = screen.getByRole('button', { name: 'Show dashboard view' });
-    expect(tableButton).toHaveAttribute('aria-pressed', 'true');
-    expect(tableButton).toHaveTextContent('');
-    expect(dashboardButton).toHaveTextContent('');
-    fireEvent.click(dashboardButton);
-    expect(onViewModeChange).toHaveBeenCalledWith('dashboard');
+    expect(screen.queryByRole('button', { name: 'Show table view' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show dashboard view' })).not.toBeInTheDocument();
   });
 
   it('keeps the column header outside the zoomed, scrollable report rows', () => {

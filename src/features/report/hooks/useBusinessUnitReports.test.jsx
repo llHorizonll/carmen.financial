@@ -23,15 +23,15 @@ beforeEach(() => {
   fetchCarmenReports.mockImplementation(async () => [{ id: 'same', name: 'Report' }]);
 });
 describe('business unit report catalog', () => {
-  it('restores multiple BUs after reload and uses the default again after login', async () => {
+  it('restores one BU after reload and uses the default again after login', async () => {
     const first = render(<Harness />);
     await screen.findByText('a/same');
-    fireEvent.click(screen.getByText('Both'));
+    fireEvent.click(screen.getByText('B only'));
     await screen.findByText('b/same');
     first.unmount();
     const reloaded = render(<Harness />);
     await screen.findByText('b/same');
-    expect(screen.getByTestId('selection')).toHaveTextContent('a,b');
+    expect(screen.getByTestId('selection')).toHaveTextContent('b');
     reloaded.unmount();
     clearCarmenSession();
     saveCarmenSession(session);
@@ -53,16 +53,16 @@ describe('business unit report catalog', () => {
     render(<Harness />);
     await waitFor(() => expect(fetchCarmenBusinessUnits).toHaveBeenCalled());
     await screen.findByText('Ready BUs');
-    await waitFor(() => expect(window.localStorage.getItem('carmen_selected_business_units')).toBe(stored === '[]' ? '[]' : '["a"]'));
-    expect(screen.getByTestId('selection').textContent).toBe(stored === '[]' ? '' : 'a');
+    await waitFor(() => expect(window.localStorage.getItem('carmen_selected_business_units')).toBe('["a"]'));
+    expect(screen.getByTestId('selection').textContent).toBe('a');
   });
   it('keeps identical report IDs separate and loads only selected tenants', async () => {
     render(<Harness />);
     await screen.findByText('a/same');
     expect(fetchCarmenReports).toHaveBeenCalledWith({ tenant: 'a' });
-    fireEvent.click(screen.getByText('Both'));
+    fireEvent.click(screen.getByText('B only'));
     await screen.findByText('b/same');
-    expect(screen.getByText('a/same')).toBeInTheDocument();
+    expect(screen.queryByText('a/same')).not.toBeInTheDocument();
     expect(reportKey({ tenant: 'a', id: 'same' })).not.toBe(reportKey({ tenant: 'b', id: 'same' }));
   });
   it('discards stale catalog responses after selection changes', async () => {
@@ -82,8 +82,10 @@ describe('business unit report catalog', () => {
     });
     render(<Harness />);
     await screen.findByText('a/one');
-    fireEvent.click(screen.getByText('Both'));
+    fireEvent.click(screen.getByText('B only'));
     await screen.findByText('b: Access denied');
-    expect(screen.getByText('a/one')).toBeInTheDocument();
+    expect(screen.queryByText('a/one')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('Both'));
+    await screen.findByText('a/one');
   });
 });

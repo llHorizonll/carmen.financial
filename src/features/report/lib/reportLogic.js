@@ -515,6 +515,18 @@ const filterEngineRows = (row, masterData) => {
   };
 };
 
+export const rowDepartmentsOverlap = (left, right, masterData) => {
+  const leftDepts = filterEngineRows(left, masterData).deptSet;
+  const rightDepts = filterEngineRows(right, masterData).deptSet;
+  // Do not move account codes out of a group whose members could not be resolved.
+  const leftGroup = String(left.deptGroup || left.DeptGroup || '').trim().toUpperCase();
+  const rightGroup = String(right.deptGroup || right.DeptGroup || '').trim().toUpperCase();
+  if ((!leftDepts.size && leftGroup) || (!rightDepts.size && rightGroup)) {
+    return Boolean(leftGroup && leftGroup === rightGroup);
+  }
+  return !leftDepts.size || !rightDepts.size || [...leftDepts].some((dept) => rightDepts.has(dept));
+};
+
 export const rowDimensionsOverlap = (left, right) => {
   const leftSets = filterEngineRows(left, INITIAL_MASTER_DATA).dimensionSets;
   const rightSets = filterEngineRows(right, INITIAL_MASTER_DATA).dimensionSets;

@@ -14,6 +14,7 @@ import {
   findBrokenReferences,
   findRowMappingConflicts,
   rowDimensionsOverlap,
+  rowDepartmentsOverlap,
   getRowMappingWarnings,
   deleteRowAndRewriteReferences,
   deleteColAndRewriteReferences,
@@ -630,6 +631,17 @@ describe('buildReportData', () => {
     });
 
     expect(dailyResult[0].results.C1).toBe(100);
+  });
+
+  it('checks department overlap including multi-select and department groups', () => {
+    const masterData = { deptGroups: [{ id: 'RESTAURANT', deptIds: ['101', '103'] }] };
+    expect(rowDepartmentsOverlap({ dept: '101' }, { dept: '102' }, masterData)).toBe(false);
+    expect(rowDepartmentsOverlap({ dept: '101, 102' }, { dept: '102' }, masterData)).toBe(true);
+    expect(rowDepartmentsOverlap({ dept: ' 101 ' }, { dept: '101' }, masterData)).toBe(true);
+    expect(rowDepartmentsOverlap({}, { dept: '101' }, masterData)).toBe(true);
+    expect(rowDepartmentsOverlap({ deptGroup: 'restaurant' }, { dept: '102' }, masterData)).toBe(false);
+    expect(rowDepartmentsOverlap({ dept: '103' }, { deptGroup: 'RESTAURANT' }, masterData)).toBe(true);
+    expect(rowDepartmentsOverlap({ deptGroup: 'UNKNOWN' }, { dept: '101' }, masterData)).toBe(false);
   });
 
   it('allows shared accounts only when at least one dimension has disjoint values', () => {

@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/table.jsx';
 import { buildReportDrilldown, getReportDisplayColumns, formatReportCell } from '../lib/reportLogic.js';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet.jsx';
-import ReportViewModeToggle from './ReportViewModeToggle.jsx';
+
 
 export default function ReportView({
   activeReport,
@@ -25,8 +25,6 @@ export default function ReportView({
   currentTheme,
   tableZoom,
   getIndentClass,
-  viewMode = 'table',
-  onViewModeChange,
   engineData,
   budgetData,
   appliedDepts,
@@ -57,12 +55,7 @@ export default function ReportView({
 
   return (
     <Card className="flex h-full min-h-0 flex-col gap-0 border border-border shadow-none ring-0">
-      <CardHeader className="relative border-b px-4 pt-14 sm:px-5 sm:pt-4">
-        <ReportViewModeToggle
-          className="absolute top-3 right-3 sm:top-4 sm:right-4"
-          value={viewMode}
-          onChange={onViewModeChange}
-        />
+      <CardHeader className="relative border-b px-4 pt-4 sm:px-5">
         <CardTitle className="text-center text-2xl font-semibold text-balance text-foreground sm:px-20 lg:text-3xl">
           {displayCompanyLabel}
         </CardTitle>

@@ -131,6 +131,7 @@ import {
   findBrokenReferences,
   findRowMappingConflicts,
   rowDimensionsOverlap,
+  rowDepartmentsOverlap,
   getLatestCreatedReport,
 } from "../features/report/lib/reportLogic.js";
 import { mergeCarmenMasterData } from "../features/report/lib/reportAdapters.js";
@@ -143,9 +144,6 @@ import {
 
 const ReportView = React.lazy(
   () => import("../features/report/components/ReportView.jsx"),
-);
-const ReportDashboard = React.lazy(
-  () => import("../features/report/components/ReportDashboard.jsx"),
 );
 const ReportSetup = React.lazy(
   () => import("../features/report/components/ReportSetup.jsx"),
@@ -435,10 +433,6 @@ export default function App({ onLogout = null }) {
     return INITIAL_MASTER_DATA.users[0];
   });
   const [tableZoom, setTableZoom] = useState(100);
-  const [reportViewMode, setReportViewMode] = usePersistentState(
-    "carmen_report_view_mode_v1",
-    "table",
-  );
   const [isLoading, setIsLoading] = useState(false);
 
   const [globalDepts, setGlobalDepts] = useState([]);
@@ -1825,15 +1819,15 @@ export default function App({ onLogout = null }) {
         className={`flex min-w-0 flex-1 flex-col ${visibleActiveTab === "setup" ? "overflow-visible" : "overflow-hidden"}`}
       >
         <header className="w-full border-b border-border bg-card/95 backdrop-blur print:hidden">
-          <div className="flex flex-col gap-3 px-4 py-2.5 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+          <div className="flex items-center justify-between gap-2 px-2 py-2.5 sm:gap-3 sm:px-4">
+            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
               {isMobile ? (
                 <Button
                   variant="outline"
                   size="icon-sm"
                   onClick={() => setIsSidebarOpen(true)}
                   aria-label={t("Open navigation")}
-                  className="size-8 rounded-lg border-primary/30 text-primary hover:bg-primary/5"
+                  className="size-8 shrink-0 rounded-lg border-primary/30 text-primary hover:bg-primary/5"
                 >
                   <PanelLeftOpen className="size-4" />
                 </Button>
@@ -1842,7 +1836,7 @@ export default function App({ onLogout = null }) {
                   type="button"
                   variant="outline"
                   size="icon-sm"
-                  className="size-8 rounded-lg border-primary/30 text-primary hover:bg-primary/5"
+                  className="size-8 shrink-0 rounded-lg border-primary/30 text-primary hover:bg-primary/5"
                   onClick={() =>
                     setIsSidebarCollapsed((collapsed) => !collapsed)
                   }
@@ -1865,14 +1859,14 @@ export default function App({ onLogout = null }) {
                 <Button
                   type="button"
                   variant="ghost"
-                  className="max-w-64 truncate font-semibold text-foreground"
+                  className="min-w-0 max-w-64 truncate font-semibold text-foreground"
                   onClick={() => handleTabChange("report")}
                 >
                   {activeReport?.name || t("Reports")}
                 </Button>
               )}
 
-              <div className="hidden flex-wrap items-center gap-2 sm:flex">
+              <div className="hidden items-center gap-2 xl:flex">
                 {visibleActiveTab === "setup" && (
                   <Badge variant="secondary">{t("Configuration")}</Badge>
                 )}
@@ -1902,10 +1896,9 @@ export default function App({ onLogout = null }) {
               </div>
             </div>
 
-            <div className="flex w-full flex-wrap items-center justify-end gap-2 xl:w-auto">
-              {visibleActiveTab === "report" &&
-                reportViewMode !== "dashboard" && (
-                  <div className="mr-auto flex items-center gap-1 rounded-lg border border-border bg-card/80 px-2 py-1 shadow-sm xl:mr-0">
+            <div className="flex min-w-0 items-center justify-end gap-1 sm:gap-2">
+              {visibleActiveTab === "report" && (
+                  <div className="flex shrink-0 items-center gap-1 rounded-lg border border-border bg-card/80 px-1 py-1 shadow-sm sm:px-2">
                     <Button
                       type="button"
                       variant="ghost"
@@ -1925,7 +1918,7 @@ export default function App({ onLogout = null }) {
                       max={150}
                       step={10}
                       onValueChange={(value) => setTableZoom(value[0] || 100)}
-                      className="w-20 min-w-20"
+                      className="hidden w-20 min-w-20 md:flex"
                     />
                     <Button
                       type="button"
@@ -1940,7 +1933,7 @@ export default function App({ onLogout = null }) {
                     >
                       <ZoomIn className="size-3.5" />
                     </Button>
-                    <span className="w-10 text-right text-xs font-medium tabular-nums text-foreground/70">
+                    <span className="hidden w-10 text-right text-xs font-medium tabular-nums text-foreground/70 sm:inline">
                       {tableZoom}%
                     </span>
                   </div>
@@ -1967,7 +1960,7 @@ export default function App({ onLogout = null }) {
                     aria-label={t("Account preferences")}
                     className="h-10 gap-2.5 rounded-xl border-border bg-background px-3 hover:bg-muted"
                   >
-                    <div className="hidden flex-col text-right sm:flex">
+                    <div className="hidden flex-col text-right lg:flex">
                       <span className="text-xs font-semibold leading-tight text-foreground max-w-36 truncate">
                         {currentUser?.name || currentUser?.id || t("User")}
                       </span>
@@ -2396,29 +2389,6 @@ export default function App({ onLogout = null }) {
                       </Card>
                     }
                   >
-                    {reportViewMode === "dashboard" ? (
-                      <ReportDashboard
-                        activeReport={activeReport}
-                        displayCompanyLabel={displayCompanyLabel}
-                        displayDateLabel={displayDateLabel}
-                        displayPeriodLabel={displayPeriodLabel}
-                        remark={activeReport.remark}
-                        departmentContext={
-                          appliedDepts.length === 0
-                            ? "All departments"
-                            : appliedDepts.length === 1
-                              ? masterData.depts.find(
-                                  (dept) =>
-                                    String(dept.id) === String(appliedDepts[0]),
-                                )?.name || appliedDepts[0]
-                              : `${appliedDepts.length} departments`
-                        }
-                        reportData={reportData}
-                        activeCols={activeCols}
-                        viewMode="dashboard"
-                        onViewModeChange={setReportViewMode}
-                      />
-                    ) : (
                       <ReportView
                         activeReport={activeReport}
                         engineData={engineData}
@@ -2438,10 +2408,7 @@ export default function App({ onLogout = null }) {
                         currentTheme={currentTheme}
                         tableZoom={tableZoom}
                         getIndentClass={getIndentClass}
-                        viewMode="table"
-                        onViewModeChange={setReportViewMode}
                       />
-                    )}
                   </React.Suspense>
                 )}
 
@@ -2606,6 +2573,7 @@ export default function App({ onLogout = null }) {
               .filter(({ value }) => value);
             const conflictingRows = setupReport.rows.filter((row) =>
               row.id !== editingRow.id &&
+              rowDepartmentsOverlap(editingRow, row, masterData) &&
               rowDimensionsOverlap({ ...editingRow, dimensions: nextDimensions }, row) &&
               String(row.accCodes || "")
                 .split(/[;,\n]/)

@@ -512,7 +512,7 @@ describe('App shell', () => {
     await waitFor(() => expect(onLogout).toHaveBeenCalledOnce());
   });
 
-  it('browses identical report IDs in separate BUs and creates in one explicit destination', async () => {
+  it('switches between single BUs and creates in the selected BU', async () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.getStoredCarmenSession.mockReturnValue({ accessToken: 'token', businessUnit: { tenant: 'a' }, user: { id: 'admin', role: 'Admin' } });
     reportApiMocks.fetchCarmenBusinessUnits.mockResolvedValue([
@@ -528,16 +528,13 @@ describe('App shell', () => {
     render(<App />);
     await screen.findByRole('region', { name: 'Reports in a' });
     await screen.findByText('100.00');
-    fireEvent.click(screen.getByRole('button', { name: /BU.*Unit A/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Unit B', exact: true }));
-    fireEvent.keyDown(screen.getByPlaceholderText('Search business units...'), { key: 'Escape' });
-    fireEvent.click(await screen.findByRole('button', { name: 'Unit B (1)', exact: true }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'BU' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Unit B', exact: true }));
     const groupB = await screen.findByRole('region', { name: 'Reports in b' });
-    fireEvent.click(await within(groupB).findByRole('button', { name: 'P&L' }));
+    expect(await within(groupB).findByRole('button', { name: 'P&L' })).toHaveAttribute('aria-current', 'page');
     await screen.findByText('200.00');
     expect(reportApiMocks.fetchCarmenMasterData).toHaveBeenCalledWith(expect.objectContaining({ tenant: 'b' }));
     fireEvent.click(screen.getByRole('button', { name: 'New Report', exact: true }));
-    fireEvent.click(await screen.findByRole('button', { name: /Unit B.*b/ }));
     await waitFor(() => expect(reportApiMocks.createCarmenReport).toHaveBeenCalledWith(expect.objectContaining({ id: expect.any(String) }), { tenant: 'b' }));
   });
 
@@ -1186,7 +1183,13 @@ describe('App shell', () => {
     { otherDimension: 'B', shouldConfirm: false },
     { otherDimension: 'A, B', shouldConfirm: true },
     { otherDimension: '', shouldConfirm: true },
-  ])('persists shared account mappings with dimension "$otherDimension" without clearing disjoint rows', async ({ otherDimension, shouldConfirm }) => {
+    { dept: '101', otherDept: '102', otherDimension: '', shouldConfirm: false },
+    { dept: '102', otherDept: '101', editingDimension: '', otherDimension: 'BF, LN, DN', shouldConfirm: false },
+    { dept: '102', otherDept: '101', deptGroup: '', otherDeptGroup: 'RESTAURANT', editingDimension: '', otherDimension: 'BF', shouldConfirm: false },
+    { dept: '101', otherDept: '102', otherDimension: 'A', shouldConfirm: false },
+    { dept: '101', otherDept: '101', otherDimension: 'A', shouldConfirm: true },
+    { dept: '101, 102', otherDept: '102', otherDimension: 'A', shouldConfirm: true },
+  ])('persists shared account mappings for dept $dept / $otherDept and dimension "$otherDimension" without clearing disjoint rows', async ({ otherDimension, shouldConfirm, dept = '', otherDept = '', editingDimension = 'A', deptGroup = '', otherDeptGroup = '' }) => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.getStoredCarmenSession.mockReturnValue({
       user: {
@@ -1227,7 +1230,8 @@ describe('App shell', () => {
         },
       ],
       companyProfile: { name: 'Carmen Hotel & Resorts' },
-      depts: [{ id: '101', name: 'Front Office' }],
+      depts: [{ id: '101', name: 'Restaurant' }, { id: '102', name: 'Banquet' }],
+      deptGroups: [{ id: 'RESTAURANT', name: 'Restaurant', deptIds: ['101'] }],
       accCodes: [{ id: '4001', name: 'Rooms', type: 'I' }],
       periods: [],
       budgetRevisions: [],
@@ -1254,9 +1258,9 @@ describe('App shell', () => {
           { id: 'C1', label: 'Actual', isActive: true, isFormula: false, isPercent: false, yearMode: 'current', periodMode: 'current', type: 'AC', width: '' },
         ],
         rows: [
-          { id: 'r1', desc: 'Rooms', isActive: true, isHeader: false, isTotal: false, dept: '', groupLevel: 'L4', groups: '', accCodes: '', dim1: 'A', percentBase: '', formula: '', indent: 0 },
-          { id: 'r2', desc: 'Duplicate mapping', isActive: true, isHeader: false, isTotal: false, dept: '', groupLevel: 'L4', groups: '', accCodes: '4001', dim1: otherDimension, percentBase: '', formula: '', indent: 0 },
-          { id: 'r3', desc: 'Separate dimension', isActive: true, isHeader: false, isTotal: false, dept: '', groupLevel: 'L4', groups: '', accCodes: '4001', dim1: 'C', percentBase: '', formula: '', indent: 0 },
+          { id: 'r1', desc: 'Rooms', isActive: true, isHeader: false, isTotal: false, dept, deptGroup, groupLevel: 'L4', groups: '', accCodes: '', dim1: editingDimension, percentBase: '', formula: '', indent: 0 },
+          { id: 'r2', desc: 'Duplicate mapping', isActive: true, isHeader: false, isTotal: false, dept: otherDeptGroup ? '' : otherDept, deptGroup: otherDeptGroup, groupLevel: 'L4', groups: '', accCodes: '4001', dim1: otherDimension, percentBase: '', formula: '', indent: 0 },
+          { id: 'r3', desc: 'Separate dimension', isActive: true, isHeader: false, isTotal: false, dept: otherDept, groupLevel: 'L4', groups: '', accCodes: '4001', dim1: 'C', percentBase: '', formula: '', indent: 0 },
         ],
       },
     ]);
@@ -1264,7 +1268,7 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Edit Modal Report').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument());
     await screen.findByText('Rows Configurator');
 
@@ -1285,8 +1289,8 @@ describe('App shell', () => {
     await waitFor(() => expect(reportApiMocks.saveCarmenReport).toHaveBeenCalledWith(expect.objectContaining({
       id: 'rep-edit-modal',
       rows: [
-        expect.objectContaining({ id: 'r1', accCodes: '4001', dim1: 'A', dimensions: [{ key: 'dim1', value: 'A' }] }),
-        expect.objectContaining({ id: 'r2', accCodes: shouldConfirm ? '' : '4001', dim1: otherDimension }),
+        expect.objectContaining({ id: 'r1', dept, accCodes: '4001', dim1: editingDimension, dimensions: editingDimension ? [{ key: 'dim1', value: editingDimension }] : [] }),
+        expect.objectContaining({ id: 'r2', dept: otherDeptGroup ? '' : otherDept, accCodes: shouldConfirm ? '' : '4001', dim1: otherDimension }),
         expect.objectContaining({ id: 'r3', accCodes: '4001', dim1: 'C' }),
       ],
     })));
