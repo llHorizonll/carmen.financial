@@ -82,6 +82,19 @@ describe('setup validation', () => {
 
 vi.mock('../features/report/lib/reportApi.js', () => reportApiMocks);
 
+const excelImportMocks = vi.hoisted(() => ({
+  parseExcelWorkbook: vi.fn(),
+  createReportsFromExcelSheets: vi.fn(),
+}));
+
+// Real import behavior by default; tests can queue a parsed workbook with mock*Once.
+vi.mock('../features/report/lib/excelTemplateImport.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  excelImportMocks.parseExcelWorkbook.mockImplementation(actual.parseExcelWorkbook);
+  excelImportMocks.createReportsFromExcelSheets.mockImplementation(actual.createReportsFromExcelSheets);
+  return { ...actual, ...excelImportMocks };
+});
+
 describe('App shell', () => {
   let localStorageStore = {};
   beforeEach(() => {
@@ -315,6 +328,46 @@ describe('App shell', () => {
       await screen.findByDisplayValue('New Custom Report', {}, { timeout: 5000 }),
     ).toBeInTheDocument();
     expect(screen.getByText('Report Details')).toBeInTheDocument();
+  });
+
+  it('creates a new report in the group of the highlighted report', async () => {
+    const [baseReport] = getDefaultReports();
+    const spaReport = { ...structuredClone(baseReport), id: 'rep-spa', name: 'Spa Revenue', reportGroup: 'Operations' };
+    localStorageStore.carmen_bi_reports_config_v5_23 = JSON.stringify([baseReport, spaReport]);
+
+    render(<App />);
+    const nav = await screen.findByRole('navigation', { name: 'Report groups' });
+    fireEvent.click(within(nav).getByRole('button', { name: 'Spa Revenue', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'New Report', exact: true }));
+
+    expect(await screen.findByDisplayValue('New Custom Report', {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.getByLabelText('Report Group')).toHaveValue('Operations');
+  });
+
+  it('imports Excel reports into the group of the highlighted report', async () => {
+    const [baseReport] = getDefaultReports();
+    const spaReport = { ...structuredClone(baseReport), id: 'rep-spa', name: 'Spa Revenue', reportGroup: 'Operations' };
+    localStorageStore.carmen_bi_reports_config_v5_23 = JSON.stringify([baseReport, spaReport]);
+    const importConfig = { dataStartRow: 1, dataEndRow: 10, reportStartColumn: 'A', reportEndColumn: 'C', descriptionColumn: 'A',
+      mappingHeaderRow: 1, deptMappingColumn: 'B', accountMappingColumn: 'C' };
+    excelImportMocks.parseExcelWorkbook.mockResolvedValueOnce({ fileName: 'spa.xlsx', sheets: [{
+      name: 'Spa', rowCount: 10, columnCount: 3, isRecommended: true, detectedRows: [{ id: 'R1' }], detectedColumns: [{ id: 'C1' }],
+      previewRows: ['Revenue'], importConfig, autoImportConfig: importConfig, importIssues: { errors: [], warnings: [] }, mappingPreviewRows: [],
+    }] });
+    excelImportMocks.createReportsFromExcelSheets.mockReturnValueOnce([{ ...structuredClone(baseReport), id: 'rep-imported', name: 'Imported Spa' }]);
+
+    render(<App />);
+    const nav = await screen.findByRole('navigation', { name: 'Report groups' });
+    fireEvent.click(within(nav).getByRole('button', { name: 'Spa Revenue', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Import Excel' }));
+    fireEvent.change(await screen.findByLabelText('Choose an Excel workbook'), {
+      target: { files: [new File(['workbook'], 'spa.xlsx')] },
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Create 1 report' }));
+
+    await screen.findByRole('heading', { name: '1 report created' });
+    const savedReports = JSON.parse(localStorageStore.carmen_bi_reports_config_v5_23);
+    expect(savedReports.find((report) => report.id === 'rep-imported')).toMatchObject({ reportGroup: 'Operations' });
   });
 
   it('creates an API-backed blank report with a client-generated id', async () => {

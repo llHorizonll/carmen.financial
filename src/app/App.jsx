@@ -44,7 +44,7 @@ import {
   CardTitle,
 } from "@/components/ui/card.jsx";
 import { Badge } from "@/components/ui/badge.jsx";
-import ReportGroupNavigation from "@/features/report/components/ReportGroupNavigation.jsx";
+import ReportGroupNavigation, { getReportGroup } from "@/features/report/components/ReportGroupNavigation.jsx";
 import ReportHistory from "@/features/report/components/ReportHistory.jsx";
 import { Input } from "@/components/ui/input.jsx";
 import { Slider } from "@/components/ui/slider";
@@ -1084,6 +1084,7 @@ export default function App({ onLogout = null }) {
       newId,
       currentUser?.id || "",
     );
+    if (activeReport) newReport.reportGroup = getReportGroup(activeReport);
     if (apiConfigured) {
       try {
         const targetContext = targetTenant ? { tenant: targetTenant } : {};
@@ -1111,10 +1112,14 @@ export default function App({ onLogout = null }) {
 
   const handleImportExcelTemplates = async (importedReports) => {
     if (!Array.isArray(importedReports) || importedReports.length === 0) return;
+    const reportGroup = activeReport ? getReportGroup(activeReport) : "";
+    const grouped = reportGroup
+      ? importedReports.map((report) => (report.reportGroup ? report : { ...report, reportGroup }))
+      : importedReports;
     if (apiConfigured) {
-      await saveCarmenReports(importedReports, ...(activeTenant ? [context] : []));
+      await saveCarmenReports(grouped, ...(activeTenant ? [context] : []));
     }
-    const scoped = activeTenant ? importedReports.map((report) => ({ ...report, tenant: activeTenant })) : importedReports;
+    const scoped = activeTenant ? grouped.map((report) => ({ ...report, tenant: activeTenant })) : grouped;
     setReports((currentReports) => [...currentReports, ...scoped]);
     setCurrentReportId(reportKey(scoped[0]));
   };
