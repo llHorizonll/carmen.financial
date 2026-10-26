@@ -1,202 +1,133 @@
+import { useTranslation } from "@/lib/i18n.js";
 import React from 'react';
-import { Copy, Eye, EyeOff, FilePlus, Palette, ScanText, Settings2, ShieldCheck, Trash2, UserCheck } from 'lucide-react';
+import { DEFAULT_REPORT_GROUPS, getReportGroup } from './ReportGroupNavigation.jsx';
+import { Settings2 } from 'lucide-react';
+import { CardDescription } from '@/components/ui/card.jsx';
+import { Input } from '@/components/ui/input.jsx';
+import { Textarea } from '@/components/ui/textarea.jsx';
+import { Label } from '@/components/ui/label.jsx';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select.jsx';
+
+const EMPTY_REPORT_OPTIONS = {};
+const PERIOD_FORMAT_LABELS = {
+  standard: "Standard (Period : 2026-02)",
+  year_month: "Year-Month (2026-02)",
+  numeric: "Numeric Full (02/2026)",
+  numeric_short: "Numeric Short (02/26)",
+  short: "Short Month + YYYY (Feb 2026)",
+  short_yy: "Short Month + YY (Feb '26)",
+  long: "Long Month + YYYY (February 2026)",
+  month_only: "Month Only (February)",
+  day_month_year: "Day Month Year (28 Feb 2026)",
+  end_of_month: "End of Month (February 28, 2026)",
+};
 
 export default function ReportDetailsPanel({
   activeReport,
-  activeCategories,
-  masterData,
-  reportOptions = {},
+  reportOptions = EMPTY_REPORT_OPTIONS,
   updateActiveReport,
-  handleCloneReport,
-  handleCreateBlankReport,
-  handleDeleteReport,
-  handleOCRUpload,
-  setIsAccessModalOpen,
+  onBusyTransition,
 }) {
-  const themeOptions = reportOptions.themes?.length > 0
-    ? reportOptions.themes
-    : [
-        { id: 'blue', label: 'Classic Blue' },
-        { id: 'green', label: 'Emerald Green' },
-        { id: 'gray', label: 'Slate Gray' },
-      ];
-  const periodFormatOptions = reportOptions.periodFormats?.length > 0
+  const t = useTranslation();
+  const periodFormatOptions = (reportOptions.periodFormats?.length > 0
     ? reportOptions.periodFormats
     : [
-        { id: 'standard', label: 'Standard (Period : YYYY-MM)' },
-        { id: 'year_month', label: 'Year-Month (YYYY-MM)' },
-        { id: 'numeric', label: 'Numeric Full (MM/YYYY)' },
-        { id: 'numeric_short', label: 'Numeric Short (MM/YY)' },
-        { id: 'short', label: 'Short Month + YYYY (Feb 2025)' },
-        { id: 'short_yy', label: "Short Month + YY (Feb '25)" },
-        { id: 'long', label: 'Long Month + YYYY (February 2025)' },
+        { id: 'standard', label: 'Standard (Period : 2026-02)' },
+        { id: 'year_month', label: 'Year-Month (2026-02)' },
+        { id: 'numeric', label: 'Numeric Full (02/2026)' },
+        { id: 'numeric_short', label: 'Numeric Short (02/26)' },
+        { id: 'short', label: 'Short Month + YYYY (Feb 2026)' },
+        { id: 'short_yy', label: "Short Month + YY (Feb '26)" },
+        { id: 'long', label: 'Long Month + YYYY (February 2026)' },
         { id: 'month_only', label: 'Month Only (February)' },
-        { id: 'day_month_year', label: 'Day Month Year (28 Feb 2025)' },
-        { id: 'end_of_month', label: 'End of Month (February 28, 2025)' },
-      ];
-  const accountCategoryOptions = reportOptions.accountCategories?.length > 0
-    ? reportOptions.accountCategories
-    : [
-        { id: 'ALL', label: 'All Categories' },
-        { id: 'I', label: 'Income Statement (I)' },
-        { id: 'B', label: 'Balance Sheet (B)' },
-      ];
-  const reportTypeOptions = [
-    { id: 'Monthly', label: 'Monthly' },
-    { id: 'Daily', label: 'Daily' },
-  ];
-  const dateDisplayValue = activeReport.overrideDateDisplay ?? activeReport.customDateLabel ?? '';
-  const periodDisplayValue = activeReport.overridePeriodDisplay ?? activeReport.customPeriodLabel ?? '';
+        { id: 'day_month_year', label: 'Day Month Year (28 Feb 2026)' },
+        { id: 'end_of_month', label: 'End of Month (February 28, 2026)' },
+      ]).map(option => ({
+        ...option,
+        label: PERIOD_FORMAT_LABELS[option.id] || option.label
+      }));
 
   return (
-    <div className="bg-white p-5 rounded-2xl shadow-sm border border-purple-100 flex flex-col xl:flex-row gap-6 flex-shrink-0">
-      <div className="flex-1 space-y-3">
-        <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-          <Settings2 size={14} className="text-purple-500" /> Report Details
-        </h3>
+    <section className="space-y-5">
+      <header className="flex flex-col gap-3 border-b border-border pb-5 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h2 className="flex items-center gap-2 text-xl font-semibold text-balance text-foreground"><Settings2 className="size-5 text-muted-foreground" />{activeReport.name}</h2>
+          <CardDescription className="mt-1 text-sm text-pretty text-muted-foreground"><span className="font-medium text-foreground">{t("Report Details")}</span> {t("and display labels.")}</CardDescription>
+        </div>
+      </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div>
-            <label className="block text-[10px] font-bold text-slate-600 mb-1">Report Name</label>
-            <input value={activeReport.name} onChange={e => updateActiveReport({ name: e.target.value })} className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500" />
+      <div className="space-y-5">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div className="space-y-2">
+            <Label className="text-foreground">{t("Report Name")}</Label>
+            <Input value={activeReport.name} onChange={(e) => updateActiveReport({ name: e.target.value })} />
           </div>
-          <div>
-            <label className="block text-[10px] font-bold text-slate-600 mb-1">Company Name</label>
-            <input value={activeReport.companyName || ''} onChange={e => updateActiveReport({ companyName: e.target.value })} className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500" placeholder="Auto Mode" />
+          <section className="space-y-2">
+            <Label htmlFor="report-group">{t("Report Group")}</Label>
+            <Input id="report-group" value={activeReport.reportGroup || ''} maxLength={100}
+              placeholder={getReportGroup(activeReport)} list="report-group-options"
+              onChange={(e) => updateActiveReport({ reportGroup: e.target.value })} />
+            <datalist id="report-group-options">
+              {DEFAULT_REPORT_GROUPS.map(name => <option key={name} value={name} />)}
+            </datalist>
+            <CardDescription>{t("Enter a new name to create a group. This changes the group for this report only; save to apply.")}</CardDescription>
+          </section>
+          <div className="space-y-2">
+            <Label className="text-foreground">{t("Company Name")}</Label>
+            <Input
+              value={activeReport.companyName || ''}
+              onChange={(e) => updateActiveReport({ companyName: e.target.value })}
+              placeholder={t("Use company default")}
+            />
           </div>
-          <div>
-            <label className="block text-[10px] font-bold text-slate-600 mb-1 flex items-center gap-1"><Palette size={10} /> Report Color Theme</label>
-            <select value={activeReport.theme || 'blue'} onChange={e => updateActiveReport({ theme: e.target.value })} className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500 bg-white">
-              {themeOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
-            </select>
+          <div className="space-y-2">
+            <Label htmlFor="report-type" className="text-foreground">{t("Report Type")}</Label>
+            <Select value={activeReport.reportType || 'Monthly'} onValueChange={(value) => updateActiveReport({ reportType: value })}>
+              <SelectTrigger id="report-type" className="h-9 w-full">
+                <SelectValue placeholder={t("Select report type")} />
+              </SelectTrigger>
+              <SelectContent position="popper">
+                <SelectItem value="Monthly">{t("Monthly")}</SelectItem>
+                <SelectItem value="Daily">{t("Daily")}</SelectItem>
+                <SelectItem value="Mixed">Mixed</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          <div>
-            <label className="block text-[10px] font-bold text-slate-600 mb-1">Auto Period Format</label>
-            <select value={activeReport.periodFormat || 'standard'} onChange={e => updateActiveReport({ periodFormat: e.target.value })} className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500 bg-white">
-              {periodFormatOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold text-slate-600 mb-1">Report Type</label>
-            <select
-              value={activeReport.reportType || 'Monthly'}
-              onChange={e => updateActiveReport({
-                reportType: e.target.value,
-                day: e.target.value === 'Daily' ? (activeReport.day || '') : '',
-              })}
-              className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500 bg-white"
+          <div className="space-y-2">
+            <Label htmlFor="auto-period-format" className="text-foreground">{t("Auto Period Format")}</Label>
+            <Select
+              value={activeReport.periodFormat || 'standard'}
+              onValueChange={(value) => {
+                onBusyTransition?.();
+                updateActiveReport({ periodFormat: value });
+              }}
             >
-              {reportTypeOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold text-slate-600 mb-1">Override Date Display</label>
-            <input
-              value={dateDisplayValue}
-              onChange={e => updateActiveReport({ customDateLabel: e.target.value, overrideDateDisplay: e.target.value })}
-              className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500"
-              placeholder="Auto (Based on format)"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[10px] font-bold text-slate-600 mb-1">Override Period Display</label>
-            <input
-              value={periodDisplayValue}
-              onChange={e => updateActiveReport({ customPeriodLabel: e.target.value, overridePeriodDisplay: e.target.value })}
-              className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500"
-              placeholder="Auto (Based on format)"
-            />
-          </div>
-          {activeReport.reportType === 'Daily' && (
-            <div>
-              <label className="block text-[10px] font-bold text-slate-600 mb-1">Day</label>
-              <input
-                value={activeReport.day || ''}
-                onChange={e => updateActiveReport({ day: e.target.value })}
-                className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500"
-                placeholder="Daily reports only"
-              />
-            </div>
-          )}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-600 mb-1">Owner</label>
-            <input
-              value={activeReport.owner || ''}
-              onChange={e => updateActiveReport({ owner: e.target.value })}
-              className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500"
-              placeholder={masterData?.users?.[0]?.id || 'Creator user id'}
-            />
-          </div>
-          <div className="col-span-1 md:col-span-3 flex flex-col md:flex-row items-start gap-3 mt-1">
-            <div className="w-full md:w-1/3">
-              <label className="block text-[10px] font-bold text-slate-600 mb-1">Account Category (AccType from DB)</label>
-              <select
-                value=""
-                onChange={e => {
-                  const val = e.target.value;
-                  if (!val) return;
-                  let currentCats = [...activeCategories];
-                  if (val === 'ALL') {
-                    updateActiveReport({ category: ['ALL'] });
-                  } else {
-                    currentCats = currentCats.filter(c => c !== 'ALL');
-                    if (!currentCats.includes(val)) currentCats.push(val);
-                    updateActiveReport({ category: currentCats });
-                  }
-                }}
-                className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-purple-500 cursor-pointer text-purple-700 font-bold bg-purple-50"
-              >
-                <option value="" disabled>+ Add Category...</option>
-                {accountCategoryOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
-              </select>
-            </div>
-
-            <div className="flex-1 p-3 bg-slate-50 rounded-xl border border-slate-100 flex flex-wrap items-center gap-2">
-              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mr-2">Categories:</div>
-              {activeCategories.map(cat => (
-                <span key={cat} className="px-2 py-1 rounded-md bg-white border border-slate-200 text-[10px] font-bold text-slate-600">{cat}</span>
-              ))}
-            </div>
+              <SelectTrigger id="auto-period-format" className="h-9 w-full">
+                <SelectValue placeholder={t("Select format")} />
+              </SelectTrigger>
+              <SelectContent position="popper">
+                {periodFormatOptions.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {t(option.label)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2 pt-2">
-          <button onClick={handleCloneReport} className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-[9px] font-bold hover:bg-slate-50 shadow-sm"><Copy size={12} /> Clone</button>
-          <button onClick={handleCreateBlankReport} className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-[9px] font-bold hover:bg-slate-50 shadow-sm"><FilePlus size={12} /> Blank</button>
-          <label className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-[9px] font-bold hover:bg-slate-50 shadow-sm cursor-pointer">
-            <ScanText size={12} /> OCR
-            <input type="file" accept="image/*,.pdf" onChange={handleOCRUpload} className="hidden" />
-          </label>
-          <button onClick={() => setIsAccessModalOpen(true)} className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-[9px] font-bold hover:bg-slate-50 shadow-sm"><UserCheck size={12} /> Access</button>
-          <button onClick={handleDeleteReport} className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-red-200 text-red-500 rounded-lg text-[9px] font-bold hover:bg-red-50 shadow-sm"><Trash2 size={12} /> Delete</button>
+        <div className="space-y-2">
+          <Label htmlFor="report-remark" className="text-foreground">{t("Remark")}</Label>
+          <Textarea id="report-remark" value={activeReport.remark || ''} onChange={(e) => updateActiveReport({ remark: e.target.value })} />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3">
-          <div className="bg-purple-50/40 p-4 rounded-xl border border-purple-100 space-y-2">
-            <div className="flex items-center justify-between">
-              <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest flex items-center gap-2"><ShieldCheck size={12} className="text-purple-500" /> Access Summary</h4>
-              <button onClick={() => setIsAccessModalOpen(true)} className="text-[10px] font-bold text-purple-700 hover:underline">Manage</button>
-            </div>
-            <p className="text-[10px] text-slate-500">Assigned Users</p>
-            <div className="bg-white rounded-lg border border-purple-100 p-3 text-xs font-medium text-slate-600 min-h-[62px] overflow-y-auto custom-scrollbar">
-              {activeReport.assignedUsers.length > 0
-                ? activeReport.assignedUsers.map(uid => masterData?.users?.find(u => u.id === uid)?.name || uid).join(', ')
-                : 'None'}
-            </div>
-          </div>
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-2">
-            <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest flex items-center gap-2"><Eye size={12} className="text-slate-500" /> Status</h4>
-            <button
-              onClick={() => updateActiveReport({ isActive: activeReport.isActive === false ? true : false })}
-              className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[10px] font-bold border transition-colors ${activeReport.isActive !== false ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100' : 'bg-slate-100 border-slate-300 text-slate-500 hover:bg-slate-200'}`}
-            >
-              {activeReport.isActive !== false ? <Eye size={12} /> : <EyeOff size={12} />}
-              {activeReport.isActive !== false ? 'Active' : 'Inactive'}
-            </button>
-          </div>
-        </div>
       </div>
-    </div>
+    </section>
   );
 }

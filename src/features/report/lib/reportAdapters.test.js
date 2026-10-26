@@ -1,16 +1,34 @@
 import { describe, expect, it } from 'vitest';
 import {
   adaptCarmenAccountCodes,
+  adaptCarmenAccountGroups,
   adaptCarmenBudgetRevisions,
   adaptCarmenCompany,
   adaptCarmenDepartments,
+  adaptCarmenDepartmentGroups,
   adaptCarmenGlPeriods,
   adaptCarmenReportDefinition,
   adaptCarmenLoginUser,
   deriveCarmenFinancialReportAccess,
+  mergeCarmenMasterData,
 } from './reportAdapters.js';
+import { buildReportData, INITIAL_MASTER_DATA } from './reportLogic.js';
 
 describe('reportAdapters', () => {
+  it('keeps the report concurrency version from the API', () => {
+    expect(adaptCarmenReportDefinition({
+      Id: 'rep-1',
+      Name: 'Report',
+      Remark: 'Monthly close notes',
+      LastModified: '2026-09-21T10:00:00',
+      Rows: [],
+      Columns: [],
+    })).toEqual(expect.objectContaining({
+      lastModified: '2026-09-21T10:00:00',
+      remark: 'Monthly close notes',
+    }));
+  });
+
   it('normalizes Carmen company, department, and account fields', () => {
     expect(adaptCarmenCompany({ HotelName: 'Carmen Hotel' })).toEqual({ name: 'Carmen Hotel' });
 
@@ -56,6 +74,88 @@ describe('reportAdapters', () => {
       { id: '1', label: 'Revision 1' },
       { id: '2', label: 'Revision 2' },
     ]);
+  });
+
+  it('normalizes account and department groups with their editable members', () => {
+    expect(adaptCarmenAccountGroups({
+      Data: [{
+        AccGroupCode: 'REV',
+        AccGroupName: 'Revenue',
+        Level: 'L3',
+        Account: [
+          { AccCode: '04001', Description: 'Rooms' },
+          { AccCode: '04002', Description: 'Food' },
+        ],
+      }],
+    })).toEqual([expect.objectContaining({
+      id: 'REV',
+      name: 'Revenue',
+      level: 'L3',
+      accountIds: ['4001', '4002'],
+    })]);
+
+    expect(adaptCarmenDepartmentGroups({
+      Data: [{
+        DeptCateCode: 'OPERATIONS',
+        Description: 'Operations',
+        Active: true,
+        Departments: [
+          { DeptCode: '0101', Description: 'Rooms' },
+          { DeptCode: '0201', Description: 'Restaurant' },
+        ],
+      }],
+    })).toEqual([expect.objectContaining({
+      id: 'OPERATIONS',
+      name: 'Operations',
+      deptIds: ['101', '201'],
+    })]);
+  });
+
+  it('treats API master-data arrays as authoritative even when they are empty', () => {
+    const cached = {
+      companyProfile: { name: 'Cached Hotel' },
+      users: [{ id: 'cached-user' }],
+      depts: [{ id: '101' }],
+      accCodes: [{ id: '4001' }],
+      accountGroups: [{ id: 'REVENUE' }],
+      deptGroups: [{ id: 'ROOMS' }],
+      groups: {
+        L1: [{ id: 'L1-CACHED' }],
+        L2: [{ id: 'L2-CACHED' }],
+        L3: [{ id: 'L3-CACHED' }],
+        L4: [{ id: 'L4-CACHED' }],
+      },
+    };
+
+    expect(mergeCarmenMasterData(cached, {
+      companyProfile: { name: 'API Hotel' },
+      users: [],
+      depts: [],
+      accCodes: [],
+      accountGroups: [],
+      deptGroups: [],
+      groups: { L1: [], L2: [], L3: [], L4: [] },
+    })).toEqual({
+      companyProfile: { name: 'API Hotel' },
+      users: [],
+      depts: [],
+      accCodes: [],
+      accountGroups: [],
+      deptGroups: [],
+      groups: { L1: [], L2: [], L3: [], L4: [] },
+    });
+
+    expect(mergeCarmenMasterData(cached, {})).toEqual(cached);
+  });
+
+  it('decodes tenant membership permission codes and respects explicit flags', () => {
+    expect(deriveCarmenFinancialReportAccess([{ Name: 'GL.FinancialReport', Code: 'A0' }]))
+      .toEqual({ view: true, add: false, update: true, delete: false, setup: true });
+    expect(deriveCarmenFinancialReportAccess([{ Name: 'GL.FinancialReport', Code: '80' }]))
+      .toEqual({ view: true, add: false, update: false, delete: false, setup: false });
+    expect(deriveCarmenFinancialReportAccess([{ Name: 'GL.FinancialReport', Code: 'F0', View: false, Add: false, Update: false, Delete: false }]))
+      .toEqual({ view: false, add: false, update: false, delete: false, setup: false });
+    expect(deriveCarmenFinancialReportAccess([{ Name: 'GL.FinancialReport', Code: 'invalid' }]).view).toBe(false);
   });
 
   it('derives setup access from Carmen financial report permissions', () => {
@@ -105,36 +205,51 @@ describe('reportAdapters', () => {
       name: 'P&L',
       companyName: 'Hotel',
       category: ['ALL'],
-      assignedUsers: ['u1'],
+      assignedUsers: ['admin'],
       isActive: true,
       periodFormat: 'standard',
       customDateLabel: 'As of date',
       customPeriodLabel: 'Period label',
       overrideDateDisplay: 'As of date',
       overridePeriodDisplay: 'Period label',
-      owner: 'u1',
+      owner: 'admin',
       reportType: 'Daily',
       day: '28',
       theme: 'green',
-      columns: [{ id: 'C1', label: 'Actual' }],
+      sourceReportId: 42,
+      columns: [
+        { id: 'C1', label: 'Actual', type: 'AC' },
+        { id: 'C2', label: 'Budget', type: 'BUD' },
+        { id: 'C3', label: 'Year Budget', Type: 'BUDACC' },
+        { id: 'C4', label: 'Mix', type: 'MIX', TargetCol: 'c1' },
+        { id: 'C5', label: 'Variance', Type: 'FORMULA', isFormula: true },
+      ],
       rows: [{
         id: 'r1',
         desc: 'Revenue',
         Dimensions: [
           { Key: 'dim1', Value: 'A' },
           { Key: 'dim2', Value: 'X' },
+          { Key: 'dim10', Value: 'Z' },
         ],
       }],
-      access: [{ userId: 'u1', canView: true, canEdit: false }],
+      access: [{ userId: 'admin', canView: true, canEdit: false }],
     })).toEqual(expect.objectContaining({
       id: 'rep-1',
       name: 'P&L',
       companyName: 'Hotel',
-      assignedUsers: ['u1'],
-      owner: 'u1',
+      assignedUsers: ['admin'],
+      owner: 'admin',
       reportType: 'Daily',
       day: '28',
-      columns: [{ id: 'C1', label: 'Actual' }],
+      sourceReportId: 42,
+      columns: [
+        expect.objectContaining({ id: 'C1', type: 'AC' }),
+        expect.objectContaining({ id: 'C2', type: 'BC' }),
+        expect.objectContaining({ id: 'C3', type: 'BCC' }),
+        expect.objectContaining({ id: 'C4', isPercent: true, targetCol: 'C1', type: undefined }),
+        expect.objectContaining({ id: 'C5', isFormula: true, type: undefined }),
+      ],
       rows: expect.arrayContaining([
         expect.objectContaining({
           id: 'r1',
@@ -142,16 +257,19 @@ describe('reportAdapters', () => {
           Dimensions: [
             { Key: 'dim1', Value: 'A' },
             { Key: 'dim2', Value: 'X' },
+            { Key: 'dim10', Value: 'Z' },
           ],
           dimensions: [
-            { key: 'dim1', value: 'A' },
-            { key: 'dim2', value: 'X' },
+          { key: 'dim1', value: 'A' },
+          { key: 'dim2', value: 'X' },
+          { key: 'dim10', value: 'Z' },
           ],
           dim1: 'A',
           dim2: 'X',
+          dim10: 'Z',
         }),
       ]),
-      access: [{ userId: 'u1', canView: true, canEdit: false }],
+      access: [{ userId: 'admin', canView: true, canEdit: false }],
     }));
   });
 
@@ -161,16 +279,17 @@ describe('reportAdapters', () => {
       name: 'API Row Shape',
       companyName: 'Hotel',
       category: ['ALL'],
-      assignedUsers: ['u1'],
+      assignedUsers: ['admin'],
       isActive: true,
       periodFormat: 'standard',
-      owner: 'u1',
+      owner: 'admin',
       reportType: 'Monthly',
       theme: 'blue',
       columns: [],
       rows: [{
         id: 'r1',
         Description: 'Room Revenue',
+        IsActive: false,
         DeptCode: '101',
         AccCode: '4001',
         GroupLevel: 'L2',
@@ -185,6 +304,7 @@ describe('reportAdapters', () => {
       rows: [expect.objectContaining({
         id: 'r1',
         desc: 'Room Revenue',
+        isActive: false,
         dept: '101',
         accCodes: '4001',
         groupLevel: 'L2',
@@ -196,5 +316,32 @@ describe('reportAdapters', () => {
         isTotal: false,
       })],
     }));
+  });
+
+  it('calculates Mix values from API column fields', () => {
+    const activeReport = adaptCarmenReportDefinition({
+      id: 'mix-report',
+      columns: [
+        { id: 'C1', type: 'DAC' },
+        { id: 'C2', Type: 'MIX', TargetCol: 'c1' },
+      ],
+      rows: [
+        { id: 'r1', AccCode: '4002', PercentBase: 'R2' },
+        { id: 'r2', isTotal: true, Formula: 'R1', PercentBase: 'R2' },
+      ],
+    });
+    const result = buildReportData({
+      activeReport,
+      engineData: [{ year: '2026', period: '5', day: '18', acccode: '4002', amount: '500' }],
+      budgetData: [],
+      appliedDepts: [],
+      appliedYear: '2026',
+      appliedPeriod: '5',
+      appliedDay: '18',
+      appliedRevision: '0',
+      masterData: INITIAL_MASTER_DATA,
+    });
+
+    expect(result[0].results.C2).toBe(100);
   });
 });

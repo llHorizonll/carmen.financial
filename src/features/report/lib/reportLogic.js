@@ -4,32 +4,32 @@ export { normalizeLookupCode, normalizeDeptLookupCode, normalizeAccLookupCode } 
 export const THEMES = {
   blue: {
     name: 'Classic Blue',
-    header: 'bg-[#2D4A8C] text-white border-[#1e3263]',
-    subHeader: 'bg-blue-100/40 text-blue-900 font-black',
-    total: 'bg-blue-50 text-slate-900 font-black',
-    rowHover: 'hover:bg-blue-50/50',
-    borderColor: 'border-blue-100',
-    cellBorder: 'border-blue-50',
-    hexHeader: '#2D4A8C', hexSubHeader: '#dbeafe', hexTotal: '#eff6ff', hexCellBorder: '#eff6ff'
+    header: 'bg-primary text-primary-foreground border-primary/25 hover:bg-primary hover:text-primary-foreground',
+    subHeader: 'bg-primary/10 text-foreground font-bold hover:bg-primary/10 hover:text-foreground dark:bg-primary/15 dark:hover:bg-primary/15',
+    total: 'bg-primary/5 text-foreground font-bold hover:bg-primary/5 hover:text-foreground dark:bg-primary/10 dark:hover:bg-primary/10',
+    rowHover: 'hover:bg-primary/5 dark:hover:bg-primary/10',
+    borderColor: 'border-primary/15',
+    cellBorder: 'border-primary/20',
+    hexHeader: '#0974d4', hexSubHeader: '#e8f2fc', hexTotal: '#f3f8fe', hexCellBorder: '#d6eafb'
   },
   green: {
     name: 'Emerald Green',
-    header: 'bg-emerald-700 text-white border-emerald-800',
-    subHeader: 'bg-emerald-100/50 text-emerald-900 font-black',
-    total: 'bg-emerald-50 text-slate-900 font-black',
-    rowHover: 'hover:bg-emerald-50/50',
-    borderColor: 'border-emerald-200',
-    cellBorder: 'border-emerald-50',
+    header: 'bg-emerald-700 text-white border-emerald-200 dark:border-emerald-800 hover:bg-emerald-700 hover:text-white',
+    subHeader: 'bg-emerald-100/60 text-emerald-950 font-bold hover:bg-emerald-100/60 hover:text-emerald-950 dark:bg-emerald-950/60 dark:text-emerald-100 dark:hover:bg-emerald-950/60 dark:hover:text-emerald-100',
+    total: 'bg-emerald-50 text-slate-950 font-bold hover:bg-emerald-50 hover:text-slate-950 dark:bg-emerald-950/40 dark:text-emerald-50 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-50',
+    rowHover: 'hover:bg-emerald-50/60 dark:hover:bg-emerald-950/30',
+    borderColor: 'border-emerald-200 dark:border-emerald-900/60',
+    cellBorder: 'border-emerald-200 dark:border-emerald-800',
     hexHeader: '#047857', hexSubHeader: '#d1fae5', hexTotal: '#ecfdf5', hexCellBorder: '#ecfdf5'
   },
   gray: {
     name: 'Slate Gray',
-    header: 'bg-slate-700 text-white border-slate-800',
-    subHeader: 'bg-slate-200/60 text-slate-900 font-black',
-    total: 'bg-slate-100 text-slate-900 font-black',
-    rowHover: 'hover:bg-slate-100/50',
-    borderColor: 'border-slate-300',
-    cellBorder: 'border-slate-100',
+    header: 'bg-slate-700 text-white border-slate-300 dark:border-slate-700 hover:bg-slate-700 hover:text-white',
+    subHeader: 'bg-slate-200/70 text-slate-950 font-bold hover:bg-slate-200/70 hover:text-slate-950 dark:bg-slate-700/70 dark:text-slate-50 dark:hover:bg-slate-700/70 dark:hover:text-slate-50',
+    total: 'bg-slate-100 text-slate-950 font-bold hover:bg-slate-100 hover:text-slate-950 dark:bg-slate-800 dark:text-slate-50 dark:hover:bg-slate-800 dark:hover:text-slate-50',
+    rowHover: 'hover:bg-slate-100/60 dark:hover:bg-slate-800/70',
+    borderColor: 'border-slate-300 dark:border-slate-700',
+    cellBorder: 'border-slate-300 dark:border-slate-700',
     hexHeader: '#334155', hexSubHeader: '#e2e8f0', hexTotal: '#f1f5f9', hexCellBorder: '#f1f5f9'
   }
 };
@@ -37,28 +37,13 @@ export const THEMES = {
 export const INITIAL_MASTER_DATA = {
   companyProfile: { name: 'Carmen Hotel & Resorts' },
   users: [
-    { id: 'u1', name: 'Admin User', role: 'Admin' },
-    { id: 'u2', name: 'General Manager', role: 'User' },
-    { id: 'u3', name: 'F&B Director', role: 'User' }
+    { id: 'admin', name: 'admin', role: 'Admin' }
   ],
   depts: [],
+  accountGroups: [],
+  deptGroups: [],
   groups: { L1: [], L2: [], L3: [], L4: [] },
   accCodes: []
-};
-
-export const splitCSVRow = (text, delimiter = ',') => {
-  const result = [];
-  let start = 0;
-  let inQuotes = false;
-  for (let i = 0; i < text.length; i++) {
-    if (text[i] === '"') inQuotes = !inQuotes;
-    else if (text[i] === delimiter && !inQuotes) {
-      result.push(text.substring(start, i));
-      start = i + 1;
-    }
-  }
-  result.push(text.substring(start));
-  return result.map(s => s.replace(/^"|"$/g, '').trim());
 };
 
 export const parseAmount = (val) => {
@@ -72,121 +57,13 @@ export const parseAmount = (val) => {
   return isNaN(parsedVal) ? 0 : parsedVal;
 };
 
-export const detectDelimiter = (headerLine) => {
-  if (headerLine.includes(';') && !headerLine.includes(',')) return ';';
-  if (headerLine.includes('\t')) return '\t';
-  return ',';
-};
-
-const normalizeHeaders = (headers) => headers.map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
-
-const buildCsvRowObject = (headers, normHeaders, values) => {
-  const rowObj = {};
-  headers.forEach((header, index) => {
-    const val = values[index] !== undefined ? values[index] : '';
-    rowObj[header] = val;
-    rowObj[normHeaders[index]] = val;
-  });
-  return rowObj;
-};
-
-const normalizeImportedRow = (rowObj) => ({
-  ...rowObj,
-  year: rowObj.year || rowObj.yr || '',
-  revision: rowObj.revision || rowObj.rev || '0',
-  deptcode: rowObj.deptcode || rowObj.dept || rowObj.department || '',
-  acccode: rowObj.acccode || rowObj.account || rowObj.accountcode || '',
-  accname: rowObj.accnamee || rowObj.accnamet || rowObj.accname || rowObj.caption || '',
-  acctype: rowObj.acctype || rowObj.accnature || rowObj.type || '',
-});
-
-const buildImportMasterData = ({ rowObj, newDeptsMap, newAccCodesMap, newGroups = { L1: new Map(), L2: new Map(), L3: new Map(), L4: new Map() }, defaultAccType = 'I' }) => {
-  const rDept = normalizeDeptLookupCode(rowObj.deptcode);
-  const rAcc = normalizeAccLookupCode(rowObj.acccode);
-  const rAccName = rowObj.accname || rAcc;
-  const rAccType = (rowObj.acctype || defaultAccType || 'I').toString().trim().toUpperCase();
-
-  if (rDept) newDeptsMap.set(rDept, { id: rDept, name: `Dept ${rDept}` });
-  if (rAcc) newAccCodesMap.set(rAcc, { id: rAcc, name: rAccName, type: rAccType });
-
-  const g1 = rowObj.group1; if (g1) newGroups.L1.set(g1.toUpperCase(), { id: g1.toUpperCase(), name: g1 });
-  const g2 = rowObj.group2; if (g2) newGroups.L2.set(g2.toUpperCase(), { id: g2.toUpperCase(), name: g2 });
-  const g3 = rowObj.group3; if (g3) newGroups.L3.set(g3.toUpperCase(), { id: g3.toUpperCase(), name: g3 });
-  const g4 = rowObj.group4; if (g4) newGroups.L4.set(g4.toUpperCase(), { id: g4.toUpperCase(), name: g4 });
-};
-
-export const parseGlCsvText = (text) => {
-  const lines = text.split(/\r?\n/);
-  if (lines.length < 2) {
-    return { error: 'INVALID_FILE' };
-  }
-
-  const delimiter = detectDelimiter(lines[0]);
-  const headers = splitCSVRow(lines[0], delimiter).map(h => h.replace(/^\uFEFF/, '').trim());
-  const normHeaders = normalizeHeaders(headers);
-
-  const parsedData = [];
-  const newDeptsMap = new Map();
-  const newAccCodesMap = new Map();
-  const newGroups = { L1: new Map(), L2: new Map(), L3: new Map(), L4: new Map() };
-  let detectedYear = null;
-
-  for (let i = 1; i < lines.length; i++) {
-    if (!lines[i].trim()) continue;
-    const values = splitCSVRow(lines[i], delimiter);
-    const rowObj = normalizeImportedRow(buildCsvRowObject(headers, normHeaders, values));
-
-    if (!detectedYear && rowObj.year && rowObj.year !== '\\N') detectedYear = rowObj.year;
-    buildImportMasterData({ rowObj, newDeptsMap, newAccCodesMap, newGroups });
-
-    parsedData.push(rowObj);
-  }
-
-  return { parsedData, newDeptsMap, newAccCodesMap, newGroups, detectedYear };
-};
-
-export const parseBudgetCsvText = (text) => {
-  const lines = text.split(/\r?\n/);
-  if (lines.length < 2) {
-    return { error: 'INVALID_FILE' };
-  }
-
-  const delimiter = detectDelimiter(lines[0]);
-  const headers = splitCSVRow(lines[0], delimiter).map(h => h.replace(/^\uFEFF/, '').trim());
-  const normHeaders = normalizeHeaders(headers);
-
-  const parsedData = [];
-  const newDeptsMap = new Map();
-  const newAccCodesMap = new Map();
-
-  for (let i = 1; i < lines.length; i++) {
-    if (!lines[i].trim()) continue;
-    const values = splitCSVRow(lines[i], delimiter);
-    const rowObj = normalizeImportedRow(buildCsvRowObject(headers, normHeaders, values));
-
-    buildImportMasterData({
-      rowObj: { ...rowObj, accname: rowObj.caption || rowObj.accname },
-      newDeptsMap,
-      newAccCodesMap,
-      defaultAccType: 'I',
-    });
-
-    parsedData.push(rowObj);
-  }
-
-  return { parsedData, newDeptsMap, newAccCodesMap };
-};
-
-export const mergeAndSort = (oldArr, newMap) => {
-  const combinedMap = new Map();
-  oldArr.forEach(item => combinedMap.set(String(item.id).trim(), item));
-  newMap.forEach((value, key) => combinedMap.set(String(key).trim(), value));
-  return Array.from(combinedMap.values()).sort((a, b) =>
-    String(a.id).localeCompare(String(b.id), undefined, { numeric: true, sensitivity: 'base' })
-  );
-};
-
 export const formatAutoPeriod = (year, period, formatType) => {
+  if (period === 'Q1' || period === 'Q2' || period === 'Q3' || period === 'Q4') {
+    return `${period} ${year}`;
+  }
+  if (period === '-1') {
+    return `Previous Period (${year})`;
+  }
   const pInt = parseInt(period, 10);
   const yInt = parseInt(year, 10);
   if (isNaN(pInt) || isNaN(yInt)) return `Period : ${year}-${String(period).padStart(2, '0')}`;
@@ -241,6 +118,10 @@ export const resolveTime = (col, appliedYear, appliedPeriod, periodOptions = [])
   let p = parseInt(appliedPeriod, 10);
   let months = [];
   const periodSequence = getPeriodSequence(appliedPeriod, periodOptions);
+  const explicitPeriodMatch = String(col.periodMode || '').match(/^P(0?[1-9]|1[0-2])$/i);
+  const explicitPeriod = explicitPeriodMatch
+    ? Number.parseInt(explicitPeriodMatch[1], 10)
+    : Number.parseInt(col.periodMode, 10);
 
   if (periodSequence) {
     const { currentPosition, totalPositions } = periodSequence;
@@ -258,74 +139,174 @@ export const resolveTime = (col, appliedYear, appliedPeriod, periodOptions = [])
     else if (col.periodMode === 'Q3') months = Array.from({ length: Math.min(3, Math.max(0, totalPositions - 6)) }, (_, i) => i + 7);
     else if (col.periodMode === 'Q4') months = Array.from({ length: Math.min(3, Math.max(0, totalPositions - 9)) }, (_, i) => i + 10);
     else if (col.periodMode === 'FY') months = Array.from({ length: totalPositions }, (_, i) => i + 1);
-    else months = [parseInt(col.periodMode) || currentPosition];
+    else months = [explicitPeriod || currentPosition];
 
     if (col.yearMode === '-1') y -= 1;
+    else if (col.yearMode === '+1') y += 1;
+    else if (col.yearMode === 'specific' && /^\d{4}$/.test(String(col.specificYear || ''))) y = Number(col.specificYear);
     return { effYear: y.toString(), targetMonths: months };
   }
 
-  if (col.periodMode === 'current') months = [p];
-  else if (col.periodMode === '-1') { p -= 1; if (p < 1) { p = 12; y -= 1; } months = [p]; }
+  // Fallback non-sequence logic
+  let globalMonths = [p];
+  if (appliedPeriod === 'Q1') globalMonths = [1, 2, 3];
+  else if (appliedPeriod === 'Q2') globalMonths = [4, 5, 6];
+  else if (appliedPeriod === 'Q3') globalMonths = [7, 8, 9];
+  else if (appliedPeriod === 'Q4') globalMonths = [10, 11, 12];
+  else if (appliedPeriod === '-1') {
+    const prevM = new Date().getMonth(); // 0-11 (so 0 is Jan, meaning previous is Dec)
+    globalMonths = [prevM === 0 ? 12 : prevM];
+  }
+
+  if (col.periodMode === 'current') months = globalMonths;
+  else if (col.periodMode === '-1') {
+    let baseM = globalMonths[0];
+    if (isNaN(baseM)) baseM = new Date().getMonth() + 1;
+    let prevM = baseM - 1;
+    if (prevM < 1) { prevM = 12; y -= 1; }
+    months = [prevM];
+  }
   else if (col.periodMode === 'Q1') months = [1, 2, 3];
   else if (col.periodMode === 'Q2') months = [4, 5, 6];
   else if (col.periodMode === 'Q3') months = [7, 8, 9];
   else if (col.periodMode === 'Q4') months = [10, 11, 12];
   else if (col.periodMode === 'FY') months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-  else months = [parseInt(col.periodMode) || p];
+  else months = [explicitPeriod || globalMonths[0]];
 
   if (col.yearMode === '-1') y -= 1;
+  else if (col.yearMode === '+1') y += 1;
+  else if (col.yearMode === 'specific' && /^\d{4}$/.test(String(col.specificYear || ''))) y = Number(col.specificYear);
   return { effYear: y.toString(), targetMonths: months };
 };
 
-const DAILY_COLUMN_TYPES = new Set(['DAC', 'PTD', 'DACBG', 'PTDBG']);
+const BUDGET_COLUMN_TYPES = new Set(['BUD', 'BC', 'BUDACC', 'BCC', 'DACBG', 'PTDBG', 'YTDBG']);
 
 const getColumnValueMode = (colType) => {
   const type = String(colType || '').trim().toUpperCase();
-  if (type === 'ACC' || type === 'PTD' || type === 'BUDACC' || type === 'PTDBG') return 'acc';
-  if (type === 'BUD' || type === 'DACBG') return 'bud';
+  if (['ACC', 'PTD', 'BUDACC', 'BCC', 'PTDBG'].includes(type)) return 'acc';
+  if (['BUD', 'BC', 'DACBG'].includes(type)) return 'bud';
   return 'ac';
 };
 
-const normalizeRowDimensions = (row) => {
-  const dimensions = [];
-  if (Array.isArray(row?.dimensions)) {
-    row.dimensions.forEach((item) => {
-      if (!item) return;
-      const key = String(item.key || item.name || item.field || '').trim();
-      const value = String(item.value || item.id || item.code || '').trim();
-      if (key && value) dimensions.push({ key, value });
-    });
-  }
+let reportCloneCounter = 0;
 
-  ['dim1', 'dim2', 'dim3', 'dim4'].forEach((field) => {
-    if (row?.[field]) {
-      dimensions.push({ key: field, value: String(row[field]).trim() });
+const createReportId = () =>
+  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? `rep-${crypto.randomUUID()}`
+    : `rep-${++reportCloneCounter}`;
+
+const evaluateArithmeticExpression = (expression) => {
+  const sanitized = String(expression || '').replace(/[^-()\d/*+.\s]/g, '').trim();
+  if (!sanitized) return 0;
+
+  let index = 0;
+
+  const skipWhitespace = () => {
+    while (index < sanitized.length && /\s/.test(sanitized[index])) index += 1;
+  };
+
+  const parseNumber = () => {
+    skipWhitespace();
+    const start = index;
+    while (index < sanitized.length && /[\d.]/.test(sanitized[index])) index += 1;
+    const value = Number.parseFloat(sanitized.slice(start, index));
+    if (!Number.isFinite(value)) throw new Error('Invalid number');
+    return value;
+  };
+
+  const parseFactor = () => {
+    skipWhitespace();
+    if (sanitized[index] === '+') {
+      index += 1;
+      return parseFactor();
     }
-  });
+    if (sanitized[index] === '-') {
+      index += 1;
+      return -parseFactor();
+    }
+    if (sanitized[index] === '(') {
+      index += 1;
+      const value = parseExpression();
+      skipWhitespace();
+      if (sanitized[index] !== ')') throw new Error('Missing closing parenthesis');
+      index += 1;
+      return value;
+    }
+    return parseNumber();
+  };
 
-  return dimensions;
+  const parseTerm = () => {
+    let value = parseFactor();
+    while (true) {
+      skipWhitespace();
+      const operator = sanitized[index];
+      if (operator !== '*' && operator !== '/') break;
+      index += 1;
+      const rhs = parseFactor();
+      value = operator === '*' ? value * rhs : value / rhs;
+    }
+    return value;
+  };
+
+  const parseExpression = () => {
+    let value = parseTerm();
+    while (true) {
+      skipWhitespace();
+      const operator = sanitized[index];
+      if (operator !== '+' && operator !== '-') break;
+      index += 1;
+      const rhs = parseTerm();
+      value = operator === '+' ? value + rhs : value - rhs;
+    }
+    return value;
+  };
+
+  const value = parseExpression();
+  skipWhitespace();
+  if (index !== sanitized.length) throw new Error('Unexpected token');
+  return value;
 };
 
-const matchesRowDimensions = (row, sourceRow) => {
-  const rowDimensions = normalizeRowDimensions(row);
-  if (rowDimensions.length === 0) return true;
+const INDENT_CLASSES = ['pl-0', 'pl-4', 'pl-8', 'pl-12', 'pl-16', 'pl-20', 'pl-24', 'pl-28'];
+export const getIndentClass = (level) => INDENT_CLASSES[Math.min(7, Math.max(0, Math.round(Number(level) || 0)))];
 
-  return rowDimensions.every(({ key, value }) => {
-    if (!key || !value) return true;
-    const sourceValue = String(sourceRow?.[key] || sourceRow?.[key.toLowerCase()] || sourceRow?.[key.toUpperCase()] || '').trim();
-    return sourceValue === value;
-  });
-};
+export { createBlankReport } from '../data/reportTemplates.js';
 
-export const getIndentClass = (level) => level === 1 ? 'pl-8' : level === 2 ? 'pl-12' : level === 3 ? 'pl-16' : 'pl-4';
-
-export { createBlankReport, createOcrReport } from '../data/reportTemplates.js';
-
-export const cloneReport = (report, newId = `rep-${Date.now()}`) => {
-  const cloned = JSON.parse(JSON.stringify(report));
+export const cloneReport = (report, newId = createReportId(), owner = report.owner) => {
+  const cloned = structuredClone(report);
   cloned.id = newId;
+  cloned.owner = owner;
   cloned.name = `${report.name} (Copy)`;
   return cloned;
+};
+
+const getReportIdTimestamp = (report) => {
+  const matches = String(report?.id || '').match(/\d{13}/g) || [];
+  return matches.reduce((latest, value) => Math.max(latest, Number(value)), -1);
+};
+
+export const getLatestCreatedReport = (reports) => {
+  if (!Array.isArray(reports) || reports.length === 0) return null;
+
+  const timestampedReports = reports
+    .map((report) => ({ report, timestamp: getReportIdTimestamp(report) }))
+    .filter(({ timestamp }) => timestamp >= 0);
+  if (timestampedReports.length > 0) {
+    return timestampedReports.reduce((latest, candidate) => (
+      candidate.timestamp > latest.timestamp ? candidate : latest
+    )).report;
+  }
+
+  const persistedReports = reports
+    .map((report) => ({ report, sourceReportId: Number(report?.sourceReportId) }))
+    .filter(({ sourceReportId }) => Number.isInteger(sourceReportId));
+  if (persistedReports.length > 0) {
+    return persistedReports.reduce((latest, candidate) => (
+      candidate.sourceReportId > latest.sourceReportId ? candidate : latest
+    )).report;
+  }
+
+  return reports.find((report) => report?.id === 'rep-carmen-pnl') || reports[0] || null;
 };
 
 export const findBrokenReferences = (report) => {
@@ -383,83 +364,74 @@ export const findBrokenReferences = (report) => {
   return issues;
 };
 
-const buildRowMappingSignature = (row) => {
-  if (!row) return '';
-
-  const parts = [];
-  const depts = row.dept ? String(row.dept).split(',').map(normalizeDeptLookupCode).filter(Boolean).sort() : [];
-  const accs = row.accCodes ? String(row.accCodes).split(',').map(normalizeAccLookupCode).filter(Boolean).sort() : [];
-  const grps = row.groups ? String(row.groups).split(',').map((value) => String(value).trim().toUpperCase()).filter(Boolean).sort() : [];
-  const dimensions = normalizeRowDimensions(row)
-    .map(({ key, value }) => `${String(key).trim().toLowerCase()}:${String(value).trim().toUpperCase()}`)
-    .filter(Boolean)
-    .sort();
-
-  if (depts.length > 0) parts.push(`dept=${depts.join('|')}`);
-  if (accs.length > 0) parts.push(`acc=${accs.join('|')}`);
-  if (grps.length > 0) parts.push(`grp=${grps.join('|')}`);
-  if (dimensions.length > 0) parts.push(`dim=${dimensions.join('|')}`);
-
-  const groupLevel = String(row.groupLevel || '').trim().toUpperCase();
-  if (groupLevel) parts.push(`lvl=${groupLevel}`);
-
-  return parts.join('::');
-};
-
 const getMasterListIds = (items) =>
   Array.isArray(items)
     ? items.map((item) => String(item?.id || item?.code || item?.DeptCode || item?.AccCode || '').trim()).filter(Boolean)
     : [];
 
-export const getRowMappingWarnings = (row, allRows = [], masterData = null) => {
+export const createRowMappingWarningContext = (_allRows = [], masterData = null) => ({
+    masterDeptIds: new Set(getMasterListIds(masterData?.depts)),
+    masterAccIds: new Set(getMasterListIds(masterData?.accCodes)),
+    masterDeptGroupIds: new Set(
+      (Array.isArray(masterData?.deptGroups) ? masterData.deptGroups : [])
+        .map((group) => String(group?.id || '').trim().toUpperCase())
+        .filter(Boolean),
+    ),
+    masterAccGroupIds: new Set(
+      (Array.isArray(masterData?.accountGroups) ? masterData.accountGroups : [])
+        .map((group) => String(group?.id || '').trim().toUpperCase())
+        .filter(Boolean),
+    ),
+  });
+
+export const getRowMappingWarnings = (row, allRows = [], masterData = null, warningContext = null) => {
   const warnings = [];
   if (!row) return warnings;
 
+  const context = warningContext || createRowMappingWarningContext(allRows, masterData);
+
   const hasDept = Boolean(String(row.dept || '').trim());
+  const deptGroup = String(row.deptGroup || row.DeptGroup || '').trim().toUpperCase();
+  const hasDeptGroup = Boolean(deptGroup);
   const hasAccCodes = Boolean(String(row.accCodes || '').trim());
-  const hasGroups = Boolean(String(row.groups || '').trim());
-  const groupLevel = String(row.groupLevel || 'L4').trim().toUpperCase();
+  const accountGroup = String(row.groups || '').trim().toUpperCase();
+  const hasAccountGroup = Boolean(accountGroup);
 
-  if (hasDept && hasAccCodes) warnings.push('Dept and account code are both set.');
-  if (hasDept && hasGroups) warnings.push('Dept and group mapping are both set.');
-  if (hasAccCodes && hasGroups) warnings.push('Account code and group mapping are both set.');
-  if (groupLevel !== 'L4' && hasAccCodes) warnings.push('Grouped rows should not mix with explicit account codes.');
-
-  const signature = buildRowMappingSignature(row);
-  if (signature && Array.isArray(allRows)) {
-    const duplicate = allRows.find((other) =>
-      other
-      && other.id !== row.id
-      && !other.isHeader
-      && !other.isTotal
-      && buildRowMappingSignature(other) === signature
-    );
-    if (duplicate) {
-      warnings.push('This mapping duplicates another data row and may double count.');
-    }
+  if (hasDeptGroup && hasDept) {
+    warnings.push('department group and department codes cannot be mapped together.');
   }
 
-  const masterDeptIds = getMasterListIds(masterData?.depts);
-  if (masterDeptIds.length > 0 && hasDept) {
+  if (hasAccountGroup && hasAccCodes) {
+    warnings.push('account group and account codes cannot be mapped together.');
+  }
+
+  if (context.masterDeptIds.size > 0 && hasDept) {
     const invalidDepts = String(row.dept || '')
       .split(',')
       .map(normalizeDeptLookupCode)
       .filter(Boolean)
-      .filter((dept) => !masterDeptIds.includes(dept));
+      .filter((dept) => !context.masterDeptIds.has(dept));
     if (invalidDepts.length > 0) {
-      warnings.push(`Unknown department code(s): ${invalidDepts.join(', ')}.`);
+      warnings.push(`unknown department code(s): ${invalidDepts.join(', ')}.`);
     }
   }
 
-  const masterAccIds = getMasterListIds(masterData?.accCodes);
-  if (masterAccIds.length > 0 && hasAccCodes) {
+  if (hasDeptGroup && context.masterDeptGroupIds.size > 0 && !context.masterDeptGroupIds.has(deptGroup)) {
+    warnings.push('unknown department group: ' + deptGroup + '.');
+  }
+
+  if (hasAccountGroup && context.masterAccGroupIds.size > 0 && !context.masterAccGroupIds.has(accountGroup)) {
+    warnings.push('unknown account group: ' + accountGroup + '.');
+  }
+
+  if (context.masterAccIds.size > 0 && hasAccCodes) {
     const invalidAccs = String(row.accCodes || '')
       .split(',')
       .map(normalizeAccLookupCode)
       .filter(Boolean)
-      .filter((acc) => !masterAccIds.includes(acc));
+      .filter((acc) => !context.masterAccIds.has(acc));
     if (invalidAccs.length > 0) {
-      warnings.push(`Unknown account code(s): ${invalidAccs.join(', ')}.`);
+      warnings.push(`unknown account code(s): ${invalidAccs.join(', ')}.`);
     }
   }
 
@@ -480,10 +452,34 @@ export const findRowMappingConflicts = (report, masterData = null) => {
   return issues;
 };
 
-const filterEngineRows = (row) => {
-  const depts = row.dept ? String(row.dept).split(',').map(normalizeDeptLookupCode).filter(Boolean) : [];
-  const accs = row.accCodes ? String(row.accCodes).split(',').map(normalizeAccLookupCode).filter(Boolean) : [];
-  const grps = row.groups ? String(row.groups).split(',').map(s => s.trim().toUpperCase()).filter(Boolean) : [];
+const normalizeDimensionMatchValue = (value) => {
+  const trimmed = String(value || '').trim();
+  const unwrapped = trimmed.length >= 2 && trimmed.startsWith('[') && trimmed.endsWith(']')
+    ? trimmed.slice(1, -1).trim()
+    : trimmed;
+  return unwrapped.toUpperCase();
+};
+
+const filterEngineRows = (row, masterData) => {
+  const deptGroupId = String(row.deptGroup || row.DeptGroup || '').trim().toUpperCase();
+  const deptGroup = (masterData?.deptGroups || []).find((group) => String(group?.id || '').trim().toUpperCase() === deptGroupId);
+  const explicitDepts = row.dept ? String(row.dept).split(',').map(normalizeDeptLookupCode).filter(Boolean) : [];
+  const depts = explicitDepts.length > 0
+    ? explicitDepts
+    : deptGroupId
+      ? (deptGroup?.deptIds || []).map(normalizeDeptLookupCode).filter(Boolean)
+      : [];
+  const accountGroupId = String(row.groups || '').trim().toUpperCase();
+  const accountGroup = (masterData?.accountGroups || []).find((group) => String(group?.id || '').trim().toUpperCase() === accountGroupId);
+  const explicitAccs = row.accCodes ? String(row.accCodes).split(',').map(normalizeAccLookupCode).filter(Boolean) : [];
+  const accs = explicitAccs.length > 0
+    ? explicitAccs
+    : accountGroup
+      ? (accountGroup.accountIds || []).map(normalizeAccLookupCode).filter(Boolean)
+      : [];
+  const grps = accs.length === 0 && accountGroupId
+    ? String(row.groups).split(',').map(s => s.trim().toUpperCase()).filter(Boolean)
+    : [];
   const dimensions = Array.isArray(row.dimensions)
     ? row.dimensions
         .map((item) => ({
@@ -491,23 +487,58 @@ const filterEngineRows = (row) => {
           value: String(item?.value || item?.id || item?.code || '').trim(),
         }))
         .filter((item) => item.key && item.value)
-    : ['dim1', 'dim2', 'dim3', 'dim4']
+    : Array.from({ length: 10 }, (_, index) => `dim${index + 1}`)
         .map((field) => (row[field] ? { key: field, value: String(row[field]).trim() } : null))
         .filter(Boolean);
   const groupLevelKey = (row.groupLevel === 'L1' ? 'group1' : row.groupLevel === 'L2' ? 'group2' : row.groupLevel === 'L3' ? 'group3' : 'group4');
-  return { depts, accs, grps, dimensions, groupLevelKey, hasDeptMap: depts.length > 0, hasAccMap: accs.length > 0, hasGrpMap: grps.length > 0 };
+  const dimensionSets = new Map();
+  dimensions.forEach(({ key, value }) => {
+    const normalizedKey = String(key || '').trim().toLowerCase();
+    if (!normalizedKey) return;
+    if (!dimensionSets.has(normalizedKey)) dimensionSets.set(normalizedKey, new Set());
+    String(value || '').split(',').map(normalizeDimensionMatchValue).filter(Boolean)
+      .forEach((item) => dimensionSets.get(normalizedKey).add(item));
+  });
+  return {
+    depts,
+    accs,
+    grps,
+    deptSet: new Set(depts),
+    accSet: new Set(accs),
+    grpSet: new Set(grps),
+    dimensions,
+    dimensionSets,
+    groupLevelKey,
+    hasDeptMap: depts.length > 0,
+    hasAccMap: accs.length > 0,
+    hasGrpMap: grps.length > 0,
+  };
 };
 
-const resolveAccType = (d, masterData, dAccCode) => {
-  let dAccType = (d.acctype || d.accnature || d.type || '').toString().trim().toUpperCase();
-  if (!dAccType && masterData?.accCodes) {
-    const mAcc = masterData.accCodes.find(a => normalizeAccLookupCode(a.id) === dAccCode);
-    if (mAcc) dAccType = (mAcc.type || '').toString().trim().toUpperCase();
+export const rowDepartmentsOverlap = (left, right, masterData) => {
+  const leftDepts = filterEngineRows(left, masterData).deptSet;
+  const rightDepts = filterEngineRows(right, masterData).deptSet;
+  // Do not move account codes out of a group whose members could not be resolved.
+  const leftGroup = String(left.deptGroup || left.DeptGroup || '').trim().toUpperCase();
+  const rightGroup = String(right.deptGroup || right.DeptGroup || '').trim().toUpperCase();
+  if ((!leftDepts.size && leftGroup) || (!rightDepts.size && rightGroup)) {
+    return Boolean(leftGroup && leftGroup === rightGroup);
   }
-  return dAccType;
+  return !leftDepts.size || !rightDepts.size || [...leftDepts].some((dept) => rightDepts.has(dept));
 };
 
-const matchesReportCategory = ({ reportCategories, dAccType, hasAccMap, dAccCode, accs }) => {
+export const rowDimensionsOverlap = (left, right) => {
+  const leftSets = filterEngineRows(left, INITIAL_MASTER_DATA).dimensionSets;
+  const rightSets = filterEngineRows(right, INITIAL_MASTER_DATA).dimensionSets;
+  for (const [key, values] of leftSets) {
+    const otherValues = rightSets.get(key);
+    // An unspecified dimension includes all values; one disjoint field separates the rows.
+    if (otherValues?.size && values.size && ![...values].some(value => otherValues.has(value))) return false;
+  }
+  return true;
+};
+
+const matchesReportCategory = ({ reportCategories, dAccType, hasAccMap, dAccCode, accSet }) => {
   if (reportCategories.includes('ALL')) return true;
   const isIncome = ['I', 'E', 'R', 'INC', 'EXP', 'REV', 'COS', 'PL'].some(t => dAccType === t || dAccType.startsWith(t));
   const isBalance = ['B', 'A', 'L', 'AST', 'LIA', 'EQU', 'CAP', 'BS'].some(t => dAccType === t || dAccType.startsWith(t));
@@ -515,43 +546,107 @@ const matchesReportCategory = ({ reportCategories, dAccType, hasAccMap, dAccCode
   if (reportCategories.includes('I') && isIncome) return true;
   if (reportCategories.includes('B') && isBalance) return true;
   if (reportCategories.some(cat => dAccType === cat || dAccType.startsWith(cat))) return true;
-  return !hasAccMap || accs.includes(dAccCode);
+  return !hasAccMap || accSet.has(dAccCode);
 };
 
-const sumActuals = ({ col, rowConfig, engineData, appliedDepts, appliedYear, appliedPeriod, appliedDay, periodOptions, reportCategories, masterData }) => {
+const prepareSourceRows = (sourceRows, masterData) => {
+  const masterAccTypes = new Map();
+  (masterData?.accCodes || []).forEach((account) => {
+    const code = normalizeAccLookupCode(account?.id);
+    if (!masterAccTypes.has(code)) {
+      masterAccTypes.set(code, String(account?.type || '').trim().toUpperCase());
+    }
+  });
+
+  return (sourceRows || []).map((source) => {
+    const accCode = normalizeAccLookupCode(source.acccode || source.account || source.accountcode || '');
+    const directAccType = String(source.acctype || source.accnature || source.type || '').trim().toUpperCase();
+    return {
+      source,
+      year: String(source.year || source.yr || '').trim(),
+      period: Number.parseInt(source.period || source.month || source.period_no, 10),
+      day: Number.parseInt(source.day || source.Day || source.docDay || source.transactionDay || source.date_day || source.day_no, 10),
+      revision: String(source.revision || source.rev || '0').trim(),
+      deptCode: normalizeDeptLookupCode(source.deptcode || source.dept || source.department || ''),
+      accCode,
+      accType: directAccType || masterAccTypes.get(accCode) || '',
+    };
+  });
+};
+
+const matchesPreparedDimensions = (dimensionSets, source) => {
+  if (dimensionSets.size === 0) return true;
+  for (const [key, values] of dimensionSets) {
+    const sourceValue = normalizeDimensionMatchValue(source?.[key] || source?.[key.toLowerCase()] || source?.[key.toUpperCase()] || '');
+    if (!values.has(sourceValue)) return false;
+  }
+  return true;
+};
+
+const filterPreparedRows = ({ preparedRows, rowConfig, appliedDeptSet, reportCategories }) =>
+  preparedRows.filter((prepared) => {
+    if (appliedDeptSet.size > 0 && !appliedDeptSet.has(prepared.deptCode)) return false;
+    if (rowConfig.hasDeptMap && !rowConfig.deptSet.has(prepared.deptCode)) return false;
+    if (rowConfig.hasAccMap && !rowConfig.accSet.has(prepared.accCode)) return false;
+    const sourceGroup = String(prepared.source[rowConfig.groupLevelKey] || prepared.source.group || '').trim().toUpperCase();
+    if (rowConfig.hasGrpMap && !rowConfig.grpSet.has(sourceGroup)) return false;
+    if (!matchesPreparedDimensions(rowConfig.dimensionSets, prepared.source)) return false;
+    return matchesReportCategory({
+      reportCategories,
+      dAccType: prepared.accType,
+      hasAccMap: rowConfig.hasAccMap,
+      dAccCode: prepared.accCode,
+      accSet: rowConfig.accSet,
+    });
+  });
+
+const resolveDailySelection = (col, effYear, targetMonths, appliedDay) => {
+  const selectedDay = Number.parseInt(appliedDay, 10);
+  if (col.dayMode !== '-1' || !Number.isInteger(selectedDay)) {
+    return { year: effYear, months: targetMonths, day: selectedDay };
+  }
+  const month = targetMonths[0];
+  if (!Number.isInteger(month) || targetMonths.length !== 1) {
+    return { year: effYear, months: targetMonths, day: selectedDay - 1 };
+  }
+  const previousDate = new Date(Number(effYear), month - 1, selectedDay - 1);
+  return { year: String(previousDate.getFullYear()), months: [previousDate.getMonth() + 1], day: previousDate.getDate() };
+};
+
+const sumActuals = ({ col, matchedRows, appliedYear, appliedPeriod, appliedDay, periodOptions }) => {
   const { effYear, targetMonths } = resolveTime(col, appliedYear, appliedPeriod, periodOptions);
-  const normalizedAppliedDepts = appliedDepts.map(normalizeDeptLookupCode).filter(Boolean);
-  const monthsToEvaluate = col.type === 'BUDACC' && col.periodMode === 'FY' ? [targetMonths[0]] : targetMonths;
-  const needsDayFilter = DAILY_COLUMN_TYPES.has(String(col.type || '').toUpperCase()) && String(appliedDay || '').trim();
+  const type = String(col.type || '').trim().toUpperCase();
+  if (type === 'YTD') {
+    const valueFor = (sourceType) => sumActuals({
+      col: { ...col, type: sourceType }, matchedRows, appliedYear, appliedPeriod, appliedDay, periodOptions,
+    });
+    return valueFor('ACC') - valueFor('AC') + valueFor('PTD');
+  }
+  const monthsToEvaluate = ['BUDACC', 'BCC'].includes(type) && col.periodMode === 'FY' ? [targetMonths[0]] : targetMonths;
+  const dailySelection = resolveDailySelection(col, effYear, monthsToEvaluate, appliedDay);
+  const targetDay = dailySelection.day;
+  const valueMode = getColumnValueMode(col.type);
   let sum = 0;
 
-  monthsToEvaluate.forEach(m => {
-    engineData.forEach(d => {
-      const dYear = (d.year || d.yr || '').toString().trim();
-      if (dYear && dYear !== effYear) return;
-      if (needsDayFilter) {
-        const dDay = (d.day || d.Day || d.docDay || d.transactionDay || '').toString().trim();
-        if (dDay && dDay !== String(appliedDay).trim()) return;
+  (type === 'DAC' || type === 'PTD' ? dailySelection.months : monthsToEvaluate).forEach(m => {
+    matchedRows.forEach((prepared) => {
+      const d = prepared.source;
+      if (prepared.year && prepared.year !== (type === 'DAC' || type === 'PTD' ? dailySelection.year : effYear)) return;
+      if (type === 'DAC' || type === 'PTD') {
+        if (!Number.isInteger(prepared.day)) return;
+        if (Number.isInteger(prepared.period) && prepared.period !== m) return;
+        if (Number.isInteger(targetDay)) {
+          if (type === 'DAC' && prepared.day !== targetDay) return;
+          if (type === 'PTD' && (prepared.day < 1 || prepared.day > targetDay)) return;
+        }
       }
-
-      const dDeptCode = normalizeDeptLookupCode(d.deptcode || d.dept || d.department || '');
-      const dAccCode = normalizeAccLookupCode(d.acccode || d.account || d.accountcode || '');
-      const dGroup = (d[rowConfig.groupLevelKey] || d.group || '').toString().trim().toUpperCase();
-
-      if (normalizedAppliedDepts.length > 0 && !normalizedAppliedDepts.includes(dDeptCode)) return;
-      if (rowConfig.hasDeptMap && !rowConfig.depts.includes(dDeptCode)) return;
-      if (rowConfig.hasAccMap && !rowConfig.accs.includes(dAccCode)) return;
-      if (rowConfig.hasGrpMap && !rowConfig.grps.includes(dGroup)) return;
-      if (!matchesRowDimensions(rowConfig, d)) return;
-
-      const dAccType = resolveAccType(d, masterData, dAccCode);
-      if (!matchesReportCategory({ reportCategories, dAccType, hasAccMap: rowConfig.hasAccMap, dAccCode, accs: rowConfig.accs })) return;
 
       const amtM = d['amt' + m] !== undefined && d['amt' + m] !== '' ? d['amt' + m] : (d['amt0' + m] !== undefined && d['amt0' + m] !== '' ? d['amt0' + m] : 0);
       const bfAmtM = d['bfamt' + m] !== undefined && d['bfamt' + m] !== '' ? d['bfamt' + m] : (d['bfamt0' + m] !== undefined && d['bfamt0' + m] !== '' ? d['bfamt0' + m] : 0);
 
-      const valueMode = getColumnValueMode(col.type);
-      if (valueMode === 'ac') sum += parseAmount(amtM);
+      if (type === 'DAC' || type === 'PTD') {
+        sum += parseAmount(d.amount ?? d.amt ?? d.val ?? amtM);
+      } else if (valueMode === 'ac') sum += parseAmount(amtM);
       else if (valueMode === 'acc') sum += parseAmount(bfAmtM) + parseAmount(amtM);
     });
   });
@@ -559,40 +654,46 @@ const sumActuals = ({ col, rowConfig, engineData, appliedDepts, appliedYear, app
   return sum;
 };
 
-const sumBudget = ({ col, rowConfig, budgetData, appliedDepts, appliedYear, appliedPeriod, appliedDay, appliedRevision, periodOptions, reportCategories, masterData }) => {
+const sumBudget = ({ col, matchedRows, appliedYear, appliedPeriod, appliedDay, appliedRevision, periodOptions }) => {
   const { effYear, targetMonths } = resolveTime(col, appliedYear, appliedPeriod, periodOptions);
-  const normalizedAppliedDepts = appliedDepts.map(normalizeDeptLookupCode).filter(Boolean);
-  const monthsToEvaluate = col.type === 'BUDACC' && col.periodMode === 'FY' ? [targetMonths[0]] : targetMonths;
-  const needsDayFilter = DAILY_COLUMN_TYPES.has(String(col.type || '').toUpperCase()) && String(appliedDay || '').trim();
+  const type = String(col.type || '').trim().toUpperCase();
+  if (type === 'YTDBG') {
+    const valueFor = (sourceType) => sumBudget({
+      col: { ...col, type: sourceType }, matchedRows, appliedYear, appliedPeriod,
+      appliedDay, appliedRevision, periodOptions,
+    });
+    return valueFor('BCC') - valueFor('BC') + valueFor('PTDBG');
+  }
+  const monthsToEvaluate = ['BUDACC', 'BCC'].includes(type) && col.periodMode === 'FY' ? [targetMonths[0]] : targetMonths;
+  const dailySelection = resolveDailySelection(col, effYear, monthsToEvaluate, appliedDay);
+  const targetDay = dailySelection.day;
+  const revision = /^([0-4])$/.test(String(col.budRev || '')) ? String(col.budRev) : String(appliedRevision ?? '0');
+  const valueMode = getColumnValueMode(col.type);
   let sum = 0;
 
-  monthsToEvaluate.forEach(m => {
-    budgetData.forEach(d => {
-      const dYear = (d.year || d.yr || '').toString().trim();
-      if (dYear && dYear !== effYear) return;
-      if (needsDayFilter) {
-        const dDay = (d.day || d.Day || d.docDay || d.transactionDay || '').toString().trim();
-        if (dDay && dDay !== String(appliedDay).trim()) return;
+  (type === 'DACBG' || type === 'PTDBG' ? dailySelection.months : monthsToEvaluate).forEach(m => {
+    matchedRows.forEach((prepared) => {
+      const d = prepared.source;
+      if (prepared.year && prepared.year !== (type === 'DACBG' || type === 'PTDBG' ? dailySelection.year : effYear)) return;
+      if (prepared.revision !== revision) return;
+      if (type === 'DACBG' || type === 'PTDBG') {
+        if (Number.isInteger(prepared.period) && prepared.period !== m) return;
+        if (Number.isInteger(targetDay) && Number.isInteger(prepared.day)) {
+          if (type === 'DACBG' && prepared.day !== targetDay) return;
+          if (type === 'PTDBG' && (prepared.day < 1 || prepared.day > targetDay)) return;
+        }
       }
 
-      const dRev = (d.revision || d.rev || '0').toString().trim();
-      if (dRev !== appliedRevision) return;
-
-      const dDeptCode = normalizeDeptLookupCode(d.deptcode || d.dept || d.department || '');
-      const dAccCode = normalizeAccLookupCode(d.acccode || d.account || d.accountcode || '');
-      const dGroup = (d[rowConfig.groupLevelKey] || d.group || '').toString().trim().toUpperCase();
-
-      if (normalizedAppliedDepts.length > 0 && !normalizedAppliedDepts.includes(dDeptCode)) return;
-      if (rowConfig.hasDeptMap && !rowConfig.depts.includes(dDeptCode)) return;
-      if (rowConfig.hasAccMap && !rowConfig.accs.includes(dAccCode)) return;
-      if (rowConfig.hasGrpMap && !rowConfig.grps.includes(dGroup)) return;
-      if (!matchesRowDimensions(rowConfig, d)) return;
-
-      const dAccType = resolveAccType(d, masterData, dAccCode);
-      if (!matchesReportCategory({ reportCategories, dAccType, hasAccMap: rowConfig.hasAccMap, dAccCode, accs: rowConfig.accs })) return;
-
-      const valueMode = getColumnValueMode(col.type);
-      if (valueMode === 'bud') {
+      if (type === 'DACBG' || type === 'PTDBG') {
+        const amtM = d['amt' + m] !== undefined && d['amt' + m] !== '' ? d['amt' + m] : (d['amt0' + m] !== undefined && d['amt0' + m] !== '' ? d['amt0' + m] : 0);
+        if (Number.isInteger(prepared.day)) {
+          sum += parseAmount(d.amount ?? d.amt ?? d.val ?? amtM);
+        } else {
+          const daysInPeriod = Number.parseInt(d['days' + m], 10) || new Date(Number(effYear), m, 0).getDate();
+          const dailyAmount = parseAmount(amtM) / daysInPeriod;
+          sum += dailyAmount * (type === 'PTDBG' ? Math.max(0, targetDay || 0) : 1);
+        }
+      } else if (valueMode === 'bud') {
         const amtM = d['amt' + m] !== undefined && d['amt' + m] !== '' ? d['amt' + m] : (d['amt0' + m] !== undefined && d['amt0' + m] !== '' ? d['amt0' + m] : 0);
         sum += parseAmount(amtM);
       } else if (valueMode === 'acc') {
@@ -620,27 +721,46 @@ const sumBudget = ({ col, rowConfig, budgetData, appliedDepts, appliedYear, appl
 };
 
 const applyFormulaRows = (rows, columns, rowRefMap) => {
-  rows.filter(r => r.isTotal).forEach(row => {
-    columns.filter(c => !c.isFormula && !c.isPercent).forEach(col => {
-      let evalStr = row.formula?.toUpperCase() || '';
-      (evalStr.match(/R\d+/g) || []).forEach(v => {
-        const idx = parseInt(v.replace('R', ''), 10) - 1;
-        evalStr = evalStr.replace(new RegExp(`\\b${v}\\b`, 'g'), (rows[idx] && rowRefMap[rows[idx].id][col.id]) || 0);
-      });
+  columns.filter(c => !c.isFormula && !c.isPercent).forEach(col => {
+    const resolving = new Set();
+    const resolved = new Set();
+    // Resolve dependencies in this column before evaluating the caller,
+    // regardless of where the referenced row appears in the report.
+    const resolveRow = (row) => {
+      if (!row) return 0;
+      if (!row.isTotal) return rowRefMap[row.id][col.id] || 0;
+      if (resolved.has(row.id)) return rowRefMap[row.id][col.id];
+      if (resolving.has(row.id)) throw new Error('Circular row formula');
+      resolving.add(row.id);
       try {
-        const res = new Function('return ' + evalStr.replace(/[^-()\d/*+.]/g, ''))();
-        rowRefMap[row.id][col.id] = (!isFinite(res) || isNaN(res)) ? 0 : res;
-      } catch {
-        rowRefMap[row.id][col.id] = 0;
+        const evalStr = String(row.formula || '').toUpperCase().replace(/\bR(\d+)\b/g, (_, position) => {
+          const value = resolveRow(rows[Number(position) - 1]);
+          if (value === null) throw new Error('Unavailable row formula');
+          return `(${value})`;
+        });
+        const res = evaluateArithmeticExpression(evalStr);
+        rowRefMap[row.id][col.id] = Number.isFinite(res) ? res : (row.numberFormat === 'percent' ? null : 0);
+      } catch (error) {
+        rowRefMap[row.id][col.id] = ['Circular row formula', 'Unavailable row formula'].includes(error.message) ? null : 0;
+      } finally {
+        resolving.delete(row.id);
+        resolved.add(row.id);
       }
-    });
+      return rowRefMap[row.id][col.id];
+    };
+    rows.filter(row => row.isTotal).forEach(resolveRow);
   });
 };
 
 const applyPercentRows = (rows, columns, rowRefMap) => {
   rows.forEach(row => {
     columns.filter(c => c.isPercent).forEach(col => {
-      const targetColId = col.targetCol;
+      const targetRef = String(col.targetCol || '').trim();
+      const position = /^C([1-9]\d*)$/i.exec(targetRef);
+      const targetColumn = position
+        ? columns[Number(position[1]) - 1]
+        : columns.find(candidate => candidate.id.toUpperCase() === targetRef.toUpperCase());
+      const targetColId = targetColumn?.id;
       if (!targetColId) {
         rowRefMap[row.id][col.id] = 0;
         return;
@@ -651,9 +771,11 @@ const applyPercentRows = (rows, columns, rowRefMap) => {
         const baseMatch = row.percentBase.match(/R(\d+)/i);
         if (baseMatch) {
           const bIdx = parseInt(baseMatch[1], 10) - 1;
-          if (rows[bIdx]) denominator = Number(rowRefMap[rows[bIdx].id][targetColId]) || 0;
+          const baseRow = rows[bIdx];
+          if (baseRow) denominator = Number(rowRefMap[baseRow.id][targetColId]) || 0;
         }
       }
+
       const result = denominator !== 0 ? (numerator / denominator) * 100 : 0;
       rowRefMap[row.id][col.id] = (!isFinite(result) || isNaN(result)) ? 0 : result;
     });
@@ -677,41 +799,50 @@ export const buildReportData = ({
   const rowRefMap = {};
   rows.forEach(r => rowRefMap[r.id] = {});
   const reportCategories = Array.isArray(activeReport?.category) ? activeReport.category : ['ALL'];
+  const appliedDeptSet = new Set((appliedDepts || []).map(normalizeDeptLookupCode).filter(Boolean));
+  const preparedActualRows = prepareSourceRows(engineData, masterData);
+  const preparedBudgetRows = prepareSourceRows(budgetData, masterData);
 
   rows.filter(r => !r.isTotal && !r.isHeader).forEach((row) => {
-    const rowConfig = filterEngineRows(row);
+    const rowConfig = filterEngineRows(row, masterData);
 
     if (rowConfig.depts.length === 0 && rowConfig.accs.length === 0 && rowConfig.grps.length === 0) {
       columns.forEach(col => rowRefMap[row.id][col.id] = 0);
       return;
     }
 
+    const matchedActualRows = filterPreparedRows({
+      preparedRows: preparedActualRows,
+      rowConfig,
+      appliedDeptSet,
+      reportCategories,
+    });
+    const matchedBudgetRows = filterPreparedRows({
+      preparedRows: preparedBudgetRows,
+      rowConfig,
+      appliedDeptSet,
+      reportCategories,
+    });
+
     columns.filter(c => !c.isFormula && !c.isPercent).forEach(col => {
-        rowRefMap[row.id][col.id] = sumActuals({
-          col,
-          rowConfig,
-          engineData,
-          appliedDepts,
-          appliedYear,
-          appliedPeriod,
-          appliedDay,
-          periodOptions,
-          reportCategories,
-          masterData,
-        });
-      if (col.type === 'BUD' || col.type === 'BUDACC') {
+      if (BUDGET_COLUMN_TYPES.has(String(col.type || '').trim().toUpperCase())) {
         rowRefMap[row.id][col.id] = sumBudget({
           col,
-          rowConfig,
-          budgetData,
-          appliedDepts,
+          matchedRows: matchedBudgetRows,
           appliedYear,
           appliedPeriod,
           appliedDay,
           appliedRevision,
           periodOptions,
-          reportCategories,
-          masterData,
+        });
+      } else {
+        rowRefMap[row.id][col.id] = sumActuals({
+          col,
+          matchedRows: matchedActualRows,
+          appliedYear,
+          appliedPeriod,
+          appliedDay,
+          periodOptions,
         });
       }
     });
@@ -719,23 +850,69 @@ export const buildReportData = ({
   applyFormulaRows(rows, columns, rowRefMap);
 
   rows.forEach(row => {
-    columns.filter(c => c.isFormula).forEach(col => {
-      let evalStr = col.formula?.toUpperCase() || '';
-      (evalStr.match(/C\d+/g) || []).forEach(v => {
-        const idx = parseInt(v.replace('C', ''), 10) - 1;
-        evalStr = evalStr.replace(new RegExp(`\\b${v}\\b`, 'g'), (columns[idx] && rowRefMap[row.id][columns[idx].id]) || 0);
-      });
+    const resolving = new Set();
+    const resolved = new Set();
+    const resolveColumn = (col) => {
+      if (!col) return 0;
+      if (rowRefMap[row.id][col.id] === null) return null;
+      if (!col.isFormula) return rowRefMap[row.id][col.id] || 0;
+      if (resolved.has(col.id)) return rowRefMap[row.id][col.id] || 0;
+      if (resolving.has(col.id)) throw new Error('Circular column formula');
+      resolving.add(col.id);
       try {
-        const res = new Function('return ' + evalStr.replace(/[^-()\d/*+.]/g, ''))();
-        rowRefMap[row.id][col.id] = (!isFinite(res) || isNaN(res)) ? 0 : res;
-      } catch {
-        rowRefMap[row.id][col.id] = 0;
+        const expression = String(col.formula || '').toUpperCase().replace(/\bC(\d+)\b/g, (_, position) => {
+          const value = resolveColumn(columns[Number(position) - 1]);
+          if (value === null) throw new Error('Unavailable ratio');
+          return String(value);
+        });
+        const result = evaluateArithmeticExpression(expression);
+        rowRefMap[row.id][col.id] = Number.isFinite(result) ? result : (row.numberFormat === 'percent' ? null : 0);
+      } catch (error) {
+        rowRefMap[row.id][col.id] = error.message === 'Unavailable ratio' || row.numberFormat === 'percent' ? null : 0;
+      } finally {
+        resolving.delete(col.id);
+        resolved.add(col.id);
       }
-    });
+      return rowRefMap[row.id][col.id];
+    };
+    columns.filter(col => col.isFormula).forEach(resolveColumn);
   });
   applyPercentRows(rows, columns, rowRefMap);
 
   return rows.map((r, i) => ({ ...r, rowLabel: `R${i + 1}`, results: rowRefMap[r.id] }));
+};
+
+// Uses the same row matching and amount calculation as the report cell. The
+// source rows are report aggregates, so this is account/department detail.
+export const buildReportDrilldown = ({
+  activeReport, row, col, engineData, budgetData, appliedDepts,
+  appliedYear, appliedPeriod, appliedRevision, periodOptions = [], masterData,
+}) => {
+  const type = String(col?.type || '').trim().toUpperCase();
+  if (!row || !col || row.isHeader || row.isTotal || col.isFormula || col.isPercent || !['AC', 'BC'].includes(type)) return null;
+  const rowConfig = filterEngineRows(row, masterData);
+  if (rowConfig.depts.length === 0 && rowConfig.accs.length === 0 && rowConfig.grps.length === 0) return null;
+  const isBudget = type === 'BC';
+  const matched = filterPreparedRows({
+    preparedRows: prepareSourceRows(isBudget ? budgetData : engineData, masterData),
+    rowConfig,
+    appliedDeptSet: new Set((appliedDepts || []).map(normalizeDeptLookupCode).filter(Boolean)),
+    reportCategories: Array.isArray(activeReport?.category) ? activeReport.category : ['ALL'],
+  });
+  const groups = new Map();
+  matched.forEach((prepared) => {
+    const key = `${prepared.accCode}\u0000${prepared.deptCode}`;
+    if (!groups.has(key)) groups.set(key, { accountCode: prepared.accCode, departmentCode: prepared.deptCode, rows: [] });
+    groups.get(key).rows.push(prepared);
+  });
+  const lines = [...groups.values()].map((group) => ({
+    accountCode: group.accountCode,
+    departmentCode: group.departmentCode,
+    amount: (isBudget ? sumBudget : sumActuals)({
+      col, matchedRows: group.rows, appliedYear, appliedPeriod, appliedRevision, periodOptions,
+    }),
+  })).filter((line) => line.amount !== 0).sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
+  return { lines, total: lines.reduce((sum, line) => sum + line.amount, 0), source: isBudget ? 'budget' : 'actual' };
 };
 
 export const deleteRowAndRewriteReferences = (activeReport, rowId) => {
@@ -776,16 +953,18 @@ export const deleteColAndRewriteReferences = (activeReport, colId) => {
     ...activeReport,
     columns: newCols.map(c => ({
       ...c,
-      formula: c.formula ? c.formula.toUpperCase().replace(regex, m => map[m.toUpperCase()]) : c.formula
+      formula: c.formula ? c.formula.toUpperCase().replace(regex, m => map[m.toUpperCase()]) : c.formula,
+      targetCol: c.targetCol ? c.targetCol.toUpperCase().replace(regex, m => map[m.toUpperCase()]) : c.targetCol
     }))
   };
 };
 
 export const moveColumnsAndRewriteReferences = (activeReport, idx, dir) => {
   const newCols = [...activeReport.columns];
-  const swapIdx = dir === 'left' ? idx - 1 : idx + 1;
-  if (swapIdx < 0 || swapIdx >= newCols.length) return activeReport;
-  [newCols[idx], newCols[swapIdx]] = [newCols[swapIdx], newCols[idx]];
+  const targetIdx = Number.isInteger(dir) ? dir : (dir === 'left' ? idx - 1 : idx + 1);
+  if (idx < 0 || idx >= newCols.length || targetIdx < 0 || targetIdx >= newCols.length || idx === targetIdx) return activeReport;
+  const [movedColumn] = newCols.splice(idx, 1);
+  newCols.splice(targetIdx, 0, movedColumn);
   const map = {};
   newCols.forEach((c, i) => {
     const oldI = activeReport.columns.findIndex(oc => oc.id === c.id);
@@ -804,11 +983,29 @@ export const moveColumnsAndRewriteReferences = (activeReport, idx, dir) => {
   };
 };
 
+export const moveDisplayColumnsAndRewriteReferences = (activeReport, fromIndex, toIndex) => {
+  const displayColumns = getReportDisplayColumns(activeReport);
+  if (fromIndex < 0 || fromIndex >= displayColumns.length || toIndex < 0 || toIndex >= displayColumns.length || fromIndex === toIndex) return activeReport;
+  const [movedColumn] = displayColumns.splice(fromIndex, 1);
+  displayColumns.splice(toIndex, 0, movedColumn);
+
+  const descriptionPosition = displayColumns.findIndex((column) => column.isDescription);
+  if (movedColumn.isDescription) return { ...activeReport, descriptionPosition };
+
+  const targetColumnIndex = displayColumns.filter((column) => !column.isDescription).findIndex((column) => column.id === movedColumn.id);
+  const sourceColumnIndex = activeReport.columns.findIndex((column) => column.id === movedColumn.id);
+  return {
+    ...moveColumnsAndRewriteReferences(activeReport, sourceColumnIndex, targetColumnIndex),
+    descriptionPosition,
+  };
+};
+
 export const moveRowsAndRewriteReferences = (activeReport, idx, dir) => {
   const newRows = [...activeReport.rows];
-  const swapIdx = dir === 'up' ? idx - 1 : idx + 1;
-  if (swapIdx < 0 || swapIdx >= newRows.length) return activeReport;
-  [newRows[idx], newRows[swapIdx]] = [newRows[swapIdx], newRows[idx]];
+  const targetIdx = Number.isInteger(dir) ? dir : (dir === 'up' ? idx - 1 : idx + 1);
+  if (idx < 0 || idx >= newRows.length || targetIdx < 0 || targetIdx >= newRows.length || idx === targetIdx) return activeReport;
+  const [movedRow] = newRows.splice(idx, 1);
+  newRows.splice(targetIdx, 0, movedRow);
   const map = {};
   newRows.forEach((r, i) => {
     const oldI = activeReport.rows.findIndex(or => or.id === r.id);
@@ -827,17 +1024,46 @@ export const moveRowsAndRewriteReferences = (activeReport, idx, dir) => {
   };
 };
 
+export const getReportDisplayColumns = (activeReport, columns = activeReport?.columns || []) => {
+  const reportColumns = activeReport?.columns || [];
+  const requestedPosition = Number(activeReport?.descriptionPosition);
+  const descriptionPosition = Number.isInteger(requestedPosition)
+    ? Math.min(reportColumns.length, Math.max(0, requestedPosition))
+    : 0;
+  const precedingIds = new Set(reportColumns.slice(0, descriptionPosition).map((column) => column.id));
+  const visiblePosition = columns.filter((column) => precedingIds.has(column.id)).length;
+  const displayColumns = [...columns];
+  displayColumns.splice(visiblePosition, 0, { id: '__description__', label: 'Description', isDescription: true });
+  return displayColumns;
+};
+
+// Row percentages store ratios (0.5); existing percentage columns store points (50).
+export const formatReportCell = (row, col) => {
+  const raw = row.results?.[col.id];
+  if (raw === null) return '—';
+  const columnPercent = Boolean(col.isPercent || col.formatAsPercent);
+  const percent = row.numberFormat === 'percent' || columnPercent;
+  const value = (Number(raw) || 0) * (!columnPercent && row.numberFormat === 'percent' ? 100 : 1);
+  const text = percent
+    ? `${Math.abs(value).toFixed(2)}%`
+    : Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return value < 0 ? `(${text})` : text;
+};
+
 export const buildExcelHtml = ({ activeReport, activeCols, displayCompanyLabel, displayDateLabel, displayPeriodLabel, reportData, themeColors }) => {
+  const displayColumns = getReportDisplayColumns(activeReport, activeCols);
   let tableHtml = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"></head><body>`;
   tableHtml += `<table border="1" cellpadding="5" cellspacing="0" style="font-family: Arial, sans-serif; font-size: 12px; border-collapse: collapse;">`;
-  tableHtml += `<tr><td colspan="${activeCols.length + 1}" style="text-align:center; font-size: 16px; font-weight: bold; border:none;">${displayCompanyLabel}</td></tr>`;
-  tableHtml += `<tr><td colspan="${activeCols.length + 1}" style="text-align:center; font-size: 14px; font-weight: bold; border:none;">${activeReport.name}</td></tr>`;
-  tableHtml += `<tr><td colspan="${activeCols.length + 1}" style="text-align:center; font-size: 12px; border:none;">${displayDateLabel}</td></tr>`;
-  tableHtml += `<tr><td colspan="${activeCols.length + 1}" style="text-align:center; font-size: 12px; border:none;">${displayPeriodLabel}</td></tr>`;
-  tableHtml += `<tr><td colspan="${activeCols.length + 1}" style="border:none;"></td></tr>`;
-  tableHtml += `<tr><th style="background-color: ${themeColors.hexHeader}; color: white; text-align: left; padding: 8px;">Description</th>`;
-  activeCols.forEach(col => {
-    tableHtml += `<th style="background-color: ${themeColors.hexHeader}; color: white; padding: 8px; width: ${col.width || 100}px;">${col.label}</th>`;
+  tableHtml += `<tr><td colspan="${displayColumns.length}" style="text-align:center; font-size: 16px; font-weight: bold; border:none;">${displayCompanyLabel}</td></tr>`;
+  tableHtml += `<tr><td colspan="${displayColumns.length}" style="text-align:center; font-size: 14px; font-weight: bold; border:none;">${activeReport.name}</td></tr>`;
+  tableHtml += `<tr><td colspan="${displayColumns.length}" style="text-align:center; font-size: 12px; border:none;">${displayDateLabel}</td></tr>`;
+  tableHtml += `<tr><td colspan="${displayColumns.length}" style="text-align:center; font-size: 12px; border:none;">${displayPeriodLabel}</td></tr>`;
+  tableHtml += `<tr><td colspan="${displayColumns.length}" style="border:none;"></td></tr>`;
+  tableHtml += `<tr>`;
+  displayColumns.forEach(col => {
+    tableHtml += col.isDescription
+      ? `<th style="background-color: ${themeColors.hexHeader}; color: white; text-align: left; padding: 8px;">Description</th>`
+      : `<th style="background-color: ${themeColors.hexHeader}; color: white; padding: 8px; width: ${col.width || 100}px;">${String(col.label ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\r\n?|\n/g, '<br>')}</th>`;
   });
   tableHtml += `</tr>`;
 
@@ -847,17 +1073,17 @@ export const buildExcelHtml = ({ activeReport, activeCols, displayCompanyLabel, 
     if (row.isTotal) { rowStyle = `background-color: ${themeColors.hexTotal};`; fontStyle = 'font-weight: bold;'; }
     else if (row.isHeader) { rowStyle = `background-color: ${themeColors.hexSubHeader};`; fontStyle = 'font-weight: bold;'; }
     tableHtml += `<tr style="${rowStyle} ${fontStyle}">`;
-    const indentSpaces = '&nbsp;&nbsp;&nbsp;&nbsp;'.repeat(row.indent || 0);
-    tableHtml += `<td style="padding: 6px;">${indentSpaces}${row.desc}</td>`;
-    activeCols.forEach(col => {
+    displayColumns.forEach(col => {
+      if (col.isDescription) {
+        const indentSpaces = '&nbsp;&nbsp;&nbsp;&nbsp;'.repeat(row.indent || 0);
+        tableHtml += `<td style="padding: 6px;">${indentSpaces}${row.desc}</td>`;
+        return;
+      }
       if (row.isHeader) {
         tableHtml += `<td></td>`;
       } else {
         const val = Number(row.results?.[col.id]) || 0;
-        const isDisplayPercent = col.isPercent || col.formatAsPercent;
-        const displayVal = isDisplayPercent
-          ? (val < 0 ? `(${Math.abs(val).toFixed(2)}%)` : val.toFixed(2) + '%')
-          : (val < 0 ? `(${Math.abs(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})` : val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+        const displayVal = formatReportCell(row, col);
         const colorStyle = val < 0 ? 'color: red;' : '';
         tableHtml += `<td style="text-align: right; ${colorStyle}">${displayVal}</td>`;
       }

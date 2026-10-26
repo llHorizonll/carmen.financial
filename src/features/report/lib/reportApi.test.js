@@ -1,40 +1,274 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildReportDefinitionPayload, cloneCarmenReport, deleteCarmenReport, fetchCarmenReport, fetchCarmenReportOptions, saveCarmenReport } from './reportApi.js';
+import { buildReportDefinitionPayload, cloneCarmenReport, createCarmenReport, deleteCarmenReport, fetchBusinessUnitsByUsername, fetchCarmenAccountGroups, fetchCarmenDepartmentGroups, fetchCarmenDimensions, fetchCarmenReport, fetchCarmenReportHistory, fetchCarmenReportOptions, fetchCarmenUsers, loginWithCarmenCredentials, saveCarmenReport, saveCarmenReports } from './reportApi.js';
+import { clearCarmenApiFailure, getCarmenApiFailure } from '../../../lib/carmenApiFailure.js';
+import { setCarmenSessionLanguage } from './carmenSession.js';
+import { fetchCarmenBusinessUnits, fetchCarmenReports, fetchCarmenReportData, fetchCarmenMasterData, restoreCarmenReportHistoryVersion } from './reportApi.js';
+
+const createSessionStorageMock = (session = {}) => {
+  const storage = new Map();
+  const user = session.user ?? null;
+  const businessUnit = session.businessUnit ?? null;
+
+  if (session.accessToken) storage.set('carmen_access_token', session.accessToken);
+  if (session.username) storage.set('carmen_username', session.username);
+  if (user !== undefined) storage.set('carmen_user', JSON.stringify(user));
+  if (businessUnit !== undefined) storage.set('carmen_business_unit', JSON.stringify(businessUnit));
+
+  const mockLocalStorage = {
+    getItem: vi.fn((key) => (storage.has(key) ? storage.get(key) : null)),
+    setItem: vi.fn((key, value) => {
+      storage.set(key, String(value));
+    }),
+    removeItem: vi.fn((key) => {
+      storage.delete(key);
+    }),
+    clear: vi.fn(() => {
+      storage.clear();
+    }),
+  };
+
+  vi.stubGlobal('localStorage', mockLocalStorage);
+
+  return storage;
+};
 
 afterEach(() => {
+  clearCarmenApiFailure();
   vi.unstubAllGlobals();
-  window.localStorage.clear();
+  vi.restoreAllMocks();
 });
 
 describe('reportApi helpers', () => {
+  it('loads all three nested BU entries from the existing username endpoint', async () => {
+    createSessionStorageMock({ accessToken: 'token', username: 'user' });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ Data: [
+      { Tenant: { Tenant: 'carmencloud', Description: 'CarmenCloud' }, IsDefault: true, Permission: [{ Name: 'gl.financialreport', Code: '80' }] },
+      { Tenant: { Tenant: 'prod', Description: 'paresa' }, Permission: [{ Name: 'gl.financialreport', Code: 'C0' }] },
+      { Tenant: { Tenant: 'noon', Description: 'lilit' }, Permission: [] },
+    ] }) });
+    vi.stubGlobal('fetch', fetchMock);
+    const units = await fetchCarmenBusinessUnits();
+    expect(units.map((unit) => unit.Description)).toEqual(['CarmenCloud', 'paresa', 'lilit']);
+    expect(units[1].financialReport.setup).toBe(true);
+    expect(units[2].financialReport.view).toBe(false);
+    expect(fetchMock.mock.calls[0][0]).toContain('/api/userTenant/UserName/user');
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('token');
+  });
+  it('separates in-flight report reads by BU and routes a save/history to the chosen BU', async () => {
+    createSessionStorageMock({ accessToken: 'token', businessUnit: { tenant: 'a' } });
+    const finishes = [];
+    const fetchMock = vi.fn(() => new Promise((resolve) => { finishes.push(resolve); }));
+    vi.stubGlobal('fetch', fetchMock);
+    const a = fetchCarmenReports({ tenant: 'a' });
+    const b = fetchCarmenReports({ tenant: 'b' });
+    const duplicate = fetchCarmenReports({ tenant: 'b' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0][0]).toContain('/api/reports?useTenant=a');
+    expect(fetchMock.mock.calls[1][0]).toContain('/api/reports?useTenant=b');
+    for (const finish of finishes) finish({ ok: true, json: async () => [] });
+    await Promise.all([a, b, duplicate]);
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) });
+    await saveCarmenReport({ id: 'same', lastModified: 'version', rows: [], columns: [] }, { tenant: 'b' });
+    expect(fetchMock.mock.lastCall[0]).toContain('/api/reports/same?useTenant=b');
+    expect(fetchMock.mock.lastCall[1].method).toBe('PUT');
+    await fetchCarmenReportHistory('same', { tenant: 'b' });
+    expect(fetchMock.mock.lastCall[0]).toContain('/api/reports/same/history?useTenant=b');
+    await restoreCarmenReportHistoryVersion('same', 7, 'version', { tenant: 'b' });
+    expect(fetchMock.mock.lastCall[0]).toContain('/api/reports/same/history/7/restore?useTenant=b');
+  });
+  it('loads financial report master data without separately denied group lookups', async () => {
+    createSessionStorageMock({ accessToken: 'token', businessUnit: { tenant: 'a' } });
+    const fetchMock = vi.fn().mockImplementation(async (url) => url.includes('report-master-data')
+      ? { ok: true, json: async () => ({ companyProfile: { HotelName: 'Scoped Hotel' }, depts: [], accCodes: [] }) }
+      : { ok: false, status: 403, json: async () => ({ Message: 'Access denied' }) });
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(fetchCarmenMasterData({ year: 2025, tenant: 'b' })).resolves.toEqual(expect.objectContaining({
+      companyProfile: { name: 'Scoped Hotel' }, accountGroups: [], deptGroups: [],
+    }));
+    expect(fetchMock.mock.calls.every(([url]) => new URL(url).searchParams.get('useTenant') === 'b')).toBe(true);
+  });
+
+  it('still rejects failed group services instead of treating them as denied permissions', async () => {
+    createSessionStorageMock({ accessToken: 'token', businessUnit: { tenant: 'a' } });
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url) => url.includes('report-master-data')
+      ? { ok: true, json: async () => ({}) }
+      : { ok: false, status: 500, json: async () => ({ Message: 'Lookup unavailable' }) }));
+    await expect(fetchCarmenMasterData({ year: 2025, tenant: 'b' })).rejects.toThrow(/Lookup unavailable/);
+  });
+
+  it('does not fall back to the login BU when a scoped master lookup fails', async () => {
+    createSessionStorageMock({ accessToken: 'token', businessUnit: { tenant: 'a' } });
+    const fetchMock = vi.fn().mockImplementation(async (url) => url.includes('report-master-data')
+      ? { ok: false, status: 403, json: async () => ({ Message: 'Access denied' }) }
+      : { ok: true, json: async () => ({ Data: [] }) });
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(fetchCarmenMasterData({ year: 2025, tenant: 'b' })).rejects.toThrow(/denied/);
+    expect(fetchMock.mock.calls.every(([url]) => new URL(url).searchParams.get('useTenant') === 'b')).toBe(true);
+    expect(fetchMock.mock.calls.some(([url]) => url.includes('/user/search'))).toBe(false);
+  });
+  it('uses existing report endpoints with explicit useTenant and preserves the token BU', async () => {
+    window.__CARMEN_CONFIG__ = { adminToken: 'scope' };
+    const storage = createSessionStorageMock({ accessToken: 'token', username: 'admin', businessUnit: { tenant: 'a' } });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => [] });
+    vi.stubGlobal('fetch', fetchMock);
+    await fetchCarmenBusinessUnits();
+    expect(fetchMock.mock.calls[0][0]).toContain('/api/userTenant/UserName/admin');
+    await fetchCarmenReports({ tenant: 'b' });
+    const query = { tenant: 'b', reportId: 'one', year: 2025, period: 2, revision: 0 };
+    await fetchCarmenReportData(query);
+    for (const [url, options] of fetchMock.mock.calls) {
+      expect(url).not.toContain('/api/business-units/'); expect(options.headers.Authorization).toBe('token');
+    }
+    expect(new URL(fetchMock.mock.calls[0][0]).searchParams.has('useTenant')).toBe(false);
+    expect(new URL(fetchMock.mock.calls[2][0]).pathname).toBe('/Carmen.WebApi/api/report-data');
+    expect(new URL(fetchMock.mock.calls[2][0]).searchParams.get('useTenant')).toBe('b');
+    expect(storage.get('carmen_business_unit')).toBe(JSON.stringify({ tenant: 'a' }));
+  });
+  it('keeps a valid session after a denied report BU but expires it on HTTP 401', async () => {
+    window.__CARMEN_CONFIG__ = { adminToken: 'scope' };
+    const storage = createSessionStorageMock({ accessToken: 'token', username: 'admin', businessUnit: { tenant: 'a' } });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 403, json: async () => ({ Message: 'Access denied' }) });
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(fetchCarmenReports({ tenant: 'b' })).rejects.toThrow(/denied/);
+    expect(storage.get('carmen_access_token')).toBe('token');
+    fetchMock.mockResolvedValue({ ok: false, status: 401, json: async () => ({}) });
+    await expect(fetchCarmenBusinessUnits()).rejects.toThrow(/expired/);
+    expect(storage.has('carmen_access_token')).toBe(false);
+  });
+  it('sends the selected language and separates pending requests by language', async () => {
+    createSessionStorageMock({ accessToken: 'token', businessUnit: { tenant: 'a' } });
+    const resolvers = [];
+    const fetchMock = vi.fn(() => new Promise((resolve) => { resolvers.push(resolve); }));
+    vi.stubGlobal('fetch', fetchMock);
+    const english = fetchCarmenReportOptions();
+    setCarmenSessionLanguage('th');
+    const thai = fetchCarmenReportOptions();
+    const sameThai = fetchCarmenReportOptions();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0][1].headers['Accept-Language']).toBe('en');
+    expect(fetchMock.mock.calls[1][1].headers['Accept-Language']).toBe('th');
+    expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe('token');
+    expect(fetchMock.mock.calls[1][0]).toContain('useTenant=a');
+    for (const resolve of resolvers) resolve({ ok: true, json: async () => ({ themes: [] }) });
+    await Promise.all([english, thai, sameThai]);
+  });
+  it('explains when the report history endpoint is missing without exposing an HTML error page', async () => {
+    createSessionStorageMock({ accessToken: 'token', businessUnit: { tenant: 'tenant-1' } });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      headers: { get: () => 'text/html; charset=utf-8' },
+      text: async () => '<!DOCTYPE html><html><title>404 - File or directory not found.</title></html>',
+    }));
+
+    await expect(fetchCarmenReportHistory('rep-1')).rejects.toThrow(/report history.*unavailable/i);
+    expect(getCarmenApiFailure().message).not.toMatch(/<!DOCTYPE|<html/i);
+  });
+
+  it('coalesces concurrent identical GET requests during StrictMode remounts', async () => {
+    const storage = createSessionStorageMock({
+      accessToken: 'token',
+      businessUnit: { tenant: 'tenant-1' },
+    });
+    let resolveFetch;
+    const fetchMock = vi.fn(() => new Promise((resolve) => {
+      resolveFetch = resolve;
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const firstRequest = fetchCarmenReportOptions();
+    const secondRequest = fetchCarmenReportOptions();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    resolveFetch({ ok: true, json: async () => ({ themes: [] }) });
+    await expect(Promise.all([firstRequest, secondRequest])).resolves.toHaveLength(2);
+  });
+
+  it('coalesces concurrent user and dimension search requests', async () => {
+    createSessionStorageMock({
+      accessToken: 'token',
+      businessUnit: { tenant: 'tenant-1' },
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ Data: [] }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await Promise.all([
+      fetchCarmenUsers(),
+      fetchCarmenUsers(),
+      fetchCarmenDimensions(),
+      fetchCarmenDimensions(),
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('loads account and department groups from the Carmen grouping APIs', async () => {
+    createSessionStorageMock({
+      accessToken: 'token',
+      businessUnit: { tenant: 'tenant-1' },
+    });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ Data: [{ AccGroupCode: 'REV', AccGroupName: 'Revenue', Level: 'L2', Account: [{ AccCode: '4001' }] }] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ Data: [{ DeptCateCode: 'OPS', Description: 'Operations', Active: true, Departments: [{ DeptCode: '101' }] }] }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchCarmenAccountGroups()).resolves.toEqual([
+      expect.objectContaining({ id: 'REV', level: 'L2', accountIds: ['4001'] }),
+    ]);
+    await expect(fetchCarmenDepartmentGroups()).resolves.toEqual([
+      expect.objectContaining({ id: 'OPS', deptIds: ['101'] }),
+    ]);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('/api/accountGroup/search?useTenant=tenant-1'),
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('/api/DepartmentCategory/search?useTenant=tenant-1'),
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
   it('keeps report definition payloads aligned with the frontend shape', () => {
     expect(buildReportDefinitionPayload({
       id: 'rep-1',
       name: 'Profit and Loss',
+      reportGroup: 'Operations',
       companyName: 'Carmen Hotel',
       category: ['ALL', 'I'],
-      assignedUsers: ['u1', 'u2'],
+      assignedUsers: ['admin', 'admin2'],
       isActive: true,
       periodFormat: 'standard',
       customDateLabel: 'As of February 28, 2026',
       customPeriodLabel: 'Period : 2026-P02',
       overrideDateDisplay: 'As of February 28, 2026',
       overridePeriodDisplay: 'Period : 2026-P02',
-      owner: 'u1',
+      remark: '',
+      owner: 'admin',
       reportType: 'Daily',
       day: '28',
       theme: 'blue',
       columns: [
-        { id: 'C1', label: 'Actual', isActive: true },
+        { id: 'C1', label: 'Actual', isActive: true, yearMode: 'specific', specificYear: '2024', dayMode: '15', budRev: '2' },
       ],
       rows: [
-        { id: 'r1', desc: 'Revenue', isActive: true, dim1: 'A', dim2: 'X' },
+        { id: 'r1', desc: 'Revenue', isActive: true, deptGroup: 'ROOMS', dim1: 'A', dim2: 'X' },
       ],
       access: [
         {
-          userId: 'u1',
-          userName: 'u1',
-          displayName: 'u1',
+          userId: 'admin',
+          userName: 'admin',
+          displayName: 'admin',
           role: 'User',
           canView: true,
           canEdit: false,
@@ -43,24 +277,28 @@ describe('reportApi helpers', () => {
     })).toEqual({
       id: 'rep-1',
       name: 'Profit and Loss',
+      reportGroup: 'Operations',
       companyName: 'Carmen Hotel',
       category: ['ALL', 'I'],
-      assignedUsers: ['u1', 'u2'],
+      assignedUsers: ['admin', 'admin2'],
       isActive: true,
       periodFormat: 'standard',
       customDateLabel: 'As of February 28, 2026',
       customPeriodLabel: 'Period : 2026-P02',
       overrideDateDisplay: 'As of February 28, 2026',
       overridePeriodDisplay: 'Period : 2026-P02',
-      owner: 'u1',
+      owner: 'admin',
+      remark: '',
       reportType: 'Daily',
       day: '28',
       theme: 'blue',
-      columns: [{ id: 'C1', label: 'Actual', isActive: true }],
+      descriptionPosition: 0,
+      columns: [{ id: 'C1', label: 'Actual', isActive: true, yearMode: 'specific', specificYear: '2024', dayMode: '15', budRev: '2' }],
       rows: [{
         id: 'r1',
         desc: 'Revenue',
         isActive: true,
+        deptGroup: 'ROOMS',
         dim1: 'A',
         dim2: 'X',
         dimensions: [
@@ -70,15 +308,33 @@ describe('reportApi helpers', () => {
       }],
       access: [
         {
-          userId: 'u1',
-          userName: 'u1',
-          displayName: 'u1',
+          userId: 'admin',
+          userName: 'admin',
+          displayName: 'admin',
           role: 'User',
           canView: true,
           canEdit: false,
         },
       ],
     });
+  });
+
+  it('does not persist stale data types on formula and mix columns', () => {
+    const payload = buildReportDefinitionPayload({
+      id: 'rep-column-logic',
+      columns: [
+        { id: 'C1', type: 'AC', isFormula: false, isPercent: false },
+        { id: 'C2', type: 'MIX', isFormula: false, isPercent: true, targetCol: 'C1' },
+        { id: 'C3', Type: 'FORMULA', isFormula: true, isPercent: false, formula: 'C1' },
+      ],
+      rows: [],
+    });
+
+    expect(payload.columns[0]).toEqual(expect.objectContaining({ id: 'C1', type: 'AC' }));
+    expect(payload.columns[1]).not.toHaveProperty('type');
+    expect(payload.columns[1]).not.toHaveProperty('Type');
+    expect(payload.columns[2]).not.toHaveProperty('type');
+    expect(payload.columns[2]).not.toHaveProperty('Type');
   });
 
   it('serializes row dimensions for API persistence', () => {
@@ -123,11 +379,13 @@ describe('reportApi helpers', () => {
     }));
   });
 
-  it('rejects report detail loads for unauthorized users', async () => {
-    window.localStorage.setItem('carmen_access_token', 'token');
-    window.localStorage.setItem('carmen_username', 'viewer');
-    window.localStorage.setItem('carmen_user', JSON.stringify({ id: 'viewer' }));
-    window.localStorage.setItem('carmen_business_unit', JSON.stringify({ tenant: 'tenant-1' }));
+  it('trusts Carmen API permission checks for report detail loads', async () => {
+    createSessionStorageMock({
+      accessToken: 'token',
+      username: 'viewer',
+      user: { id: 'viewer' },
+      businessUnit: { tenant: 'tenant-1' },
+    });
 
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
@@ -139,14 +397,18 @@ describe('reportApi helpers', () => {
       }),
     }));
 
-    await expect(fetchCarmenReport('rep-unauthorized')).rejects.toThrow(/do not have access to this report/i);
+    await expect(fetchCarmenReport('rep-unauthorized')).resolves.toEqual(expect.objectContaining({
+      id: 'rep-unauthorized',
+    }));
   });
 
   it('allows report detail loads for the owning user', async () => {
-    window.localStorage.setItem('carmen_access_token', 'token');
-    window.localStorage.setItem('carmen_username', 'owner-1');
-    window.localStorage.setItem('carmen_user', JSON.stringify({ id: 'owner-1' }));
-    window.localStorage.setItem('carmen_business_unit', JSON.stringify({ tenant: 'tenant-1' }));
+    createSessionStorageMock({
+      accessToken: 'token',
+      username: 'owner-1',
+      user: { id: 'owner-1' },
+      businessUnit: { tenant: 'tenant-1' },
+    });
 
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
@@ -171,25 +433,86 @@ describe('reportApi helpers', () => {
     expect(buildReportDefinitionPayload({
       id: 'rep-2',
       name: 'Balance Sheet',
-      assignedUsers: ['u1'],
+      assignedUsers: ['admin'],
       columns: [],
       rows: [],
     }).access).toEqual([
       expect.objectContaining({
-        userId: 'u1',
-        userName: 'u1',
-        displayName: 'u1',
+        userId: 'admin',
+        userName: 'admin',
+        displayName: 'admin',
         canView: true,
         canEdit: true,
       }),
     ]);
   });
 
+  it('loads dimension values by configured dimension slot', async () => {
+    createSessionStorageMock({
+      accessToken: 'token',
+      businessUnit: { tenant: 'tenant-1' },
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ Data: [
+        { Caption: 'Market Segment', ListOfValues: '["Retail","Corporate"]' },
+        { Caption: 'Meal Period', ListOfValues: 'Breakfast,Lunch|Dinner' },
+      ] }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchCarmenDimensions()).resolves.toEqual({
+      dim1: ['Retail', 'Corporate'],
+      dim2: ['Breakfast', 'Lunch', 'Dinner'],
+      definitions: [
+        { key: 'dim1', caption: 'Market Segment', values: ['Retail', 'Corporate'] },
+        { key: 'dim2', caption: 'Meal Period', values: ['Breakfast', 'Lunch', 'Dinner'] },
+      ],
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/dimension/search?useTenant=tenant-1'),
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"Field":"Active"'),
+      }),
+    );
+  });
+
+  it('loads active Carmen users from api/user/search using usernames as report identities', async () => {
+    createSessionStorageMock({
+      accessToken: 'token',
+      businessUnit: { tenant: 'tenant-1' },
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ Data: [
+        { UserId: 'guid-2', UserName: 'viewer.b', Active: true },
+        { UserId: 'guid-1', UserName: 'viewer.a', Active: true },
+        { UserId: 'guid-3', UserName: 'disabled', Active: false },
+      ] }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchCarmenUsers()).resolves.toEqual([
+      expect.objectContaining({ id: 'viewer.a', name: 'viewer.a' }),
+      expect.objectContaining({ id: 'viewer.b', name: 'viewer.b' }),
+    ]);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/user/search?useTenant=tenant-1'),
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"Field":"Active"'),
+      }),
+    );
+  });
+
   it('sends POST for new reports and PUT for updates', async () => {
-    window.localStorage.setItem('carmen_access_token', 'token');
-    window.localStorage.setItem('carmen_username', 'owner-1');
-    window.localStorage.setItem('carmen_user', JSON.stringify({ id: 'owner-1' }));
-    window.localStorage.setItem('carmen_business_unit', JSON.stringify({ tenant: 'tenant-1' }));
+    createSessionStorageMock({
+      accessToken: 'token',
+      username: 'owner-1',
+      user: { id: 'owner-1' },
+      businessUnit: { tenant: 'tenant-1' },
+    });
 
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -229,11 +552,239 @@ describe('reportApi helpers', () => {
     }));
   });
 
+  it('loads report details without checking report-level access fields', async () => {
+    createSessionStorageMock({
+      accessToken: 'token',
+      username: 'viewer',
+      user: { UserName: 'viewer' },
+      businessUnit: { tenant: 'tenant-1' },
+    });
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: 'rep-access-shape',
+        Access: [{ UserName: 'VIEWER', CanView: false }],
+        rows: [],
+        columns: [],
+      }),
+    }));
+
+    await expect(fetchCarmenReport('rep-access-shape')).resolves.toEqual(expect.objectContaining({
+      id: 'rep-access-shape',
+    }));
+  });
+
+  it('creates reports with the client-generated id required by the API', async () => {
+    createSessionStorageMock({
+      accessToken: 'token',
+      username: 'owner-1',
+      user: { id: 'owner-1' },
+      businessUnit: { tenant: 'tenant-1' },
+    });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => true })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 'rep-client-provisional',
+          name: 'New Custom Report',
+          lastModified: '2026-09-25T10:00:00',
+          rows: [], columns: [],
+        }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const createdReport = await createCarmenReport({
+      id: 'rep-client-provisional',
+      name: 'New Custom Report',
+      companyName: 'Carmen Hotel',
+      rows: [],
+      columns: [],
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/reports?useTenant=tenant-1'), expect.objectContaining({
+      method: 'POST',
+    }));
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual(expect.objectContaining({
+      id: 'rep-client-provisional',
+      name: 'New Custom Report',
+    }));
+    expect(createdReport).toEqual(expect.objectContaining({
+      id: 'rep-client-provisional',
+      name: 'New Custom Report',
+      lastModified: '2026-09-25T10:00:00',
+    }));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      expect.stringContaining('/api/reports/rep-client-provisional?useTenant=tenant-1'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
+  it('surfaces Carmen API UserMessage details instead of a generic HTTP error', async () => {
+    createSessionStorageMock({
+      accessToken: 'token',
+      businessUnit: { tenant: 'carmencloud' },
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      text: async () => JSON.stringify({
+        Code: -2147467259,
+        UserMessage: "Unknown column 'DescriptionPosition' in 'field list'",
+      }),
+    }));
+
+    await expect(saveCarmenReport({
+      id: 'rep-excel-1',
+      name: 'Imported report',
+      rows: [],
+      columns: [],
+    })).rejects.toThrow(/Unknown column 'DescriptionPosition'/i);
+    expect(window.localStorage.getItem('carmen_access_token')).toBe('token');
+  });
+
+  it('includes the server version when saving an existing report', async () => {
+    createSessionStorageMock({ accessToken: 'token', businessUnit: { tenant: 'tenant-1' } });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => JSON.stringify({ lastModified: '2026-09-21T10:01:00' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const saved = await saveCarmenReport({
+      id: 'rep-versioned',
+      name: 'Versioned report',
+      lastModified: '2026-09-21T10:00:00',
+      rows: [],
+      columns: [],
+    });
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual(expect.objectContaining({
+      lastModified: '2026-09-21T10:00:00',
+    }));
+    expect(saved).toEqual({ lastModified: '2026-09-21T10:01:00' });
+  });
+
+  it('classifies offline fetch failures and publishes a global API error event', async () => {
+    const storage = createSessionStorageMock({
+      accessToken: 'token',
+      businessUnit: { tenant: 'carmencloud' },
+    });
+    Object.defineProperty(window.navigator, 'onLine', { value: false, configurable: true });
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+    const apiErrorListener = vi.fn();
+    window.addEventListener('carmen-api-error', apiErrorListener);
+
+    await expect(saveCarmenReport({
+      id: 'rep-offline',
+      name: 'Offline report',
+      rows: [],
+      columns: [],
+    })).rejects.toThrow(/offline/i);
+    expect(apiErrorListener).toHaveBeenCalledWith(expect.objectContaining({
+      detail: expect.objectContaining({ kind: 'offline' }),
+    }));
+    expect(storage.has('carmen_access_token')).toBe(true);
+    expect(getCarmenApiFailure()).toEqual(expect.objectContaining({ kind: 'offline' }));
+
+    window.removeEventListener('carmen-api-error', apiErrorListener);
+  });
+
+  it('clears an expired session and publishes a session-expired event', async () => {
+    const storage = createSessionStorageMock({
+      accessToken: 'expired-token',
+      businessUnit: { tenant: 'carmencloud' },
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      text: async () => '',
+    }));
+    const apiErrorListener = vi.fn();
+    window.addEventListener('carmen-api-error', apiErrorListener);
+
+    await expect(saveCarmenReport({
+      id: 'rep-expired',
+      name: 'Expired session report',
+      rows: [],
+      columns: [],
+    })).rejects.toThrow(/session expired/i);
+    expect(storage.has('carmen_access_token')).toBe(false);
+    expect(apiErrorListener).toHaveBeenCalledWith(expect.objectContaining({
+      detail: expect.objectContaining({ kind: 'session' }),
+    }));
+
+    window.removeEventListener('carmen-api-error', apiErrorListener);
+  });
+
+  it('saves multiple imported reports with one batch request', async () => {
+    createSessionStorageMock({
+      accessToken: 'token',
+      businessUnit: { tenant: 'tenant-1' },
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [{ id: 'rep-1' }, { id: 'rep-2' }],
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await saveCarmenReports([
+      { id: 'rep-1', name: 'Sheet 1', rows: [], columns: [] },
+      { id: 'rep-2', name: 'Sheet 2', rows: [], columns: [] },
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/reports/batch'),
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"id":"rep-2"'),
+      }),
+    );
+  });
+
+  it('normalizes login language codes before calling the auth API', async () => {
+    window.__CARMEN_CONFIG__ = {
+      apiUrl: 'http://localhost/Carmen.WebApi',
+      adminToken: 'admin-token',
+    };
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        AccessToken: 'access-token',
+        UserName: 'admin',
+        Tenant: 'tenant-1',
+        Permissions: [],
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await loginWithCarmenCredentials({
+      userName: 'admin',
+      password: 'secret',
+      tenant: 'tenant-1',
+      language: 'en-US',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/login?adminToken='), expect.objectContaining({
+      method: 'POST',
+    }));
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual(expect.objectContaining({
+      Language: 'EN',
+      UserName: 'admin',
+      Tenant: 'tenant-1',
+    }));
+  });
+
   it('sends delete and clone requests to the API', async () => {
-    window.localStorage.setItem('carmen_access_token', 'token');
-    window.localStorage.setItem('carmen_username', 'owner-1');
-    window.localStorage.setItem('carmen_user', JSON.stringify({ id: 'owner-1' }));
-    window.localStorage.setItem('carmen_business_unit', JSON.stringify({ tenant: 'tenant-1' }));
+    createSessionStorageMock({
+      accessToken: 'token',
+      username: 'owner-1',
+      user: { id: 'owner-1' },
+      businessUnit: { tenant: 'tenant-1' },
+    });
 
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({
@@ -263,10 +814,12 @@ describe('reportApi helpers', () => {
   });
 
   it('clears the Carmen session when the API returns 401', async () => {
-    window.localStorage.setItem('carmen_access_token', 'token');
-    window.localStorage.setItem('carmen_username', 'owner-1');
-    window.localStorage.setItem('carmen_user', JSON.stringify({ id: 'owner-1' }));
-    window.localStorage.setItem('carmen_business_unit', JSON.stringify({ tenant: 'tenant-1' }));
+    createSessionStorageMock({
+      accessToken: 'token',
+      username: 'owner-1',
+      user: { id: 'owner-1' },
+      businessUnit: { tenant: 'tenant-1' },
+    });
 
     const fetchMock = vi.fn().mockResolvedValue({
       ok: false,
@@ -274,6 +827,31 @@ describe('reportApi helpers', () => {
       json: async () => ({ message: 'Unauthorized' }),
     });
     vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchCarmenReportOptions()).rejects.toThrow(/session expired/i);
+    expect(window.localStorage.getItem('carmen_access_token')).toBeNull();
+  });
+
+  it('treats an empty business unit response as no matching username', async () => {
+    window.__CARMEN_CONFIG__ = {
+      apiUrl: 'http://localhost/Carmen.WebApi',
+      adminToken: 'admin-token',
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+    }));
+
+    await expect(fetchBusinessUnitsByUsername('missing-user')).resolves.toEqual([]);
+  });
+
+  it('clears the Carmen session when the API returns 403', async () => {
+    createSessionStorageMock({ accessToken: 'token', businessUnit: { tenant: 'tenant-1' } });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({ message: 'Forbidden' }),
+    }));
 
     await expect(fetchCarmenReportOptions()).rejects.toThrow(/session expired/i);
     expect(window.localStorage.getItem('carmen_access_token')).toBeNull();

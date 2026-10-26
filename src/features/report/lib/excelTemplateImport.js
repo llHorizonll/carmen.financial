@@ -1,0 +1,1267 @@
+import {
+  normalizeAccLookupCode,
+  normalizeDeptLookupCode,
+} from "./normalizeCode.js";
+
+const ERROR_VALUE = /^#(?:NAME\?|REF!|DIV\/0!|VALUE!|N\/A|NULL!|NUM!)/i;
+const NUMBER_VALUE = /^\(?-?[\d,.]+\)?%?$/;
+const FINANCIAL_NUMBER_VALUE = /^\(?-?\s*(?:[$฿€£¥]\s*)?[\d,.]+\s*\)?\s*%?$/;
+const EMPTY_VALUE = /^[-–—]$/;
+const HEADER_NOISE =
+  /^(?:%|bht|actual|budget|plan|variance|description|current month|last month|last year|this month|this year|year to date|month to date|report description)$/i;
+const DESCRIPTION_HEADER = /^(?:description|report description)$/i;
+const LINKED_MAPPING_HEADERS = {
+  dept: /^dept\s+code\s*\(linked\)$/i,
+  accCodes: /^account\s+code\s*\(linked\)$/i,
+};
+const DIMENSION_MAPPING_HEADERS = {
+  fieldName: /^field\s*name$/i,
+  operator: /^operator$/i,
+  value: /^value$/i,
+};
+const NON_REPORT_SHEET = /^(?:intro|cover|glac|sheet1|sheet2|aspenmacro|start|myconnect|carmen parameter|standard_formula)$/i;
+const SUPPORTED_SOURCE_FORMULAS = new Set(["DAC", "PTD", "YTD", "DACBG", "PTDBG", "YTDBG", "AC", "ACC", "BC", "BCC"]);
+
+const getSourceFormulaType = (cellMatrix, sourceIndex, startRowIndex, endRowIndex) => {
+  for (let rowIndex = startRowIndex; rowIndex <= endRowIndex; rowIndex += 1) {
+    const formula = cellMatrix[rowIndex]?.[sourceIndex]?.f;
+    const match = typeof formula === "string" && formula.match(/^\s*(?:_xll\.)?([A-Z]+)\s*\(/i);
+    const type = match?.[1]?.toUpperCase();
+    if (SUPPORTED_SOURCE_FORMULAS.has(type)) {
+      return { type, yearMode: /\bYR\s*-\s*1\b/i.test(formula) ? "-1" : "current" };
+    }
+  }
+  return null;
+};
+
+const cleanText = (value) =>
+  String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+const toPositiveInteger = (value) => {
+  if (value === "" || value === null || value === undefined) return null;
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : null;
+};
+
+export const excelColumnToIndex = (value) => {
+  const reference = cleanText(value).toUpperCase();
+  if (!/^[A-Z]+$/.test(reference)) return -1;
+  return (
+    [...reference].reduce(
+      (result, character) => result * 26 + character.charCodeAt(0) - 64,
+      0,
+    ) - 1
+  );
+};
+
+export const excelIndexToColumn = (value) => {
+  let index = Number(value);
+  if (!Number.isInteger(index) || index < 0) return "";
+  let reference = "";
+  while (index >= 0) {
+    reference = String.fromCharCode((index % 26) + 65) + reference;
+    index = Math.floor(index / 26) - 1;
+  }
+  return reference;
+};
+
+const isUsableText = (value) => {
+  const text = cleanText(value);
+  return (
+    text.length > 1 &&
+    !ERROR_VALUE.test(text) &&
+    !NUMBER_VALUE.test(text) &&
+    /[A-Za-zก-๙]/.test(text)
+  );
+};
+
+const detectDescriptionColumn = (matrix, override = "", excludedColumns = new Set()) => {
+  const overrideIndex = excelColumnToIndex(override);
+  if (overrideIndex >= 0) return overrideIndex;
+  const scores = [];
+  matrix.forEach((row) =>
+    row.forEach((value, columnIndex) => {
+      if (excludedColumns.has(columnIndex)) return;
+      if (!isUsableText(value)) return;
+      const text = cleanText(value);
+      const score =
+        Math.min(text.length, 60) +
+        (HEADER_NOISE.test(text) ? -40 : 0) +
+        (text.length >= 8 ? 12 : 0);
+      scores[columnIndex] = (scores[columnIndex] || 0) + Math.max(score, 1);
+    }),
+  );
+  return scores.reduce(
+    (best, score = 0, index) => (score > best.score ? { index, score } : best),
+    { index: 0, score: -1 },
+  ).index;
+};
+
+const isNumericValue = (value) => {
+  const text = cleanText(value);
+  return (
+    typeof value === "number" ||
+    ERROR_VALUE.test(text) ||
+    FINANCIAL_NUMBER_VALUE.test(text)
+  );
+};
+
+const detectLinkedMappingColumns = (matrix, options = {}) => {
+  const result = {
+    dept: excelColumnToIndex(options.deptMappingColumn),
+    accCodes: excelColumnToIndex(options.accountMappingColumn),
+    headerRow: toPositiveInteger(options.mappingHeaderRow),
+  };
+  const configuredHeaderIndex = result.headerRow ? result.headerRow - 1 : null;
+  const rows =
+    configuredHeaderIndex === null
+      ? matrix.map((row, rowIndex) => ({ row, rowIndex }))
+      : [
+          {
+            row: matrix[configuredHeaderIndex] || [],
+            rowIndex: configuredHeaderIndex,
+          },
+        ];
+
+  rows.some(({ row, rowIndex }) => {
+    row.forEach((value, columnIndex) => {
+      const header = cleanText(value);
+      Object.entries(LINKED_MAPPING_HEADERS).forEach(([field, pattern]) => {
+        if (result[field] < 0 && pattern.test(header)) {
+          result[field] = columnIndex;
+          result.headerRow ||= rowIndex + 1;
+        }
+      });
+    });
+    return result.dept >= 0 && result.accCodes >= 0;
+  });
+
+  const legacyHeader = matrix.slice(0, 12).find((row) =>
+    row.some((value) => /^dept\s*1$/i.test(cleanText(value))) &&
+    row.some((value) => /^from$/i.test(cleanText(value))),
+  );
+  result.legacyAccountRanges = [];
+  result.legacyDeptColumns = [];
+  if (legacyHeader) {
+    const firstDeptColumn = legacyHeader.findIndex((value) => /^dept\s*1$/i.test(cleanText(value)));
+    for (let columnIndex = 0; columnIndex < firstDeptColumn; columnIndex += 1) {
+      if (/^from$/i.test(cleanText(legacyHeader[columnIndex])) &&
+          /^to$/i.test(cleanText(legacyHeader[columnIndex + 1]))) {
+        result.legacyAccountRanges.push([columnIndex, columnIndex + 1]);
+        columnIndex += 1;
+      }
+    }
+    legacyHeader.forEach((value, columnIndex) => {
+      if (/^dept\s*\d+$/i.test(cleanText(value))) result.legacyDeptColumns.push(columnIndex);
+    });
+  }
+
+  return result;
+};
+
+const detectDimensionMappingColumns = (matrix) => {
+  const emptyResult = { fieldName: -1, operator: -1, value: -1, headerRow: null };
+
+  for (let rowIndex = 0; rowIndex < matrix.length; rowIndex += 1) {
+    const result = { ...emptyResult, headerRow: rowIndex + 1 };
+    (matrix[rowIndex] || []).forEach((value, columnIndex) => {
+      const header = cleanText(value);
+      Object.entries(DIMENSION_MAPPING_HEADERS).forEach(([field, pattern]) => {
+        if (result[field] < 0 && pattern.test(header)) result[field] = columnIndex;
+      });
+    });
+    if (result.fieldName >= 0 && result.operator >= 0 && result.value >= 0) return result;
+  }
+
+  return emptyResult;
+};
+
+const cleanMappingValue = (value) => {
+  const text = cleanText(value);
+  return !text || ERROR_VALUE.test(text) || EMPTY_VALUE.test(text) ? "" : text;
+};
+
+const getCatalogCodes = (items, normalizeCode) => {
+  if (!Array.isArray(items)) return null;
+  return [
+    ...new Set(
+      items
+        .map((item) => item?.id ?? item?.code ?? item)
+        .map(normalizeCode)
+        .filter(Boolean),
+    ),
+  ].sort((left, right) =>
+    left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" }),
+  );
+};
+
+export const resolveLinkedMappingValue = (
+  value,
+  catalogItems,
+  normalizeCode = normalizeAccLookupCode,
+) => {
+  const rawValue = cleanMappingValue(value);
+  if (!rawValue) {
+    return { value: "", invalidTokens: [], rangeMatches: [] };
+  }
+
+  const catalogCodes = getCatalogCodes(catalogItems, normalizeCode);
+  if (catalogCodes === null) {
+    return { value: rawValue, invalidTokens: [], rangeMatches: [] };
+  }
+
+  const catalogSet = new Set(catalogCodes);
+  const resolvedCodes = [];
+  const resolvedSet = new Set();
+  const invalidTokens = [];
+  const rangeMatches = [];
+  const addCode = (code) => {
+    if (resolvedSet.has(code)) return;
+    resolvedSet.add(code);
+    resolvedCodes.push(code);
+  };
+
+  rawValue
+    .split(/[,;|\r\n]+/)
+    .map(cleanText)
+    .filter(Boolean)
+    .forEach((token) => {
+      const range = token.match(/^(\d+)\s*[-–—]\s*(\d+)$/);
+      if (range) {
+        const start = BigInt(range[1]);
+        const end = BigInt(range[2]);
+        const matches = start <= end
+          ? catalogCodes.filter(
+              (code) => /^\d+$/.test(code) && BigInt(code) >= start && BigInt(code) <= end,
+            )
+          : [];
+        matches.forEach(addCode);
+        rangeMatches.push({ token, count: matches.length });
+        if (matches.length === 0) invalidTokens.push(token);
+        return;
+      }
+
+      const normalized = normalizeCode(token);
+      if (catalogSet.has(normalized)) addCode(normalized);
+      else invalidTokens.push(token);
+    });
+
+  return {
+    value: resolvedCodes.join(", "),
+    invalidTokens,
+    rangeMatches,
+  };
+};
+
+const normalizeDimensionLookupValue = (value) => cleanText(value).toUpperCase();
+const SUPPORTED_DIMENSION_OPERATORS = new Set(["IN", "=", "==", "EQ", "EQUALS"]);
+
+export const resolveDimensionMapping = (
+  { fieldName, operator, value },
+  dimensionDefinitions = [],
+) => {
+  const caption = cleanText(fieldName);
+  const rawValue = cleanMappingValue(value);
+  if (!caption && !rawValue) return { fieldKey: "", value: "", warning: "" };
+
+  const normalizedOperator = cleanText(operator).toUpperCase();
+  if (!SUPPORTED_DIMENSION_OPERATORS.has(normalizedOperator)) {
+    return {
+      fieldKey: "",
+      value: "",
+      warning: `unsupported dimension operator "${cleanText(operator) || "(blank)"}" for ${caption || "dimension"}.`,
+    };
+  }
+
+  const definition = dimensionDefinitions.find((item) => (
+    normalizeDimensionLookupValue(item?.caption) === normalizeDimensionLookupValue(caption)
+  ));
+  if (!definition) {
+    return {
+      fieldKey: "",
+      value: "",
+      warning: `dimension Field Name "${caption}" was not found in API Captions.`,
+    };
+  }
+
+  const allowedValues = new Map((definition.values || []).map((item) => [
+    normalizeDimensionLookupValue(item),
+    cleanText(item),
+  ]));
+  const requestedValues = rawValue.split(/[,;|\r\n]+/).map(cleanText).filter(Boolean);
+  const resolvedValues = requestedValues.map((item) => (
+    allowedValues.size > 0 ? allowedValues.get(normalizeDimensionLookupValue(item)) : item
+  )).filter(Boolean);
+  const invalidValues = requestedValues.filter((item) => (
+    allowedValues.size > 0 && !allowedValues.has(normalizeDimensionLookupValue(item))
+  ));
+
+  return {
+    fieldKey: definition.key,
+    value: [...new Set(resolvedValues)].join(", "),
+    warning: invalidValues.length > 0
+      ? `dimension value(s) not found for ${definition.caption}: ${invalidValues.join(", ")}.`
+      : "",
+  };
+};
+
+const detectColumns = (
+  matrix,
+  descriptionColumn,
+  cellMatrix = [],
+  excludedColumns = new Set(),
+  options = {},
+) => {
+  const candidates = [];
+  const merges = cellMatrix["!merges"] || [];
+  const columnSettings = cellMatrix["!cols"] || [];
+  const maximumColumns = matrix.reduce(
+    (maximum, row) => Math.max(maximum, row.length),
+    0,
+  );
+  const configuredStartColumn = excelColumnToIndex(options.reportStartColumn);
+  const configuredEndColumn = excelColumnToIndex(options.reportEndColumn);
+  const mappingAreaStartColumn = matrix.reduce((detected, row) => {
+    const columnIndex = row.findIndex((value) =>
+      /^mapping\s+area$/i.test(cleanText(value)),
+    );
+    if (columnIndex < 0) return detected;
+    return detected < 0 ? columnIndex : Math.min(detected, columnIndex);
+  }, -1);
+  const automaticEndColumn =
+    configuredEndColumn >= 0
+      ? configuredEndColumn
+      : mappingAreaStartColumn >= 0
+        ? mappingAreaStartColumn - 1
+        : -1;
+  const startRowIndex = Math.max(
+    0,
+    (toPositiveInteger(options.dataStartRow) || 1) - 1,
+  );
+  const endRowIndex = Math.min(
+    matrix.length - 1,
+    (toPositiveInteger(options.dataEndRow) || matrix.length) - 1,
+  );
+
+  for (let columnIndex = 0; columnIndex < maximumColumns; columnIndex += 1) {
+    if (
+      columnIndex === descriptionColumn ||
+      excludedColumns.has(columnIndex) ||
+      (configuredStartColumn >= 0 && columnIndex < configuredStartColumn) ||
+      (automaticEndColumn >= 0 && columnIndex > automaticEndColumn) ||
+      columnSettings[columnIndex]?.hidden
+    )
+      continue;
+    const values = matrix
+      .slice(startRowIndex, endRowIndex + 1)
+      .map((row) => row[columnIndex]);
+    const numericCount = values.filter(isNumericValue).length;
+    if (numericCount < 2) continue;
+    candidates.push({ columnIndex, numericCount });
+  }
+
+  const reportColumnIndexes = new Set();
+  const addContiguousSide = (items, getGap) => {
+    items.forEach((candidate, index) => {
+      if (index > 0 && getGap(items[index - 1], candidate) > 4) return;
+      if (
+        index === 0 ||
+        reportColumnIndexes.has(items[index - 1].columnIndex)
+      ) {
+        reportColumnIndexes.add(candidate.columnIndex);
+      }
+    });
+  };
+  addContiguousSide(
+    candidates
+      .filter(({ columnIndex }) => columnIndex < descriptionColumn)
+      .sort((left, right) => right.columnIndex - left.columnIndex),
+    (previous, current) => previous.columnIndex - current.columnIndex,
+  );
+  addContiguousSide(
+    candidates
+      .filter(({ columnIndex }) => columnIndex > descriptionColumn)
+      .sort((left, right) => left.columnIndex - right.columnIndex),
+    (previous, current) => current.columnIndex - previous.columnIndex,
+  );
+  const reportCandidates =
+    reportColumnIndexes.size > 0
+      ? candidates.filter(({ columnIndex }) =>
+          reportColumnIndexes.has(columnIndex),
+        )
+      : candidates;
+
+  const firstDataRow = matrix.findIndex(
+    (row) =>
+      isUsableText(row[descriptionColumn]) &&
+      reportCandidates.filter(({ columnIndex }) => isNumericValue(row[columnIndex])).length >= 2,
+  );
+  const headerEnd =
+    firstDataRow >= 0 ? firstDataRow : Math.min(12, matrix.length);
+  // A description heading marks the start of the table; currency/date metadata
+  // above it must not become part of the report's column labels.
+  const descriptionHeaderRow = matrix.slice(0, headerEnd).findLastIndex(
+    (row) => DESCRIPTION_HEADER.test(cleanText(row[descriptionColumn])),
+  );
+  let tableHeaderStart = descriptionHeaderRow;
+  // Some templates put merged period groups one level above Description.
+  // Keep those groups only when every populated report cell belongs to a
+  // multi-column group that does not cross the description column.
+  while (tableHeaderStart > 0) {
+    const previousRow = tableHeaderStart - 1;
+    const populated = reportCandidates.filter(
+      ({ columnIndex }) => cleanText(matrix[previousRow]?.[columnIndex]) !== '',
+    );
+    if (populated.length < 2 || !populated.every(({ columnIndex }) => merges.some(
+      ({ s, e }) => s.r === previousRow && e.r === previousRow && s.c === columnIndex && e.c > s.c &&
+        (e.c < descriptionColumn || s.c > descriptionColumn),
+    ))) break;
+    tableHeaderStart = previousRow;
+  }
+  const headerStart = Math.max(0, headerEnd - 8, tableHeaderStart);
+  const qualifyingHeaderRows = Array.from(
+    { length: headerEnd - headerStart },
+    (_, index) => headerStart + index,
+  ).filter(
+    (rowIndex) =>
+      reportCandidates.filter(
+        ({ columnIndex }) => cleanText(matrix[rowIndex]?.[columnIndex]) !== "",
+      ).length >= 2,
+  );
+  const headerRows = qualifyingHeaderRows.reduce((rows, rowIndex) => {
+    if (rows.length > 0 && rowIndex - rows.at(-1) > 1) rows.length = 0;
+    rows.push(rowIndex);
+    return rows;
+  }, []);
+  const lastHeaderColumn =
+    headerRows.length > 0
+      ? Math.max(
+          ...reportCandidates
+            .filter(({ columnIndex }) =>
+              headerRows.some(
+                (rowIndex) => cleanText(matrix[rowIndex]?.[columnIndex]) !== "",
+              ),
+            )
+            .map(({ columnIndex }) => columnIndex),
+        )
+      : maximumColumns - 1;
+  const selected = reportCandidates
+    .filter(({ columnIndex }) => columnIndex <= lastHeaderColumn)
+    .sort((left, right) => left.columnIndex - right.columnIndex);
+
+  const getHeaderValue = (rowIndex, columnIndex) => {
+    const merge = merges.find(
+      ({ s, e }) =>
+        rowIndex >= s.r &&
+        rowIndex <= e.r &&
+        columnIndex >= s.c &&
+        columnIndex <= e.c,
+    );
+    return matrix[merge?.s.r ?? rowIndex]?.[merge?.s.c ?? columnIndex];
+  };
+
+  const columns = [];
+  const sourceColumnIndexes = [];
+  selected.forEach((candidate) => {
+    const headerParts = (
+      headerRows.length > 0
+        ? headerRows.map((rowIndex) =>
+            getHeaderValue(rowIndex, candidate.columnIndex),
+          )
+        : matrix.slice(0, 12).map((row) => row[candidate.columnIndex])
+    )
+      .map(cleanText)
+      .filter(
+        (value) =>
+          value !== "" &&
+          !EMPTY_VALUE.test(value) &&
+          !ERROR_VALUE.test(value) &&
+          !isNumericValue(value),
+      )
+      .filter((value, index, items) => items.indexOf(value) === index);
+    if (headerRows.length > 0 && headerParts.length === 0) return;
+    let label =
+      headerParts.join("\n") || `Excel column ${candidate.columnIndex + 1}`;
+    if (/^(?:%|percent)$/i.test(label) && columns.length > 0) {
+      label = `${columns.at(-1).label.replace(/\n%$/, "")}\n%`;
+    }
+    const lowerLabel = label.toLowerCase();
+    const isPercent = /%|percent/.test(lowerLabel) && columns.length > 0;
+    const previousDataColumn = [...columns]
+      .reverse()
+      .find((column) => !column.isPercent);
+    const sourceFormula = getSourceFormulaType(
+      cellMatrix, candidate.columnIndex, startRowIndex, endRowIndex,
+    );
+    columns.push({
+      id: `C${columns.length + 1}`,
+      label,
+      isActive: true,
+      isFormula: false,
+      isPercent,
+      formatAsPercent: isPercent,
+      ...(isPercent
+        ? { targetCol: previousDataColumn?.id || "C1", width: "80" }
+        : {
+            type: sourceFormula?.type || (/budget|plan|forecast/.test(lowerLabel) ? "BC" : "AC"),
+            yearMode: sourceFormula?.yearMode === "-1" || /last year|prior year/.test(lowerLabel)
+              ? "-1"
+              : "current",
+            periodMode: "current",
+            width: "",
+          }),
+    });
+    sourceColumnIndexes.push(candidate.columnIndex);
+  });
+
+  const columnIdsBySourceIndex = new Map(
+    sourceColumnIndexes.map((sourceIndex, index) => [sourceIndex, columns[index].id]),
+  );
+  columns.forEach((column, index) => {
+    if (column.isPercent) return;
+    const sourceIndex = sourceColumnIndexes[index];
+    // Only same-row arithmetic belongs to a column; vertical totals belong to rows.
+    for (let rowIndex = Math.max(startRowIndex, headerEnd); rowIndex <= endRowIndex; rowIndex += 1) {
+      const sourceFormula = cellMatrix[rowIndex]?.[sourceIndex]?.f;
+      if (!sourceFormula) continue;
+      let valid = true;
+      let hasReference = false;
+      let formula = sourceFormula.replace(/^=/, "").replace(/\s/g, "").toUpperCase();
+      formula = formula.replace(/SUM\(([^()]*)\)/g, (_, args) => {
+        const terms = args.split(",").map(arg => {
+          const range = arg.match(/^\$?([A-Z]+)\$?(\d+):\$?([A-Z]+)\$?(\d+)$/);
+          if (!range) return arg;
+          const start = excelColumnToIndex(range[1]);
+          const end = excelColumnToIndex(range[3]);
+          if (range[2] !== range[4] || start > end) { valid = false; return ""; }
+          return Array.from({ length: end - start + 1 }, (_, offset) => `${excelIndexToColumn(start + offset)}${range[2]}`).join("+");
+        });
+        return `(${terms.join("+")})`;
+      });
+      formula = formula.replace(/\$?([A-Z]+)\$?(\d+)/g, (_, reference, rowNumber) => {
+        hasReference = true;
+        const referenceIndex = excelColumnToIndex(reference);
+        if (Number(rowNumber) !== rowIndex + 1 || referenceIndex === sourceIndex) valid = false;
+        return columnIdsBySourceIndex.get(referenceIndex) || "!REF!";
+      });
+      if (!valid || !hasReference || !/^(?:C\d+|!REF!|[\d.+\-*/()])+$/.test(formula)) continue;
+      columns[index] = {
+        id: column.id, label: column.label, isActive: column.isActive,
+        isFormula: true, isPercent: false, formatAsPercent: false,
+        formula: /^SUM\([^()]*\)$/i.test(sourceFormula.replace(/^=/, "").replace(/\s/g, "")) ? formula.slice(1, -1) : formula,
+        width: column.width,
+      };
+      return;
+    }
+    if (!/\bvariance\b/i.test(column.label)) return;
+    const previousDataColumns = columns.slice(0, index).filter((candidate) =>
+      !candidate.isFormula && !candidate.isPercent && !/\bvariance\b/i.test(candidate.label),
+    );
+    const formula = previousDataColumns.length >= 2
+        ? `${previousDataColumns.at(-2).id}-${previousDataColumns.at(-1).id}`
+        : "";
+    if (!formula) return;
+    columns[index] = {
+      id: column.id,
+      label: column.label,
+      isActive: column.isActive,
+      isFormula: true,
+      isPercent: false,
+      formatAsPercent: false,
+      formula,
+      width: column.width,
+    };
+  });
+
+  return {
+    columns:
+      columns.length > 0
+        ? columns
+        : [
+            {
+              id: "C1",
+              label: "Actual",
+              isActive: true,
+              isFormula: false,
+              isPercent: false,
+              formatAsPercent: false,
+              yearMode: "current",
+              periodMode: "current",
+              type: "AC",
+              width: "",
+            },
+          ],
+    sourceColumnIndexes,
+  };
+};
+
+const decodeWorkbookXml = (workbook, path) => {
+  const content =
+    workbook.files?.[String(path || "").replace(/^\//, "")]?.content;
+  return content ? new TextDecoder().decode(content) : "";
+};
+
+const getXmlSection = (xml, tag) =>
+  xml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`))?.[1] || "";
+
+const getXmlItems = (xml, tag) =>
+  [
+    ...xml.matchAll(
+      new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)</${tag}>`, "g"),
+    ),
+  ].map((match) => match[0]);
+
+const parseWorkbookStyles = (workbook) => {
+  const xml = decodeWorkbookXml(
+    workbook,
+    workbook.Directory?.style || "xl/styles.xml",
+  );
+  if (!xml) return [];
+
+  const fonts = getXmlItems(getXmlSection(xml, "fonts"), "font").map(
+    (font) => ({
+      bold: /<b(?:\s[^>]*)?(?:\/>|>)/.test(font),
+      underline: /<u(?:\s[^>]*)?(?:\/>|>)/.test(font),
+    }),
+  );
+  const borders = getXmlItems(getXmlSection(xml, "borders"), "border").map(
+    (border) => ({
+      top: /<top\s[^>]*style=/.test(border),
+      bottom: /<bottom\s[^>]*style=/.test(border),
+    }),
+  );
+
+  return [
+    ...getXmlSection(xml, "cellXfs").matchAll(
+      /<xf\b([^>]*?)(?:\/>|>([\s\S]*?)<\/xf>)/g,
+    ),
+  ].map((match) => {
+    const attributes = match[1];
+    const body = match[2] || "";
+    const fontId = Number(attributes.match(/\bfontId="(\d+)"/)?.[1] || 0);
+    const borderId = Number(attributes.match(/\bborderId="(\d+)"/)?.[1] || 0);
+    const indent = body.match(/<alignment[^>]*\bindent="(\d+)"/)?.[1];
+    return {
+      ...fonts[fontId],
+      ...borders[borderId],
+      indent: indent === undefined ? undefined : Number(indent),
+    };
+  });
+};
+
+const parseSheetStyles = (workbook, sheetIndex, styles, XLSX) => {
+  const xml = decodeWorkbookXml(
+    workbook,
+    workbook.Directory?.sheets?.[sheetIndex],
+  );
+  const result = new Map();
+
+  for (const match of xml.matchAll(/<c\b[^>]*>/g)) {
+    const address = match[0].match(/\br="([^"]+)"/)?.[1];
+    const styleIndex = match[0].match(/\bs="(\d+)"/)?.[1];
+    if (!address || styleIndex === undefined) continue;
+    const position = XLSX.utils.decode_cell(address);
+    result.set(`${position.r}:${position.c}`, styles[Number(styleIndex)] || {});
+  }
+
+  return result;
+};
+
+const getExcelIndent = (cell, style, original) => {
+  const styleIndent = Number(style?.indent ?? cell?.s?.alignment?.indent);
+  if (Number.isFinite(styleIndent) && styleIndent >= 0) {
+    return Math.min(7, Math.round(styleIndent));
+  }
+
+  const leadingSpaces = (original.match(/^[ \t]*/)?.[0] || "").replace(
+    /\t/g,
+    "    ",
+  ).length;
+  return leadingSpaces === 0
+    ? 0
+    : Math.min(7, Math.max(1, Math.round(leadingSpaces / 5)));
+};
+
+// Translate worksheet references only after the imported row order is known.
+const importRowFormulas = (rows, sourceRowNumbers, cellMatrix, columns, sourceColumnIndexes) => {
+  const rowRefs = new Map(sourceRowNumbers.map((number, index) => [number, `R${index + 1}`]));
+  rows.forEach((row, index) => {
+    for (let colIndex = 0; colIndex < columns.length; colIndex += 1) {
+      if (columns[colIndex].isFormula || columns[colIndex].isPercent) continue;
+      const sourceColumn = sourceColumnIndexes[colIndex];
+      const sourceCell = cellMatrix[sourceRowNumbers[index] - 1]?.[sourceColumn];
+      const sourceFormula = sourceCell?.f;
+      if (!sourceFormula) continue;
+      let formula = sourceFormula.replace(/^=/, '').replace(/\s/g, '').toUpperCase();
+      let valid = true;
+      let hasReference = false;
+      formula = formula.replace(/SUM\(([^()]*)\)/g, (_, args) => {
+        const terms = args.split(',').map((arg) => {
+          const range = arg.match(/^\$?([A-Z]+)\$?(\d+):\$?([A-Z]+)\$?(\d+)$/);
+          if (!range) return arg;
+          if (range[1] !== range[3] || Number(range[2]) > Number(range[4])) { valid = false; return ''; }
+          return Array.from({ length: Number(range[4]) - Number(range[2]) + 1 }, (_, offset) => `${range[1]}${Number(range[2]) + offset}`).join('+');
+        });
+        return `(${terms.join('+')})`;
+      });
+      formula = formula.replace(/\$?([A-Z]+)\$?(\d+)/g, (_, column, number) => {
+        hasReference = true;
+        if (excelColumnToIndex(column) !== sourceColumn || Number(number) === sourceRowNumbers[index]) valid = false;
+        return rowRefs.get(Number(number)) || '!REF!';
+      });
+      if (!valid || !hasReference || !/^(?:R\d+|!REF!|[\d.+\-*/()])+$/.test(formula)) continue;
+      row.formula = /^SUM\([^()]*\)$/i.test(sourceFormula.replace(/^=/, '')) ? formula.slice(1, -1) : formula;
+      row.isTotal = true;
+      row.isHeader = false;
+      row.numberFormat = /%/.test((sourceCell.z || '').replace(/"[^"]*"|\\./g, '')) ? 'percent' : 'column';
+      row.indent = 0;
+      break;
+    }
+  });
+};
+
+const detectRows = (
+  sheetName,
+  matrix,
+  descriptionColumn,
+  cellMatrix = [],
+  cellStyles = new Map(),
+  linkedMappingColumns = { dept: -1, accCodes: -1 },
+  dimensionMappingColumns = { fieldName: -1, operator: -1, value: -1 },
+  options = {},
+  mappingCatalogs = {},
+) => {
+  const descriptionHeaderIndex = matrix.findIndex((row) =>
+    (row || []).some((value) => DESCRIPTION_HEADER.test(cleanText(value))),
+  );
+  const configuredStartRow = toPositiveInteger(options.dataStartRow);
+  const configuredEndRow = toPositiveInteger(options.dataEndRow);
+  let hasSection = false;
+  const sourceRowNumbers = [];
+  const mappingChecks = [];
+  const mappingWarnings = [];
+  const mappingRequirements = { dept: false, accCodes: false, dimensions: false };
+
+  const rows = matrix.flatMap((sourceRow, sourceIndex) => {
+    const sourceRowNumber = sourceIndex + 1;
+    const original = String(sourceRow[descriptionColumn] ?? "");
+    const desc = cleanText(original);
+    if (
+      (configuredStartRow && sourceRowNumber < configuredStartRow) ||
+      (configuredEndRow && sourceRowNumber > configuredEndRow) ||
+      !isUsableText(desc) ||
+      HEADER_NOISE.test(desc) ||
+      (descriptionHeaderIndex >= 0 && sourceIndex <= descriptionHeaderIndex)
+    ) {
+      return [];
+    }
+    const populatedCells = sourceRow.filter(
+      (value) => cleanText(value) !== "" && !ERROR_VALUE.test(cleanText(value)),
+    );
+    const style = cellStyles.get(`${sourceIndex}:${descriptionColumn}`);
+    const isStyleBoundary = Boolean(
+      style && (style.bold || style.underline || style.top || style.bottom),
+    );
+    const sourceIndent = getExcelIndent(
+      cellMatrix[sourceIndex]?.[descriptionColumn],
+      style,
+      original,
+    );
+    const rawDept = linkedMappingColumns.dept >= 0
+      ? cleanMappingValue(sourceRow[linkedMappingColumns.dept])
+      : (linkedMappingColumns.legacyDeptColumns || [])
+          .map((columnIndex) => cleanMappingValue(sourceRow[columnIndex]))
+          .filter(Boolean).join(', ');
+    const rawAccCodes = linkedMappingColumns.accCodes >= 0
+      ? cleanMappingValue(sourceRow[linkedMappingColumns.accCodes])
+      : (linkedMappingColumns.legacyAccountRanges || [])
+          .map(([fromIndex, toIndex]) => {
+            const from = cleanMappingValue(sourceRow[fromIndex]);
+            const to = cleanMappingValue(sourceRow[toIndex]);
+            return from && to && from !== to ? `${from}-${to}` : from || to;
+          })
+          .filter(Boolean).join(', ');
+    const deptResolution = resolveLinkedMappingValue(
+      rawDept,
+      mappingCatalogs.depts,
+      normalizeDeptLookupCode,
+    );
+    const accountResolution = resolveLinkedMappingValue(
+      rawAccCodes,
+      mappingCatalogs.accCodes,
+      normalizeAccLookupCode,
+    );
+    const dept = deptResolution.value;
+    const accCodes = accountResolution.value;
+    const dimensionFieldName = cleanMappingValue(sourceRow[dimensionMappingColumns.fieldName]);
+    const dimensionOperator = cleanMappingValue(sourceRow[dimensionMappingColumns.operator]);
+    const dimensionValue = cleanMappingValue(sourceRow[dimensionMappingColumns.value]);
+    const dimensionResolution = resolveDimensionMapping(
+      { fieldName: dimensionFieldName, operator: dimensionOperator, value: dimensionValue },
+      mappingCatalogs.dimensions,
+    );
+    const hasDimensionMapping = Boolean(dimensionResolution.fieldKey && dimensionResolution.value);
+    const hasLinkedMapping = Boolean(rawDept || rawAccCodes || hasDimensionMapping);
+    mappingRequirements.dept ||= Boolean(rawDept);
+    mappingRequirements.accCodes ||= Boolean(rawAccCodes);
+    mappingRequirements.dimensions ||= Boolean(dimensionFieldName || dimensionValue);
+
+    if (dimensionResolution.warning) {
+      mappingWarnings.push(`Row ${sourceRowNumber} (${desc}): ${dimensionResolution.warning}`);
+    } else if (dimensionResolution.fieldKey && dimensionResolution.value) {
+      mappingChecks.push(
+        `Row ${sourceRowNumber} (${desc}): ${dimensionFieldName} ${dimensionOperator} ${dimensionResolution.value} mapped to ${dimensionResolution.fieldKey.toUpperCase()}.`,
+      );
+    }
+
+    [
+      ["Department", deptResolution],
+      ["Account", accountResolution],
+    ].forEach(([label, resolution]) => {
+      resolution.rangeMatches.forEach(({ token, count }) => {
+        mappingChecks.push(
+          `Row ${sourceRowNumber} (${desc}): ${label} range ${token} matched ${count} system code${count === 1 ? "" : "s"}.`,
+        );
+      });
+      if (resolution.invalidTokens.length > 0) {
+        mappingWarnings.push(
+          `Row ${sourceRowNumber} (${desc}): ignored ${label.toLowerCase()} mapping values not found in the system: ${resolution.invalidTokens.join(", ")}.`,
+        );
+      }
+    });
+    const indent = isStyleBoundary
+      ? 0
+      : hasSection
+        ? Math.max(1, sourceIndent)
+        : sourceIndent;
+    const letters = desc.replace(/[^\p{L}]/gu, "");
+    const firstMappingColumn = Math.min(
+      ...[
+        linkedMappingColumns.dept,
+        linkedMappingColumns.accCodes,
+        linkedMappingColumns.legacyAccountRanges?.[0]?.[0],
+        linkedMappingColumns.legacyDeptColumns?.[0],
+        dimensionMappingColumns.fieldName,
+      ].filter((index) => Number.isInteger(index) && index >= 0),
+      sourceRow.length,
+    );
+    const hasReportValue = sourceRow.slice(0, firstMappingColumn).some((value, columnIndex) =>
+      columnIndex !== descriptionColumn && isNumericValue(value),
+    );
+    const isHeader = (/^DAILY\s+F&B$/i.test(sheetName) && Boolean(style?.bold)) ||
+      (!hasLinkedMapping && !hasReportValue && (
+        isStyleBoundary || populatedCells.length <= 2 ||
+        (letters.length >= 4 && desc === desc.toUpperCase())
+      ));
+    if (isStyleBoundary) hasSection = true;
+    sourceRowNumbers.push(sourceRowNumber);
+
+    return [
+      {
+        id: `excel-row-${sourceIndex + 1}`,
+        desc,
+        isActive: true,
+        isHeader,
+        isTotal: false,
+        dept,
+        groupLevel: "L4",
+        groups: "",
+        accCodes,
+        percentBase: "",
+        formula: "",
+        indent,
+        ...(dimensionResolution.fieldKey && dimensionResolution.value
+          ? { [dimensionResolution.fieldKey]: dimensionResolution.value }
+          : {}),
+      },
+    ];
+  });
+
+  return {
+    rows,
+    sourceRowNumbers,
+    mappingChecks,
+    mappingWarnings,
+    mappingRequirements,
+  };
+};
+
+const getImportConfigIssues = ({
+  config,
+  matrix,
+  descriptionColumn,
+  linkedMappingColumns,
+  rowCount,
+  columnCount,
+  mappingCatalogs,
+  mappingRequirements,
+  mappingWarnings,
+}) => {
+  const errors = [];
+  const warnings = [];
+  [
+    ["descriptionColumn", "Description column"],
+    ["reportStartColumn", "First report column"],
+    ["reportEndColumn", "Last report column"],
+  ].forEach(([field, label]) => {
+    if (excelColumnToIndex(config[field]) < 0) {
+      errors.push(`${label} must be a valid Excel column such as A or BZ.`);
+    }
+  });
+
+  const startRow = toPositiveInteger(config.dataStartRow);
+  const endRow = toPositiveInteger(config.dataEndRow);
+  if (!startRow) errors.push("Data start row must be a positive whole number.");
+  if (!endRow) errors.push("Data end row must be a positive whole number.");
+  if (startRow && endRow && startRow > endRow) {
+    errors.push("Data start row cannot be after data end row.");
+  }
+  if (endRow && endRow > matrix.length) {
+    warnings.push(
+      `Data end row is beyond the worksheet's ${matrix.length} rows.`,
+    );
+  }
+
+  const reportStartColumn = excelColumnToIndex(config.reportStartColumn);
+  const reportEndColumn = excelColumnToIndex(config.reportEndColumn);
+  if (
+    reportStartColumn >= 0 &&
+    reportEndColumn >= 0 &&
+    reportStartColumn > reportEndColumn
+  ) {
+    errors.push("First report column cannot be after last report column.");
+  }
+
+  [
+    ["deptMappingColumn", "Department mapping column"],
+    ["accountMappingColumn", "Account mapping column"],
+  ].forEach(([field, label]) => {
+    if (cleanText(config[field]) && excelColumnToIndex(config[field]) < 0) {
+      errors.push(`${label} must be a valid Excel column or left blank.`);
+    }
+  });
+
+  const mappingHeaderRow = toPositiveInteger(config.mappingHeaderRow);
+  if (cleanText(config.mappingHeaderRow) && !mappingHeaderRow) {
+    errors.push(
+      "Mapping header row must be a positive whole number or left blank.",
+    );
+  }
+  if (
+    linkedMappingColumns.dept >= 0 &&
+    linkedMappingColumns.dept === linkedMappingColumns.accCodes
+  ) {
+    errors.push("Department and account mappings cannot use the same column.");
+  }
+  if (
+    descriptionColumn === linkedMappingColumns.dept ||
+    descriptionColumn === linkedMappingColumns.accCodes
+  ) {
+    errors.push("Description and mapping columns must be different.");
+  }
+
+  if (mappingHeaderRow && mappingHeaderRow <= matrix.length) {
+    const headerRow = matrix[mappingHeaderRow - 1] || [];
+    [
+      [
+        linkedMappingColumns.dept,
+        LINKED_MAPPING_HEADERS.dept,
+        "Dept Code (Linked)",
+      ],
+      [
+        linkedMappingColumns.accCodes,
+        LINKED_MAPPING_HEADERS.accCodes,
+        "Account Code (Linked)",
+      ],
+    ].forEach(([columnIndex, pattern, label]) => {
+      if (
+        columnIndex >= 0 &&
+        !pattern.test(cleanText(headerRow[columnIndex]))
+      ) {
+        warnings.push(
+          `${label} was not found on mapping header row ${mappingHeaderRow}.`,
+        );
+      }
+    });
+  }
+
+  if (rowCount < 2) errors.push("At least 2 report rows are required.");
+  if (columnCount < 2)
+    errors.push("At least 2 report value columns are required.");
+  if (
+    mappingRequirements.dept &&
+    Array.isArray(mappingCatalogs.depts) &&
+    getCatalogCodes(mappingCatalogs.depts, normalizeDeptLookupCode).length === 0
+  ) {
+    errors.push(
+      "Department master data is unavailable. Linked department mappings cannot be verified.",
+    );
+  }
+  if (
+    mappingRequirements.accCodes &&
+    Array.isArray(mappingCatalogs.accCodes) &&
+    getCatalogCodes(mappingCatalogs.accCodes, normalizeAccLookupCode).length === 0
+  ) {
+    errors.push(
+      "Account master data is unavailable. Linked account mappings cannot be verified.",
+    );
+  }
+  if (
+    mappingRequirements.dimensions &&
+    Array.isArray(mappingCatalogs.dimensions) &&
+    mappingCatalogs.dimensions.length === 0
+  ) {
+    errors.push(
+      "Dimension master data is unavailable. Template dimension mappings cannot be matched by Caption.",
+    );
+  }
+  warnings.push(...mappingWarnings);
+  return { errors, warnings };
+};
+
+export const analyzeExcelSheet = (
+  name,
+  matrix,
+  cellMatrix = [],
+  cellStyles = new Map(),
+  options = {},
+  mappingCatalogs = {},
+) => {
+  const linkedMappingColumns = detectLinkedMappingColumns(matrix, options);
+  const dimensionMappingColumns = detectDimensionMappingColumns(matrix);
+  const excludedMappingColumns = new Set([
+    linkedMappingColumns.dept,
+    linkedMappingColumns.accCodes,
+    ...(linkedMappingColumns.legacyAccountRanges || []).flat(),
+    ...(linkedMappingColumns.legacyDeptColumns || []),
+    dimensionMappingColumns.fieldName,
+    dimensionMappingColumns.operator,
+    dimensionMappingColumns.value,
+  ].filter((columnIndex) => columnIndex >= 0));
+  const descriptionColumn = detectDescriptionColumn(
+    matrix,
+    options.descriptionColumn,
+    excludedMappingColumns,
+  );
+  const {
+    rows,
+    sourceRowNumbers,
+    mappingChecks,
+    mappingWarnings,
+    mappingRequirements,
+  } = detectRows(
+    name,
+    matrix,
+    descriptionColumn,
+    cellMatrix,
+    cellStyles,
+    linkedMappingColumns,
+    dimensionMappingColumns,
+    options,
+    mappingCatalogs,
+  );
+  const { columns, sourceColumnIndexes } = detectColumns(
+    matrix,
+    descriptionColumn,
+    cellMatrix,
+    excludedMappingColumns,
+    options,
+  );
+  importRowFormulas(rows, sourceRowNumbers, cellMatrix, columns, sourceColumnIndexes);
+  const populatedRows = new Set();
+  const populatedColumns = new Set();
+  const reportColumnIndexes = new Set(sourceColumnIndexes);
+  const configuredStartRow = toPositiveInteger(options.dataStartRow);
+  const configuredEndRow = toPositiveInteger(options.dataEndRow);
+  let reportDataRowCount = 0;
+
+  matrix.forEach((row, rowIndex) => {
+    const rowNumber = rowIndex + 1;
+    let hasReportValue = false;
+    row.forEach((value, columnIndex) => {
+      const text = cleanText(value);
+      if (!text) return;
+      populatedRows.add(rowIndex);
+      populatedColumns.add(columnIndex);
+      if (
+        reportColumnIndexes.has(columnIndex) &&
+        (typeof value === "number" ||
+          ERROR_VALUE.test(text) ||
+          NUMBER_VALUE.test(text))
+      ) {
+        hasReportValue = true;
+      }
+    });
+    if (
+      (!configuredStartRow || rowNumber >= configuredStartRow) &&
+      (!configuredEndRow || rowNumber <= configuredEndRow) &&
+      isUsableText(row[descriptionColumn]) &&
+      hasReportValue
+    ) {
+      reportDataRowCount += 1;
+    }
+  });
+
+  const importConfig = {
+    dataStartRow: options.dataStartRow ?? sourceRowNumbers[0] ?? 1,
+    dataEndRow: options.dataEndRow ?? sourceRowNumbers.at(-1) ?? matrix.length,
+    reportStartColumn:
+      options.reportStartColumn ?? excelIndexToColumn(sourceColumnIndexes[0]),
+    reportEndColumn:
+      options.reportEndColumn ?? excelIndexToColumn(sourceColumnIndexes.at(-1)),
+    descriptionColumn:
+      options.descriptionColumn ?? excelIndexToColumn(descriptionColumn),
+    mappingHeaderRow:
+      options.mappingHeaderRow ?? linkedMappingColumns.headerRow ?? "",
+    deptMappingColumn:
+      options.deptMappingColumn ??
+      excelIndexToColumn(linkedMappingColumns.dept),
+    accountMappingColumn:
+      options.accountMappingColumn ??
+      excelIndexToColumn(linkedMappingColumns.accCodes),
+  };
+  const importIssues = getImportConfigIssues({
+    config: importConfig,
+    matrix,
+    descriptionColumn,
+    linkedMappingColumns,
+    rowCount: rows.length,
+    columnCount: columns.length,
+    mappingCatalogs,
+    mappingRequirements,
+    mappingWarnings,
+  });
+  const isRecommended =
+    !NON_REPORT_SHEET.test(name) &&
+    rows.length >= 2 &&
+    columns.length >= 2 &&
+    reportDataRowCount >= 2 &&
+    importIssues.errors.length === 0;
+
+  return {
+    name,
+    rowCount: populatedRows.size,
+    columnCount: populatedColumns.size,
+    descriptionColumn,
+    detectedRows: rows,
+    detectedColumns: columns,
+    importConfig,
+    importIssues,
+    mappingChecks,
+    mappingPreviewRows: rows.slice(0, 5).map((row) => ({
+      rowNumber: Number(row.id.replace("excel-row-", "")),
+      description: row.desc,
+      dept: row.dept,
+      accCodes: row.accCodes,
+    })),
+    previewRows: rows.slice(0, 5).map((row) => row.desc),
+    isRecommended,
+  };
+};
+
+export const configureExcelSheetImport = (
+  sheet,
+  importConfig,
+  mappingCatalogs = {},
+) => {
+  if (!sheet?.source) return sheet;
+  const configured = analyzeExcelSheet(
+    sheet.name,
+    sheet.source.matrix,
+    sheet.source.cellMatrix,
+    sheet.source.cellStyles,
+    importConfig,
+    mappingCatalogs,
+  );
+  return {
+    ...configured,
+    source: sheet.source,
+    autoImportConfig: sheet.autoImportConfig || sheet.importConfig,
+  };
+};
+
+export const parseExcelWorkbook = async (file, mappingCatalogs = {}) => {
+  const xlsxModule = await import("xlsx");
+  const XLSX = xlsxModule.default || xlsxModule;
+  const workbook = XLSX.read(new Uint8Array(await file.arrayBuffer()), {
+    cellDates: true,
+    cellStyles: true,
+    cellNF: true,
+    bookFiles: true,
+    dense: true,
+    type: "array",
+  });
+  const styles = parseWorkbookStyles(workbook);
+
+  return {
+    fileName: file.name,
+    sheets: workbook.SheetNames.map((name, sheetIndex) => {
+      const sheet = workbook.Sheets[name];
+      const matrix = XLSX.utils.sheet_to_json(sheet, {
+        header: 1,
+        defval: "",
+        blankrows: true,
+        raw: false,
+      });
+      const source = {
+        matrix,
+        cellMatrix: sheet,
+        cellStyles: parseSheetStyles(workbook, sheetIndex, styles, XLSX),
+      };
+      const analyzed = analyzeExcelSheet(
+        name,
+        source.matrix,
+        source.cellMatrix,
+        source.cellStyles,
+        {},
+        mappingCatalogs,
+      );
+      return {
+        ...analyzed,
+        source,
+        autoImportConfig: analyzed.importConfig,
+      };
+    }),
+  };
+};
+
+const DAILY_COLUMN_TYPES = new Set(["DAC", "PTD", "YTD", "DACBG", "PTDBG", "YTDBG"]);
+
+const inferReportType = (columns) => {
+  const dataColumns = columns.filter((column) => !column.isFormula && !column.isPercent);
+  const hasDaily = dataColumns.some((column) => DAILY_COLUMN_TYPES.has(String(column.type || "").trim().toUpperCase()));
+  const hasMonthly = dataColumns.some((column) => !DAILY_COLUMN_TYPES.has(String(column.type || "").trim().toUpperCase()));
+  return hasDaily && hasMonthly ? "Mixed" : hasDaily ? "Daily" : "Monthly";
+};
+
+export const createReportsFromExcelSheets = (
+  workbook,
+  selectedSheetNames,
+  { companyName, userIds, owner, idSeed = Date.now() },
+) => {
+  const selected = new Set(selectedSheetNames);
+  const workbookName = workbook.fileName.replace(/\.(?:xlsx?|xlsm)$/i, "");
+
+  return workbook.sheets
+    .filter((sheet) => selected.has(sheet.name) && sheet.isRecommended)
+    .map((sheet, index) => ({
+      id: `rep-excel-${idSeed}-${index + 1}`,
+      name: sheet.name,
+      companyName,
+      category: ["ALL"],
+      assignedUsers: [...userIds],
+      isActive: true,
+      periodFormat: "standard",
+      reportType: inferReportType(sheet.detectedColumns),
+      owner,
+      overrideDateDisplay: "",
+      overridePeriodDisplay: "",
+      day: "",
+      theme: "blue",
+      sourceWorkbook: workbookName,
+      sourceSheet: sheet.name,
+      columns: sheet.detectedColumns,
+      rows: sheet.detectedRows,
+    }));
+};

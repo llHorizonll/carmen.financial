@@ -1,74 +1,179 @@
-import React from 'react';
+import { useTranslation } from "@/lib/i18n.js";
+import React, { useMemo, useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card.jsx';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area.jsx';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table.jsx';
+import { buildReportDrilldown, getReportDisplayColumns, formatReportCell } from '../lib/reportLogic.js';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet.jsx';
+
 
 export default function ReportView({
   activeReport,
   displayCompanyLabel,
   displayDateLabel,
   displayPeriodLabel,
+  remark,
   reportData,
   activeCols,
   currentTheme,
   tableZoom,
   getIndentClass,
+  engineData,
+  budgetData,
+  appliedDepts,
+  appliedYear,
+  appliedPeriod,
+  appliedRevision,
+  periodOptions,
+  masterData,
 }) {
+  const t = useTranslation();
+  const [selectedCell, setSelectedCell] = useState(null);
+  const drilldown = useMemo(() => selectedCell && activeReport ? buildReportDrilldown({
+    activeReport,
+    row: selectedCell.row,
+    col: selectedCell.col,
+    engineData,
+    budgetData,
+    appliedDepts,
+    appliedYear,
+    appliedPeriod,
+    appliedRevision,
+    periodOptions,
+    masterData,
+  }) : null, [selectedCell, activeReport, engineData, budgetData, appliedDepts, appliedYear, appliedPeriod, appliedRevision, periodOptions, masterData]);
   if (!activeReport) return null;
+  const displayColumns = getReportDisplayColumns(activeReport, activeCols);
+  const descriptionIsFirst = displayColumns[0]?.isDescription;
 
   return (
-    <div className="flex flex-col h-full space-y-4 animate-in fade-in duration-300">
-      <div className="text-center space-y-1 py-1 print:py-0 print:mb-4 flex-shrink-0" data-testid="report-print-header">
-        <h1 className="text-xl font-black text-slate-900 uppercase tracking-wide">{displayCompanyLabel}</h1>
-        <h2 className="text-base font-bold text-slate-700">{activeReport.name}</h2>
-        <p className="text-xs font-medium text-slate-500">{displayDateLabel}</p>
-        <p className="text-xs font-medium text-slate-500">{displayPeriodLabel}</p>
-      </div>
+    <Card data-report-surface className="flex h-full min-h-0 flex-col gap-0 border border-border shadow-none ring-0">
+      <CardHeader className="relative border-b px-4 pt-4 sm:px-5">
+        <CardTitle className="text-center text-2xl font-semibold text-balance text-foreground sm:px-20 lg:text-3xl">
+          {displayCompanyLabel}
+        </CardTitle>
+        <CardDescription className="text-center text-sm font-medium text-foreground/80 sm:text-[0.95rem]">
+          {activeReport.name}
+        </CardDescription>
+        <CardDescription className="text-center text-sm text-muted-foreground">
+          {displayDateLabel}
+        </CardDescription>
+        {remark && <CardDescription className="whitespace-pre-line text-center text-sm text-muted-foreground">{remark}</CardDescription>}
+        <CardDescription className="text-center text-sm text-muted-foreground">
+          {displayPeriodLabel}
+        </CardDescription>
+        <div className="pt-1 text-center text-xs font-medium text-muted-foreground sm:hidden">{t("Swipe horizontally to inspect columns")}</div>
+      </CardHeader>
 
-      <div className="flex-1 bg-white shadow-lg border border-purple-100 overflow-auto print:shadow-none print:border-none print:overflow-visible custom-scrollbar relative">
-        <table className="text-left border-collapse whitespace-nowrap min-w-full" style={{ zoom: tableZoom / 100 }}>
-          <thead className={`sticky top-0 z-30 print:static print:bg-slate-100 print:text-black ${currentTheme.header}`}>
-            <tr>
-              <th className={`p-3 font-black border-r sticky left-0 z-40 text-[10px] uppercase tracking-[0.2em] text-center min-w-[300px] print:border-slate-300 print:bg-white ${currentTheme.header}`}>Description</th>
-              {activeCols.map((col) => (
-                <th key={col.id} style={{ width: col.width ? `${col.width}px` : 'auto', minWidth: col.width ? `${col.width}px` : '100px' }} className={`p-3 font-black text-center border-r print:border-slate-300 ${currentTheme.header}`}>
-                  <div className="text-[11px] tracking-wider">{col.label}</div>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="text-slate-700 text-xs font-medium bg-white">
-            {reportData.map((row) => {
-              const isHeader = row.isHeader || false;
-              const isTotal = row.isTotal || false;
-              const indentClass = getIndentClass(row.indent || 0);
+      <CardContent className="min-h-0 flex-1 p-0">
+        <ScrollArea className="h-full print:overflow-visible">
+          <div className="w-max min-w-full">
+            <Table
+              className="min-w-full border-collapse whitespace-nowrap print:table-auto"
+              data-testid="report-print-header"
+            >
+              <TableHeader className={`sticky top-0 z-20 ${currentTheme.header}`}>
+                <TableRow className="hover:bg-transparent">
+                  {displayColumns.map((col) => col.isDescription ? (
+                    <TableHead
+                      key={col.id}
+                      data-description-cell
+                      className={`${descriptionIsFirst ? 'sticky left-0 z-30 shadow-[1px_0_0_0_var(--border)]' : ''} min-w-[240px] border-r text-center text-xs font-semibold sm:min-w-[300px] ${currentTheme.header}`}
+                    >{t("Description")}</TableHead>
+                  ) : (
+                    <TableHead
+                      key={col.id}
+                      style={{ width: col.width ? `${col.width}px` : 'auto', minWidth: col.width ? `${col.width}px` : '96px' }}
+                      className={`border-r text-center ${currentTheme.header}`}
+                    >
+                      <div className="whitespace-pre-line text-xs font-semibold">{col.label}</div>
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody data-testid="report-table-body" className="bg-background text-sm font-medium" style={{ zoom: tableZoom / 100 }}>
+                {reportData.filter((row) => row.isActive !== false).map((row) => {
+                  const isHeader = row.isHeader || false;
+                  const isTotal = row.isTotal || false;
+                  const indentClass = getIndentClass(row.indent || 0);
 
-              let rowThemeClass = 'hover:bg-slate-50/50';
-              if (isTotal) rowThemeClass = currentTheme.total;
-              else if (isHeader) rowThemeClass = currentTheme.subHeader;
-              else rowThemeClass = currentTheme.rowHover;
+                  let rowThemeClass = 'hover:bg-muted/40';
+                  if (isTotal) rowThemeClass = currentTheme.total;
+                  else if (isHeader) rowThemeClass = currentTheme.subHeader;
+                  else rowThemeClass = currentTheme.rowHover;
 
-              return (
-                <tr key={row.id} className={`border-b transition-colors print:border-slate-200 print:break-inside-avoid ${currentTheme.cellBorder} ${rowThemeClass}`}>
-                  <td className={`p-2.5 px-4 border-r sticky left-0 z-20 print:border-slate-300 print:static shadow-[1px_0_0_0_#e2e8f0] ${isTotal || isHeader ? '' : 'bg-white font-semibold'} ${currentTheme.cellBorder} ${indentClass}`}>{row.desc}</td>
-                  {activeCols.map(col => {
-                    const val = Number(row.results?.[col.id]) || 0;
-                    const isNegativeVar = col.formula?.includes('-') && val < 0 && !col.isPercent;
-                    if (isHeader) return <td key={col.id} className={`border-r print:border-slate-300 ${currentTheme.cellBorder}`}></td>;
+                  return (
+                    <TableRow key={row.id} className={`border-b ${currentTheme.cellBorder} ${rowThemeClass}`}>
+                      {displayColumns.map((col) => {
+                        if (col.isDescription) {
+                          return (
+                            <TableCell
+                              key={col.id}
+                              data-description-cell
+                              className={`${descriptionIsFirst ? 'sticky left-0 z-10' : ''} border-r px-3 py-2.5 text-sm leading-6 sm:px-4 ${currentTheme.cellBorder} ${isTotal || isHeader ? '' : 'bg-background font-semibold'}`}
+                            >
+                              <span className={`block ${indentClass}`}>{row.desc}</span>
+                            </TableCell>
+                          );
+                        }
+                        const val = Number(row.results?.[col.id]) || 0;
+                        const isNegativeVar = col.formula?.includes('-') && val < 0 && !col.isPercent;
+                        if (isHeader) {
+                          return <TableCell key={col.id} className={`border-r ${currentTheme.cellBorder}`} />;
+                        }
 
-                    const isDisplayPercent = col.isPercent || col.formatAsPercent;
+                        const displayValue = formatReportCell(row, col);
 
-                    return (
-                      <td key={col.id} className={`p-2.5 px-3 text-right border-r tabular-nums print:border-slate-300 ${currentTheme.cellBorder} ${isNegativeVar || val < 0 ? 'text-red-500 font-bold' : ''}`}>
-                        {isDisplayPercent
-                          ? (val < 0 ? `(${Math.abs(val).toFixed(2)}%)` : val.toFixed(2) + '%')
-                          : (val < 0 ? `(${Math.abs(val).toLocaleString(undefined, { minimumFractionDigits: 2 })})` : val.toLocaleString(undefined, { minimumFractionDigits: 2 }))}
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
+                        return (
+                          <TableCell
+                            key={col.id}
+                            className={`border-r px-2 py-2.5 text-right tabular-nums sm:px-3 ${currentTheme.cellBorder} ${col.isFormula ? 'bg-muted/70' : ''} ${isNegativeVar || val < 0 ? 'font-bold text-destructive' : ''}`}
+                          >
+                            {['AC', 'BC'].includes(String(col.type || '').toUpperCase()) && !row.isTotal && !col.isFormula && !col.isPercent ? (
+                              <button type="button" className="w-full cursor-pointer text-right underline-offset-2 hover:underline focus-visible:underline" aria-label={`View ${row.desc} ${col.label} breakdown`} onClick={() => setSelectedCell({ row, col, value: val })}>
+                                {displayValue}
+                              </button>
+                            ) : displayValue}
+                          </TableCell>
+                        );
+                      })}
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+          <ScrollBar orientation="horizontal" />
+        </ScrollArea>
+      </CardContent>
+      <Sheet open={Boolean(selectedCell)} onOpenChange={(open) => { if (!open) setSelectedCell(null); }}>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
+          <SheetHeader>
+            <SheetTitle>{selectedCell?.row.desc} · {selectedCell?.col.label}</SheetTitle>
+            <SheetDescription>{t("Account and department contributions from the")} {drilldown?.source || 'report'} {t("summary data.")}</SheetDescription>
+          </SheetHeader>
+          {drilldown && <section className="grid gap-3 p-4 text-sm">
+            <p>{t("Cell:")} {selectedCell.value.toLocaleString(undefined, { minimumFractionDigits: 2 })} {t("· Breakdown:")} {drilldown.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+            <p role="status" className={Math.abs(selectedCell.value - drilldown.total) < 0.005 ? 'text-emerald-700' : 'text-destructive'}>{t("Difference:")}{" "}{(selectedCell.value - drilldown.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </p>
+            <table className="w-full text-left tabular-nums">
+              <thead><tr className="border-b"><th className="py-2">{t("Account")}</th><th>{t("Department")}</th><th className="text-right">{t("Amount")}</th></tr></thead>
+              <tbody>{drilldown.lines.map((line) => <tr key={`${line.accountCode}:${line.departmentCode}`} className="border-b">
+                <td className="py-2">{line.accountCode || '—'}</td><td>{line.departmentCode || '—'}</td>
+                <td className="text-right">{line.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+              </tr>)}</tbody>
+            </table>
+            {drilldown.lines.length === 0 && <p className="text-muted-foreground">{t("No matching source rows.")}</p>}
+          </section>}
+        </SheetContent>
+      </Sheet>
+    </Card>
   );
 }

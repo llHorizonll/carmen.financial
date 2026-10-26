@@ -1,19 +1,56 @@
+import { useTranslation } from "@/lib/i18n.js";
 import React from 'react';
-import { SearchIcon, Settings2, X } from 'lucide-react';
+import { ChevronDown, SearchIcon, Settings2 } from 'lucide-react';
+import { Accordion } from 'radix-ui';
+import { Button } from '@/components/ui/button.jsx';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog.jsx';
+import { Input } from '@/components/ui/input.jsx';
+import { Label } from '@/components/ui/label.jsx';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select.jsx';
+import { Textarea } from '@/components/ui/textarea.jsx';
+import MultiSelectDropdown from './MultiSelectDropdown.jsx';
+import GroupSelectDropdown from './GroupSelectDropdown.jsx';
+
+const EMPTY_REPORT_OPTIONS = {};
+const EMPTY_DIMENSION_OPTIONS = {};
+const EMPTY_DIMENSION_DEFINITIONS = [];
+const DIMENSION_FIELDS = Array.from({ length: 10 }, (_, index) => ({
+  key: `dim${index + 1}`,
+  label: `DIM ${index + 1}`,
+}));
+const parseDimensionValues = (value) => String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
+const normalizeDimensionValue = (value) => String(value || '').trim().toUpperCase();
 
 export default function EditMappingModal({
   isOpen,
   editingRow,
   setEditingRow,
   masterData,
-  reportOptions = {},
+  reportOptions = EMPTY_REPORT_OPTIONS,
+  dimensionOptions = EMPTY_DIMENSION_OPTIONS,
+  dimensionDefinitions = EMPTY_DIMENSION_DEFINITIONS,
   modalAccCategory,
   setModalAccCategory,
   onOpenDetailSelector,
   onApply,
   onClose,
 }) {
+  const t = useTranslation();
   if (!isOpen || !editingRow) return null;
+  const friendlyButtonClassName = 'border-border bg-background text-foreground hover:bg-muted';
 
   const accountCategoryOptions = reportOptions.accountCategories?.length > 0
     ? reportOptions.accountCategories
@@ -22,95 +59,196 @@ export default function EditMappingModal({
         { id: 'I', label: 'Income Statement' },
         { id: 'B', label: 'Balance Sheet' },
       ];
-
+  const accountGroups = masterData.accountGroups || [];
+  const departmentGroups = masterData.deptGroups || [];
+  const selectedAccountGroup = accountGroups.find((group) => String(group.id).toUpperCase() === String(editingRow.groups || '').toUpperCase());
+  const selectedDepartmentGroup = departmentGroups.find((group) => String(group.id).toUpperCase() === String(editingRow.deptGroup || '').toUpperCase());
+  const hasAccountGroup = Boolean(selectedAccountGroup);
+  const hasDepartmentGroup = Boolean(selectedDepartmentGroup);
+  const departmentCount = parseDimensionValues(editingRow.dept).length;
+  const accountCount = parseDimensionValues(editingRow.accCodes).length;
+  const departmentSummary = selectedDepartmentGroup?.name || editingRow.deptGroup || (departmentCount ? `${departmentCount} department${departmentCount === 1 ? '' : 's'}` : 'Not configured');
+  const accountSummary = selectedAccountGroup?.name || editingRow.groups || (accountCount ? `${accountCount} account code${accountCount === 1 ? '' : 's'}` : 'Not configured');
+  const dimensionCount = DIMENSION_FIELDS.filter(({ key }) => parseDimensionValues(editingRow[key]).length > 0).length;
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-[500px] flex flex-col border border-purple-100 overflow-hidden">
-        <div className="p-4 border-b border-purple-100 flex justify-between items-center bg-purple-50">
-          <div className="flex items-center gap-2 text-purple-900"><Settings2 size={16} className="text-purple-600" /><h2 className="text-sm font-bold">Edit Mapping</h2></div>
-          <button onClick={onClose} className="text-purple-400 hover:text-purple-600 transition-colors"><X size={16} /></button>
-        </div>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] w-full min-h-0 flex-col overflow-hidden bg-popover sm:max-w-6xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Settings2 className="size-4" />{t("Edit Mapping")}</DialogTitle>
+          <DialogDescription>{t("Adjust row mapping details and detail selectors.")}</DialogDescription>
+        </DialogHeader>
 
-        <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
-          <div>
-            <label className="block text-[11px] font-bold text-slate-700 mb-1">Description</label>
-            <input value={editingRow.desc} onChange={e => setEditingRow({ ...editingRow, desc: e.target.value })} className="w-full border border-slate-300 rounded-md px-3 py-1.5 text-sm text-slate-700 outline-none focus:border-purple-500" />
-          </div>
+        <section className="grid min-h-0 flex-1 gap-4 overflow-y-auto pr-1">
+          <section className="space-y-2">
+            <Label>{t("Description")}</Label>
+            <Input value={editingRow.desc} onChange={(e) => setEditingRow({ ...editingRow, desc: e.target.value })} />
+          </section>
 
-          <div>
-            <div className="flex justify-between items-center mb-1">
-              <label className="text-[11px] font-bold text-slate-700">Departments</label>
-              <button onClick={() => onOpenDetailSelector({ field: 'dept', title: 'Select Departments', subTitle: editingRow.desc, items: masterData.depts })} className="text-purple-600 text-[10px] font-bold flex items-center gap-1 hover:underline"><SearchIcon size={10} /> Select</button>
-            </div>
-            <input value={editingRow.dept} onChange={e => setEditingRow({ ...editingRow, dept: e.target.value })} placeholder="e.g. 101, 102" className="w-full border border-slate-300 rounded-md px-3 py-1.5 text-sm text-slate-700 outline-none focus:border-purple-500" />
-          </div>
+          <Accordion.Root type="multiple" defaultValue={['department', 'account']} className="grid gap-3">
+          <Accordion.Item value="department" className="rounded-xl border border-border bg-background">
+            <Accordion.Header>
+              <Accordion.Trigger aria-label={`Department: ${departmentSummary}`} className="flex w-full items-center gap-3 p-4 text-left text-sm font-medium focus-visible:rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&[data-state=open]>svg]:rotate-180">
+                <span>{t("Department")}</span><span className="min-w-0 flex-1 truncate text-xs font-normal text-muted-foreground">{departmentSummary}</span><ChevronDown className="size-4 shrink-0 transition-transform" />
+              </Accordion.Trigger>
+            </Accordion.Header>
+            <Accordion.Content className="space-y-3 px-4 pb-4">
+            <section className="space-y-2">
+              <Label>{t("Department Group")}</Label>
+              <GroupSelectDropdown
+                ariaLabel="Department group"
+                emptyLabel="No department group"
+                groups={departmentGroups}
+                memberKey="deptIds"
+                value={selectedDepartmentGroup?.id || '__none__'}
+                onChange={(value) => {
+                  const group = departmentGroups.find((item) => item.id === value);
+                  setEditingRow({
+                    ...editingRow,
+                    deptGroup: group?.id || '',
+                    ...(group ? { dept: '' } : {}),
+                  });
+                }}
+              />
+              {selectedDepartmentGroup && (
+                <p className="text-xs text-muted-foreground">{t("This group maps")}{" "}{selectedDepartmentGroup.deptIds?.length || 0}{" "}{t("department(s). Clear the group before selecting individual departments.")}</p>
+              )}
+            </section>
 
-          <div className="bg-purple-50/50 p-3 rounded-xl border border-purple-100 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-[11px] font-bold text-slate-700">Group Level Target</label>
-              <select
-                value={editingRow.groupLevel || 'L4'}
-                onChange={e => setEditingRow({
-                  ...editingRow,
-                  groupLevel: e.target.value,
-                  groups: '',
-                })}
-                className="bg-white border border-purple-200 rounded-md px-2 py-1 text-xs font-bold text-purple-700 outline-none focus:border-purple-500 w-32 cursor-pointer"
+            <section className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <Label>{t("Departments")}</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={`w-full justify-start sm:w-auto ${friendlyButtonClassName}`}
+                aria-label={t("Select departments")}
+                disabled={hasDepartmentGroup}
+                onClick={() => onOpenDetailSelector({ field: 'dept', title: 'Select Departments', subTitle: editingRow.desc, items: masterData.depts })}
               >
-                <option value="L1">L1 (Category)</option><option value="L2">L2 (Sub Category)</option><option value="L3">L3 (Group)</option><option value="L4">L4 (Detail)</option>
-              </select>
-            </div>
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <label className="text-[11px] font-bold text-slate-700">Group Names</label>
-                <button onClick={() => onOpenDetailSelector({ field: 'groups', title: 'Select Groups', subTitle: editingRow.desc, items: masterData.groups[editingRow.groupLevel || 'L4'] })} className="text-purple-600 text-[10px] font-bold flex items-center gap-1 hover:underline"><SearchIcon size={10} /> Select</button>
-              </div>
-              <input value={editingRow.groups} onChange={e => setEditingRow({ ...editingRow, groups: e.target.value })} placeholder="e.g. Food Revenue" className="w-full border border-slate-300 rounded-md px-3 py-1.5 text-sm text-slate-700 outline-none focus:border-purple-500" />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">Dim 1</label>
-                <input
-                  value={editingRow.dim1 || ''}
-                  onChange={e => setEditingRow({ ...editingRow, dim1: e.target.value })}
-                  placeholder="Optional"
-                  className="w-full border border-slate-300 rounded-md px-3 py-1.5 text-sm text-slate-700 outline-none focus:border-purple-500"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">Dim 2</label>
-                <input
-                  value={editingRow.dim2 || ''}
-                  onChange={e => setEditingRow({ ...editingRow, dim2: e.target.value })}
-                  placeholder="Optional"
-                  className="w-full border border-slate-300 rounded-md px-3 py-1.5 text-sm text-slate-700 outline-none focus:border-purple-500"
-                />
-              </div>
-            </div>
-          </div>
+                <SearchIcon />{t("Select Departments")}</Button>
+            </section>
+            <Input
+              value={editingRow.dept}
+              onChange={(e) => setEditingRow({ ...editingRow, dept: e.target.value })}
+              placeholder="e.g. 101, 102"
+              disabled={hasDepartmentGroup}
+            />
+            </Accordion.Content>
+          </Accordion.Item>
 
-          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
-            <div className="flex justify-between items-center">
-              <label className="text-[11px] font-bold text-slate-700">Account Codes Filter</label>
-              <select value={modalAccCategory} onChange={e => setModalAccCategory(e.target.value)} className="bg-white border border-slate-300 rounded px-2 py-0.5 text-[11px] font-bold text-indigo-700 outline-none cursor-pointer">
-                {accountCategoryOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <label className="text-[11px] font-bold text-slate-700">Account Codes</label>
-                <button onClick={() => onOpenDetailSelector({ field: 'accCodes', title: 'Select Account Detail', subTitle: editingRow.desc, items: masterData.accCodes.filter(a => modalAccCategory === 'ALL' || a.type === modalAccCategory) })} className="text-purple-600 text-[10px] font-bold flex items-center gap-1 hover:underline"><SearchIcon size={10} /> Select Detail</button>
-              </div>
-              <textarea value={editingRow.accCodes} onChange={e => setEditingRow({ ...editingRow, accCodes: e.target.value })} placeholder="e.g. 4001, 4002" className="w-full border border-slate-300 rounded-md px-3 py-1.5 text-sm text-slate-700 outline-none focus:border-purple-500 h-16 resize-none" />
-            </div>
-          </div>
-        </div>
+          <Accordion.Item value="account" className="rounded-xl border border-border bg-background">
+            <Accordion.Header>
+              <Accordion.Trigger aria-label={`Account: ${accountSummary}`} className="flex w-full items-center gap-3 p-4 text-left text-sm font-medium focus-visible:rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&[data-state=open]>svg]:rotate-180">
+                <span>{t("Account")}</span><span className="min-w-0 flex-1 truncate text-xs font-normal text-muted-foreground">{accountSummary}</span><ChevronDown className="size-4 shrink-0 transition-transform" />
+              </Accordion.Trigger>
+            </Accordion.Header>
+            <Accordion.Content className="space-y-3 px-4 pb-4">
+            <section className="space-y-2">
+              <Label>{t("Account Group")}</Label>
+              <GroupSelectDropdown
+                ariaLabel="Account group"
+                emptyLabel="No account group"
+                groups={accountGroups}
+                memberKey="accountIds"
+                value={selectedAccountGroup?.id || '__none__'}
+                onChange={(value) => {
+                  const group = accountGroups.find((item) => item.id === value);
+                  setEditingRow({
+                    ...editingRow,
+                    groups: group?.id || '',
+                    ...(group ? {
+                      groupLevel: group.level,
+                      accCodes: '',
+                    } : {}),
+                  });
+                }}
+              />
+              {selectedAccountGroup && (
+                <p className="text-xs text-muted-foreground">{t("This")}{" "}{selectedAccountGroup.level} {t("group maps")} {selectedAccountGroup.accountIds?.length || 0}{" "}{t("account code(s). Clear the group before selecting individual accounts.")}</p>
+              )}
+            </section>
 
-        <div className="px-5 py-3 bg-slate-50 border-t border-purple-100 flex justify-end gap-2 rounded-b-2xl">
-          <button onClick={onClose} className="px-4 py-1.5 text-slate-600 font-bold hover:bg-slate-200 rounded-md text-xs transition-colors">Cancel</button>
-          <button onClick={onApply} className="px-5 py-1.5 bg-purple-600 text-white font-bold rounded-md shadow-sm hover:bg-purple-700 transition-colors text-xs">Apply Mapping</button>
-        </div>
-      </div>
-    </div>
+            <section className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <Label>{t("Account Codes Filter")}</Label>
+              <Select value={modalAccCategory} onValueChange={setModalAccCategory} disabled={hasAccountGroup}>
+                <SelectTrigger className="h-9 w-full sm:w-40">
+                  <SelectValue placeholder={t("All Categories")} />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  {accountCategoryOptions.map((option) => (
+                    <SelectItem key={option.id} value={option.id}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </section>
+
+            <section className="space-y-2">
+              <section className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <Label>{t("Account Codes")}</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className={`w-full justify-start sm:w-auto ${friendlyButtonClassName}`}
+                  aria-label={t("Select account details")}
+                  disabled={hasAccountGroup}
+                  onClick={() => onOpenDetailSelector({ field: 'accCodes', title: 'Select Account Detail', subTitle: editingRow.desc, items: masterData.accCodes.filter((item) => modalAccCategory === 'ALL' || item.type === modalAccCategory) })}
+                >
+                  <SearchIcon />{t("Select Account Detail")}</Button>
+              </section>
+              <Textarea
+                aria-label={t("Account codes")}
+                value={editingRow.accCodes}
+                onChange={(e) => setEditingRow({ ...editingRow, accCodes: e.target.value })}
+                placeholder="e.g. 4001, 4002"
+                className="min-h-24"
+                disabled={hasAccountGroup}
+              />
+            </section>
+            </Accordion.Content>
+          </Accordion.Item>
+
+          <Accordion.Item value="dimensions" className="rounded-xl border border-border bg-background">
+            <Accordion.Header>
+              <Accordion.Trigger aria-label={`Dimensions: ${dimensionCount} of 10 configured`} className="flex w-full items-center gap-3 p-4 text-left text-sm font-medium focus-visible:rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&[data-state=open]>svg]:rotate-180">
+                <span>{t("Dimensions")}</span><span className="min-w-0 flex-1 truncate text-xs font-normal text-muted-foreground">{dimensionCount ? `${dimensionCount} of 10 configured` : t("Not configured")}</span><ChevronDown className="size-4 shrink-0 transition-transform" />
+              </Accordion.Trigger>
+            </Accordion.Header>
+            <Accordion.Content className="px-4 pb-4">
+            <section className="grid gap-3 md:grid-cols-2">
+              {DIMENSION_FIELDS.map(({ key, label }) => {
+                const definition = dimensionDefinitions.find((item) => item.key === key);
+                const dimensionLabel = definition?.caption || label;
+                const selected = parseDimensionValues(editingRow[key]);
+                const options = [...new Set([...(definition?.values || dimensionOptions[key] || []), ...selected])];
+                return (
+                  <MultiSelectDropdown
+                    key={key}
+                    options={options}
+                    selected={selected}
+                    onChange={(values) => setEditingRow({ ...editingRow, [key]: values.join(', ') })}
+                    label={dimensionLabel}
+                    testIdPrefix={`mapping-${key}`}
+                    normalizeValue={normalizeDimensionValue}
+                    searchPlaceholder={`Search ${dimensionLabel.toLowerCase()}...`}
+                    emptyLabel="Not selected"
+                  />
+                );
+              })}
+            </section>
+            </Accordion.Content>
+          </Accordion.Item>
+          </Accordion.Root>
+        </section>
+
+        <DialogFooter className="shrink-0 flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button variant="outline" size="sm" className={`w-full sm:w-auto ${friendlyButtonClassName}`} onClick={onClose}>{t("Cancel")}</Button>
+          <Button size="sm" className="w-full sm:w-auto" onClick={onApply}>{t("Apply Mapping")}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

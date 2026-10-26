@@ -1,5 +1,34 @@
 import { normalizeAccLookupCode, normalizeDeptLookupCode } from './normalizeCode.js';
 
+const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value || {}, key);
+const takeApiArray = (previous, loaded, key) => (
+  hasOwn(loaded, key) && Array.isArray(loaded[key])
+    ? loaded[key]
+    : previous?.[key] || []
+);
+
+export const mergeCarmenMasterData = (previous = {}, loaded = {}) => ({
+  ...previous,
+  companyProfile: hasOwn(loaded, 'companyProfile') && loaded.companyProfile
+    ? loaded.companyProfile
+    : previous.companyProfile,
+  users: Array.isArray(loaded.users)
+    ? loaded.users
+    : loaded.currentUser
+      ? [loaded.currentUser]
+      : previous.users || [],
+  depts: takeApiArray(previous, loaded, 'depts'),
+  accCodes: takeApiArray(previous, loaded, 'accCodes'),
+  accountGroups: takeApiArray(previous, loaded, 'accountGroups'),
+  deptGroups: takeApiArray(previous, loaded, 'deptGroups'),
+  groups: {
+    L1: takeApiArray(previous.groups, loaded.groups, 'L1'),
+    L2: takeApiArray(previous.groups, loaded.groups, 'L2'),
+    L3: takeApiArray(previous.groups, loaded.groups, 'L3'),
+    L4: takeApiArray(previous.groups, loaded.groups, 'L4'),
+  },
+});
+
 const toArray = (value) => {
   if (Array.isArray(value)) return value;
   if (Array.isArray(value?.Data)) return value.Data;
@@ -22,6 +51,12 @@ const toBooleanFlag = (value) => {
   return false;
 };
 
+const toOptionalInteger = (value) => (
+  value !== null && value !== undefined && String(value).trim() !== '' && Number.isInteger(Number(value))
+    ? Number(value)
+    : null
+);
+
 const getFlag = (source, names) =>
   names.some((name) => toBooleanFlag(source?.[name]));
 
@@ -29,7 +64,7 @@ export const adaptCarmenCompany = (company) => ({
   name: company?.name || company?.HotelName || company?.RegName || 'Carmen Hotel & Resorts',
 });
 
-export const getCarmenFinancialReportPermission = (permissions) => {
+const getCarmenFinancialReportPermission = (permissions) => {
   const targetName = 'gl.financialreport';
   return toArray(permissions).find((permission) =>
     String(permission?.Name || permission?.name || '').trim().toLowerCase() === targetName
@@ -38,13 +73,21 @@ export const getCarmenFinancialReportPermission = (permissions) => {
 
 export const deriveCarmenFinancialReportAccess = (permissions) => {
   const permission = getCarmenFinancialReportPermission(permissions);
-  const add = getFlag(permission, ['Add', 'add']);
-  const update = getFlag(permission, ['Update', 'update']);
-  const deleteAccess = getFlag(permission, ['Delete', 'delete']);
+  const code = String(permission?.Code ?? permission?.code ?? '').trim();
+  const bits = /^[0-9a-f]{2}$/i.test(code) ? parseInt(code, 16) : 0;
+  const hasAccess = (name, mask) => {
+    const names = [name, name.toLowerCase()];
+    return names.some((key) => permission?.[key] !== undefined)
+      ? getFlag(permission, names)
+      : (bits & mask) !== 0;
+  };
+  const add = hasAccess('Add', 0x40);
+  const update = hasAccess('Update', 0x20);
+  const deleteAccess = hasAccess('Delete', 0x10);
   const setup = add || update || deleteAccess;
 
   return {
-    view: getFlag(permission, ['View', 'view']),
+    view: hasAccess('View', 0x80),
     add,
     update,
     delete: deleteAccess,
@@ -58,6 +101,14 @@ export const adaptCarmenLoginUser = (loginResponse) => {
   );
   const userName = loginResponse?.UserName || loginResponse?.userName || '';
   const displayName = loginResponse?.Name || loginResponse?.FullName || userName || 'Carmen User';
+  const avatarUrl = loginResponse?.AvatarUrl
+    || loginResponse?.ProfileImageUrl
+    || loginResponse?.ImageUrl
+    || loginResponse?.PhotoUrl
+    || loginResponse?.Picture
+    || loginResponse?.Avatar
+    || loginResponse?.Image
+    || '';
 
   return {
     id: String(loginResponse?.UserId || loginResponse?.userId || userName || 'carmen-user'),
@@ -65,6 +116,7 @@ export const adaptCarmenLoginUser = (loginResponse) => {
     role: financialReport.setup ? 'Admin' : 'User',
     source: 'carmen-api',
     userName,
+    avatarUrl,
     tenant: loginResponse?.Tenant || loginResponse?.tenant || '',
     permissions: {
       financialReport,
@@ -102,6 +154,57 @@ export const adaptCarmenAccountCodes = (accounts) =>
       nature: account.Nature || account.nature || '',
     }))
     .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' }));
+
+const normalizeAccountGroupLevel = (value) => {
+  const normalized = String(value || '').trim().toUpperCase();
+  const match = normalized.match(/[1-4]/);
+  return match ? `L${match[0]}` : 'L4';
+};
+
+export const adaptCarmenAccountGroups = (groups) =>
+  toArray(groups)
+    .filter((group) => group?.AccGroupCode || group?.accGroupCode || group?.id)
+    .map((group) => {
+      const accounts = toArray(group?.Account || group?.account || group?.accounts)
+        .map((account) => ({
+          id: normalizeAccLookupCode(account?.AccCode || account?.accCode || account?.id),
+          name: account?.Description || account?.description || account?.Description2 || account?.name || '',
+        }))
+        .filter((account) => account.id);
+      const id = String(group.AccGroupCode || group.accGroupCode || group.id).trim();
+      return {
+        id,
+        name: group.AccGroupName || group.accGroupName || group.name || id,
+        level: normalizeAccountGroupLevel(group.Level || group.level),
+        accountIds: [...new Set(accounts.map((account) => account.id))],
+        accounts,
+      };
+    })
+    .sort((left, right) => (
+      left.level.localeCompare(right.level)
+      || left.id.localeCompare(right.id, undefined, { numeric: true, sensitivity: 'base' })
+    ));
+
+export const adaptCarmenDepartmentGroups = (groups) =>
+  toArray(groups)
+    .filter((group) => group?.DeptCateCode || group?.deptCateCode || group?.id)
+    .filter((group) => group?.Active !== false && group?.active !== false)
+    .map((group) => {
+      const departments = toArray(group?.Departments || group?.departments)
+        .map((department) => ({
+          id: normalizeDeptLookupCode(department?.DeptCode || department?.deptCode || department?.id),
+          name: department?.Description || department?.description || department?.name || '',
+        }))
+        .filter((department) => department.id);
+      const id = String(group.DeptCateCode || group.deptCateCode || group.id).trim();
+      return {
+        id,
+        name: group.Description || group.description || group.name || id,
+        deptIds: [...new Set(departments.map((department) => department.id))],
+        departments,
+      };
+    })
+    .sort((left, right) => left.id.localeCompare(right.id, undefined, { numeric: true, sensitivity: 'base' }));
 
 const formatDateLabel = (dateValue) => {
   const date = new Date(dateValue);
@@ -209,7 +312,7 @@ const normalizeReportRowDimensions = (row) => {
     pushDimension(dimension.key || dimension.name || dimension.field || dimension.Key || dimension.Field, dimension.value || dimension.id || dimension.code || dimension.Value || dimension.Code);
   });
 
-  ['dim1', 'dim2', 'dim3', 'dim4'].forEach((field) => {
+  Array.from({ length: 10 }, (_, index) => `dim${index + 1}`).forEach((field) => {
     pushDimension(field, row?.[field] ?? row?.[field.toUpperCase()]);
   });
 
@@ -256,28 +359,50 @@ const normalizeReportRow = (row) => {
   const dimensions = normalizeReportRowDimensions(row);
   const rowTypeValue = row.Type ?? row.type ?? '';
   const rowTypeFlags = normalizeRowTypeFlags(rowTypeValue, row);
+  const requestedNumberFormat = row.numberFormat ?? row.NumberFormat;
+  const numberFormat = requestedNumberFormat === 'percent' && rowTypeFlags.isTotal
+      ? 'percent'
+      : 'column';
   const normalizedRow = {
     ...row,
     desc: row.desc || row.Description || row.Desc || row.description || row.name || '',
     dept: normalizeRowStringList(row.dept || row.DeptCode || row.Department || row.department),
+    deptGroup: String(row.deptGroup || row.DeptGroup || '').trim(),
     accCodes: normalizeRowStringList(row.accCodes || row.AccCode || row.AccCodes || row.AccountCode || row.AccountCodes),
     groupLevel: String(row.groupLevel || row.GroupLevel || 'L4').trim().toUpperCase() || 'L4',
     groups: normalizeRowStringList(row.groups || row.Groups || row.Group || row.group),
     percentBase: String(row.percentBase || row.PercentBase || '').trim().toUpperCase(),
+    numberFormat,
     formula: String(row.formula || row.Formula || '').trim().toUpperCase(),
     indent: Number.isFinite(Number(row.indent ?? row.Indent)) ? Number(row.indent ?? row.Indent) : 0,
+    isActive: row.isActive !== false && row.IsActive !== false,
     type: String(row.type || row.Type || '').trim().toUpperCase(),
     ...rowTypeFlags,
     dimensions,
   };
 
   dimensions.forEach(({ key, value }) => {
-    if (['dim1', 'dim2', 'dim3', 'dim4'].includes(key)) {
+    if (/^dim(?:[1-9]|10)$/.test(key)) {
       normalizedRow[key] = value;
     }
   });
 
   return normalizedRow;
+};
+
+const normalizeReportColumn = (column) => {
+  if (!column || typeof column !== 'object') return column;
+  const rawType = String(column.type || column.Type || '').trim().toUpperCase();
+  const isFormula = Boolean(column.isFormula ?? column.IsFormula ?? (rawType === 'FORMULA'));
+  const isPercent = Boolean(column.isPercent ?? column.IsPercent ?? (rawType === 'MIX'));
+  const type = rawType === 'BUD' ? 'BC' : rawType === 'BUDACC' ? 'BCC' : rawType;
+  return {
+    ...column,
+    isFormula,
+    isPercent,
+    targetCol: String(column.targetCol ?? column.TargetCol ?? '').trim().toUpperCase(),
+    type: isFormula || isPercent ? undefined : type,
+  };
 };
 
 export const adaptCarmenReportDefinition = (report) => {
@@ -289,6 +414,7 @@ export const adaptCarmenReportDefinition = (report) => {
   return {
     id: String(report.id || report.Id || '').trim(),
     name: report.name || report.Name || '',
+    reportGroup: String(report.reportGroup ?? report.ReportGroup ?? '').trim(),
     companyName: report.companyName || report.CompanyName || '',
     category: toCategoryArray(report.category || report.Category || report.CategoryJson),
     assignedUsers: assignedUsers.length > 0
@@ -302,11 +428,17 @@ export const adaptCarmenReportDefinition = (report) => {
     customPeriodLabel: report.customPeriodLabel || report.CustomPeriodLabel || '',
     overrideDateDisplay: report.overrideDateDisplay || report.OverrideDateDisplay || '',
     overridePeriodDisplay: report.overridePeriodDisplay || report.OverridePeriodDisplay || '',
+    remark: report.remark || report.Remark || '',
     owner: report.owner || report.Owner || report.createdBy || report.CreatedBy || '',
     reportType: report.reportType || report.ReportType || 'Monthly',
     day: report.day || report.Day || '',
     theme: report.theme || report.Theme || 'blue',
-    columns: toArray(report.columns || report.Columns),
+    lastModified: report.lastModified || report.LastModified || null,
+    descriptionPosition: Number.isInteger(Number(report.descriptionPosition ?? report.DescriptionPosition))
+      ? Number(report.descriptionPosition ?? report.DescriptionPosition)
+      : 0,
+    sourceReportId: toOptionalInteger(report.sourceReportId ?? report.SourceReportId),
+    columns: toArray(report.columns || report.Columns).map(normalizeReportColumn),
     rows: toArray(report.rows || report.Rows).map(normalizeReportRow),
     access,
   };

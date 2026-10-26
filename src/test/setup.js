@@ -20,6 +20,27 @@ const createMemoryStorage = () => {
   };
 };
 
+const createMatchMedia = () => (query) => ({
+  matches: false,
+  media: query,
+  onchange: null,
+  addEventListener: () => {},
+  removeEventListener: () => {},
+  addListener: () => {},
+  removeListener: () => {},
+  dispatchEvent: () => false,
+});
+
+class ResizeObserverMock {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+if (typeof globalThis.HTMLElement !== 'undefined' && typeof globalThis.HTMLElement.prototype.scrollIntoView !== 'function') {
+  globalThis.HTMLElement.prototype.scrollIntoView = () => {};
+}
+
 beforeEach(() => {
   if (
     typeof globalThis.localStorage?.getItem !== 'function' ||
@@ -31,5 +52,16 @@ beforeEach(() => {
     });
   }
   globalThis.localStorage.clear();
+
+  if (typeof globalThis.window !== 'undefined' && typeof globalThis.window.matchMedia !== 'function') {
+    Object.defineProperty(globalThis.window, 'matchMedia', {
+      value: createMatchMedia(),
+      configurable: true,
+    });
+  }
+
+  if (typeof globalThis.ResizeObserver === 'undefined') {
+    globalThis.ResizeObserver = ResizeObserverMock;
+  }
 });
 afterEach(() => cleanup());

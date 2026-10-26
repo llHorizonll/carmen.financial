@@ -1,11 +1,54 @@
-import React from 'react';
-import { ArrowDown, ArrowUp, Calculator, Edit3, Layout, Trash2 } from 'lucide-react';
-import { findBrokenReferences, getRowMappingWarnings } from '../lib/reportLogic.js';
+import { useTranslation } from "@/lib/i18n.js";
+import React from "react";
+import {
+  Calculator,
+  Copy,
+  Edit3,
+  Eye,
+  EyeOff,
+  GripVertical,
+  Layout,
+  Trash2,
+} from "lucide-react";
+import { cn } from "@/lib/utils.js";
+import { Button } from "@/components/ui/button.jsx";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card.jsx";
+import { Input } from "@/components/ui/input.jsx";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table.jsx";
+import { Badge } from "@/components/ui/badge.jsx";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select.jsx";
+import {
+  createRowMappingWarningContext,
+  findBrokenReferences,
+  getRowMappingWarnings,
+} from "../lib/reportLogic.js";
+import useDragReorder from "../hooks/useDragReorder.js";
+import MoveToPositionDialog from "./MoveToPositionDialog.jsx";
 
 export default function RowsConfigurator({
   activeReport,
   masterData,
   handleAddRow,
+  handleDuplicateRow,
   handleUpdateRow,
   handleUpdateRowMulti,
   moveRow,
@@ -13,137 +56,514 @@ export default function RowsConfigurator({
   setEditingRow,
   setConfirmAction,
 }) {
-  const brokenRowReferences = findBrokenReferences(activeReport).filter((issue) => issue.scope === 'row');
+  const t = useTranslation();
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const rowElementsRef = React.useRef(new Map());
+  const brokenRowReferences = React.useMemo(
+    () =>
+      findBrokenReferences(activeReport).filter(
+        (issue) => issue.scope === "row",
+      ),
+    [activeReport],
+  );
+  const rowsCountRef = React.useRef(activeReport.rows.length);
+  const rowWarningsById = React.useMemo(() => {
+    const warningContext = createRowMappingWarningContext(
+      activeReport.rows,
+      masterData,
+    );
+    return new Map(
+      activeReport.rows.map((row) => [
+        row.id,
+        getRowMappingWarnings(
+          row,
+          activeReport.rows,
+          masterData,
+          warningContext,
+        ),
+      ]),
+    );
+  }, [activeReport.rows, masterData]);
+  const brokenReferencesByRowId = React.useMemo(() => {
+    const result = new Map();
+    brokenRowReferences.forEach((issue) => {
+      const existing = result.get(issue.id) || [];
+      existing.push(issue);
+      result.set(issue.id, existing);
+    });
+    return result;
+  }, [brokenRowReferences]);
+  const rowEntries = activeReport.rows.map((row, originalIndex) => ({
+    row,
+    originalIndex,
+  }));
+  const normalizedSearch = searchQuery.trim().toLocaleLowerCase();
+  const matchingRows = normalizedSearch
+    ? rowEntries.filter(({ row, originalIndex }) => {
+        const rowType = row.isTotal ? (row.numberFormat === "percent" ? "formula % percent total" : "formula total") : row.isHeader ? "header" : "data";
+        const searchableText = [
+          `r${originalIndex + 1}`,
+          row.id,
+          row.desc,
+          rowType,
+          row.formula,
+          row.percentBase,
+          row.dept,
+          row.deptGroup,
+          row.groups,
+          row.accCodes,
+          ...Array.from({ length: 10 }, (_, index) => row[`dim${index + 1}`]),
+        ].join(" ").toLocaleLowerCase();
+        return searchableText.includes(normalizedSearch);
+      })
+    : [];
+  const matchingRowIds = React.useMemo(
+    () => new Set(matchingRows.map(({ row }) => row.id)),
+    [matchingRows],
+  );
+  const firstMatchingRowId = matchingRows[0]?.row.id;
+  const hiddenRowCount = activeReport.rows.filter(
+    (row) => row.isActive === false,
+  ).length;
+  const reorderRows = React.useCallback(
+    (fromIndex, toIndex) => {
+      moveRow(fromIndex, toIndex);
+    },
+    [moveRow],
+  );
+  const { announcement, containerRef, getHandleProps, getItemProps } =
+    useDragReorder({
+      items: activeReport.rows.map((row) => row.id),
+      onReorder: reorderRows,
+      axis: "vertical",
+      itemLabel: (id) => `row ${id}`,
+    });
+
+  React.useEffect(() => {
+    if (!normalizedSearch || matchingRows.length === 0) return;
+    const firstMatch = rowElementsRef.current.get(firstMatchingRowId);
+    firstMatch?.scrollIntoView?.({
+      behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? "auto" : "smooth",
+      block: "center",
+    });
+  }, [normalizedSearch, firstMatchingRowId]);
+
+  React.useEffect(() => {
+    let scrollTimer;
+    if (activeReport.rows.length > rowsCountRef.current) {
+      scrollTimer = setTimeout(() => {
+        const rows = document.querySelectorAll(".row-configurator-row");
+        if (rows.length > 0) {
+          const lastRow = rows[rows.length - 1];
+          lastRow.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          const input = lastRow.querySelector("input");
+          if (input) {
+            input.focus();
+            input.select();
+          }
+        }
+      }, 50);
+    }
+    rowsCountRef.current = activeReport.rows.length;
+    return () => clearTimeout(scrollTimer);
+  }, [activeReport.rows.length]);
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-purple-100 overflow-hidden flex-1 min-h-[350px] flex flex-col">
-      <div className="p-3 bg-purple-50/80 flex items-center justify-between border-b border-purple-200 flex-shrink-0">
-        <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-2"><Layout size={14} className="text-purple-500" /> Rows Configurator</h3>
-        <div className="flex gap-2">
-          <button onClick={() => handleAddRow('data')} className="px-3 py-1.5 bg-white border border-purple-200 rounded text-[8px] font-bold uppercase tracking-widest text-purple-700 shadow-sm hover:bg-purple-50 transition-colors">+ Add Data Row</button>
-          <button onClick={() => handleAddRow('header')} className="px-3 py-1.5 bg-white border border-purple-200 rounded text-[8px] font-bold uppercase tracking-widest text-purple-700 shadow-sm hover:bg-purple-50 transition-colors">+ Add Header Row</button>
-          <button onClick={() => handleAddRow('formula')} className="px-3 py-1.5 bg-purple-600 text-white rounded text-[8px] font-bold uppercase tracking-widest shadow-sm hover:bg-purple-700 transition-colors">+ Add Formula Row</button>
+    <Card className="min-h-0 gap-0 overflow-visible border border-border bg-card/95 pb-0 shadow-none ring-0 pt-0">
+      <CardHeader className="sticky top-40 z-20 lg:top-14 border-b bg-card px-4 py-4 shadow-sm sm:px-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-1.5">
+            <CardTitle className="flex flex-wrap items-center gap-2 text-base font-semibold tracking-tight text-foreground">
+              <Layout className="size-4 text-muted-foreground" />
+              <span>{t("Rows Configurator")}</span>
+              <Badge variant="secondary" className="tabular-nums">
+                {activeReport.rows.length}{" "}{t("rows")}</Badge>
+              {hiddenRowCount > 0 ? (
+                <Badge variant="outline" className="tabular-nums text-muted-foreground">
+                  {hiddenRowCount}{" "}{t("hidden")}</Badge>
+              ) : null}
+            </CardTitle>
+            <CardDescription className="text-sm text-muted-foreground">{t("Drag for nearby changes, or choose an exact position for long moves.")}</CardDescription>
+          </div>
+          <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+            <div className="w-full sm:w-56">
+              <Input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder={t("Search rows…")}
+                aria-label={t("Search rows by reference, name, type, or mapping")}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              {normalizedSearch ? (
+                <span className="whitespace-nowrap text-xs text-muted-foreground" aria-live="polite">
+                  {matchingRows.length} {matchingRows.length === 1 ? "match" : "matches"}
+                </span>
+              ) : null}
+            <Select value="" onValueChange={handleAddRow}>
+              <SelectTrigger className="w-full sm:w-44" aria-label={t("+ Add row")}>
+                <SelectValue placeholder={t("+ Add Row")} />
+              </SelectTrigger>
+              <SelectContent position="popper">
+                <SelectItem value="data">{t("Data")}</SelectItem>
+                <SelectItem value="header">{t("Header")}</SelectItem>
+                <SelectItem value="formula">{t("Formula")}</SelectItem>
+                <SelectItem value="formula-percent">{t("Formula %")}</SelectItem>
+              </SelectContent>
+            </Select>
+            </div>
+          </div>
         </div>
-      </div>
-      {brokenRowReferences.length > 0 && (
-        <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest bg-red-50 text-red-700 border-b border-red-100">
-          Broken row references found. Fix {brokenRowReferences.length} invalid reference(s) before saving.
-        </div>
-      )}
+      </CardHeader>
 
-      <div className="overflow-auto flex-1 custom-scrollbar">
-        <table className="w-full text-left border-collapse min-w-max">
-          <thead className="sticky top-0 z-30 bg-purple-100 shadow-sm">
-            <tr className="text-purple-900 text-[9px] font-black uppercase tracking-widest">
-              <th className="p-3 border-r border-purple-200 sticky left-0 bg-purple-100 z-40 w-[40px] text-center shadow-[1px_0_0_0_#e9d5ff]">Del</th>
-              <th className="p-3 border-r border-purple-200 sticky left-[40px] bg-purple-100 z-40 w-20 text-center shadow-[1px_0_0_0_#e9d5ff]">Type</th>
-              <th className="p-3 border-r border-purple-200 sticky left-[120px] bg-purple-100 z-40 w-56 min-w-[14rem] shadow-[1px_0_0_0_#e9d5ff]">Description</th>
-              <th className="p-3 border-r border-purple-200 w-12 text-center bg-purple-100">Indent</th>
-              <th className="p-3 border-r border-purple-200 w-10 text-center bg-purple-100">Row</th>
-              <th className="p-3 border-r border-purple-200 w-16 text-center text-purple-600 bg-purple-100">% Base</th>
-              <th className="p-3 border-r border-purple-200 w-[350px] bg-purple-100">Mapping Rules Setup</th>
-            </tr>
-          </thead>
-          <tbody>
-            {activeReport.rows.map((row, idx) => {
-              const isHeader = row.isHeader || false;
-              const isTotal = row.isTotal || false;
-              const rowType = isTotal ? 'F' : (isHeader ? 'H' : 'D');
-              const rowFormulaIssues = brokenRowReferences.filter((issue) => issue.id === row.id && issue.field === 'formula');
-              const rowPercentBaseIssues = brokenRowReferences.filter((issue) => issue.id === row.id && issue.field === 'percentBase');
+      <CardContent className="p-0">
+        <p className="sr-only" aria-live="polite">
+          {announcement}
+        </p>
+        {brokenRowReferences.length > 0 && (
+          <div className="border-b bg-destructive/5 px-4 py-2 text-sm text-destructive">{t("Broken row references found. These")}{" "}{brokenRowReferences.length}{" "}{t("invalid reference(s) may produce incomplete report data.")}</div>
+        )}
 
-              const isPctBroken = rowPercentBaseIssues.length > 0 || (row.percentBase && row.percentBase.includes('!REF!'));
-              const isFormulaBroken = rowFormulaIssues.length > 0 || (row.formula && row.formula.includes('!REF!'));
-              const rowWarnings = getRowMappingWarnings(row, activeReport.rows, masterData);
+        <div className="overflow-auto">
+          <Table className="min-w-[1000px] table-fixed text-sm [&_td]:px-2 [&_th]:px-2">
+            <TableHeader className="sticky top-0 z-10 bg-muted/80">
+              <TableRow>
+                <TableHead className="w-32 text-center align-middle text-xs font-semibold uppercase tracking-wide text-foreground">{t("Type")}</TableHead>
+                <TableHead className="w-48 text-xs font-semibold uppercase tracking-wide text-foreground">{t("Description")}</TableHead>
+                <TableHead className="w-24 text-center align-middle text-xs font-semibold uppercase tracking-wide text-foreground">{t("Indent")}</TableHead>
+                <TableHead className="w-24 text-center align-middle text-xs font-semibold uppercase tracking-wide text-foreground">{t("Row")}</TableHead>
+                <TableHead className="w-24 text-center align-middle text-xs font-semibold uppercase tracking-wide text-foreground">{t("% Base")}</TableHead>
+                <TableHead className="w-96 min-w-96 max-w-96 whitespace-normal text-xs font-semibold uppercase tracking-wide text-foreground">{t("Row mapping rules")}</TableHead>
+                <TableHead className="sticky right-0 z-20 w-40 min-w-40 max-w-40 border-l bg-muted text-center align-middle text-xs font-semibold uppercase tracking-wide text-foreground">{t("Action")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody ref={containerRef}>
+              {rowEntries.map(({ row, originalIndex: idx }) => {
+                const isHeader = row.isHeader || false;
+                const isTotal = row.isTotal || false;
+                const rowType = isTotal ? (row.numberFormat === "percent" ? "F%" : "F") : isHeader ? "H" : "D";
+                const rowReferenceIssues =
+                  brokenReferencesByRowId.get(row.id) || [];
+                const rowFormulaIssues = rowReferenceIssues.filter(
+                  (issue) => issue.field === "formula",
+                );
+                const rowPercentBaseIssues = rowReferenceIssues.filter(
+                  (issue) => issue.field === "percentBase",
+                );
 
-              return (
-                <tr key={row.id} className={`border-b border-purple-50 ${isTotal ? 'bg-purple-50/50' : isHeader ? 'bg-purple-100/40' : 'hover:bg-slate-50/50'}`}>
-                  <td className="p-1 border-r border-purple-100 sticky left-0 bg-white z-20 text-center shadow-[1px_0_0_0_#e9d5ff]">
-                    <button onClick={() => setConfirmAction({ msg: 'Delete Row?', onConfirm: () => handleDeleteRow(row.id) })} className="text-slate-300 hover:text-red-400 p-1"><Trash2 size={14} /></button>
-                  </td>
-                  <td className="p-1 border-r border-purple-100 sticky left-[40px] bg-white z-20 text-center shadow-[1px_0_0_0_#e9d5ff]">
-                    <select
-                      value={rowType}
-                      onChange={(e) => {
-                        const t = e.target.value;
-                        if (t === 'D') handleUpdateRowMulti(row.id, { isTotal: false, isHeader: false });
-                        else if (t === 'H') handleUpdateRowMulti(row.id, { isTotal: false, isHeader: true, formula: '', percentBase: '', dept: '', accCodes: '', groups: '' });
-                        else if (t === 'F') handleUpdateRowMulti(row.id, { isTotal: true, isHeader: false, dept: '', accCodes: '', groups: '' });
-                      }}
-                      className="text-[9px] font-bold bg-slate-50 border border-slate-200 rounded p-1 outline-none text-slate-700 text-center w-full cursor-pointer hover:bg-slate-100"
-                    >
-                      <option value="D">Data (D)</option>
-                      <option value="H">Header (H)</option>
-                      <option value="F">Formula (F)</option>
-                    </select>
-                  </td>
-                  <td className="p-1 border-r border-purple-100 sticky left-[120px] bg-white z-20 shadow-[1px_0_0_0_#e9d5ff]">
-                    <input value={row.desc} onChange={e => handleUpdateRow(row.id, 'desc', e.target.value)} className={`w-full text-[11px] font-bold bg-transparent outline-none focus:text-purple-600 p-1.5 ${isHeader ? 'text-purple-900' : ''}`} />
-                  </td>
-                  <td className="p-1 border-r border-purple-100 text-center bg-slate-50/30">
-                    <select value={row.indent || 0} onChange={e => handleUpdateRow(row.id, 'indent', parseInt(e.target.value, 10))} className="text-[9px] bg-white border border-slate-200 rounded p-1 outline-none text-slate-700">
-                      <option value={0}>Lvl 0</option><option value={1}>Lvl 1</option><option value={2}>Lvl 2</option><option value={3}>Lvl 3</option>
-                    </select>
-                  </td>
-                  <td className="p-1 border-r border-purple-100 text-center bg-slate-50/30">
-                    <div className="flex flex-col items-center gap-0">
-                      <button onClick={() => moveRow(idx, 'up')} className="text-slate-300 hover:text-purple-600"><ArrowUp size={10} /></button>
-                      <span className="text-[9px] font-bold text-purple-700 bg-purple-100 px-1 rounded">R{idx + 1}</span>
-                      <button onClick={() => moveRow(idx, 'down')} className="text-slate-300 hover:text-purple-600"><ArrowDown size={10} /></button>
-                    </div>
-                  </td>
-                  <td className="p-1 border-r border-purple-100 text-center bg-purple-50/30">
-                    {!isHeader && (
-                        <input
-                          value={row.percentBase}
-                          onChange={e => handleUpdateRow(row.id, 'percentBase', e.target.value.toUpperCase())}
-                          className={`w-10 text-center text-[9px] font-mono font-bold border rounded p-1 outline-none ${isPctBroken ? 'border-red-500 bg-red-50 text-red-600' : 'border-purple-200 text-purple-700 bg-white'}`}
-                          placeholder="R3"
-                          title={isPctBroken ? "Reference Error! Please update the % base reference." : ""}
-                        />
-                      )}
-                  </td>
-                  <td className="p-2 border-r border-purple-100 bg-slate-50/20">
-                    {isHeader ? (
-                      <span className="text-[10px] text-purple-400 italic">Header Row (No data mapping)</span>
-                    ) : isTotal ? (
-                      <div className={`flex items-center gap-2 bg-white border rounded-md p-1.5 shadow-sm max-w-[280px] ${isFormulaBroken ? 'border-red-400 bg-red-50' : 'border-purple-200'}`}>
-                        <Calculator size={12} className={isFormulaBroken ? "text-red-500" : "text-purple-500"} />
-                        <input
-                          value={row.formula}
-                          onChange={e => handleUpdateRow(row.id, 'formula', e.target.value)}
-                          className={`w-full bg-transparent text-[10px] font-mono font-bold outline-none ${isFormulaBroken ? 'text-red-600' : 'text-purple-700'}`}
-                          placeholder="e.g. R1+R2"
-                          title={isFormulaBroken ? "Reference Error! Please update the formula." : ""}
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex justify-between items-start gap-2">
-                        <div className="flex-1 space-y-1">
-                          <div className="text-[9px] font-medium text-slate-600 truncate"><span className="font-bold text-slate-400 text-[7px] uppercase mr-1.5">DEPT:</span>{row.dept || '-'}</div>
-                          <div className="text-[9px] font-medium text-slate-600 truncate"><span className="font-bold text-slate-400 text-[7px] uppercase mr-1.5">GRP ({row.groupLevel || 'L4'}):</span>{row.groups || '-'}</div>
-                          <div className="text-[9px] font-medium text-slate-600 truncate"><span className="font-bold text-slate-400 text-[7px] uppercase mr-1.5">CODE:</span>{row.accCodes || '-'}</div>
-                          <div className="text-[9px] font-medium text-slate-600 truncate"><span className="font-bold text-slate-400 text-[7px] uppercase mr-1.5">DIM:</span>{[row.dim1, row.dim2].filter(Boolean).join(', ') || '-'}</div>
-                          {rowWarnings.length > 0 && (
-                            <div className="space-y-0.5 pt-1">
-                              {rowWarnings.map((warning) => (
-                                <div key={warning} className="text-[9px] font-bold text-red-500 bg-red-50 border border-red-100 rounded px-2 py-1">
-                                  {warning}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        <button onClick={() => setEditingRow({ ...row })} className="p-1.5 text-purple-600 bg-white hover:bg-purple-50 rounded transition-all border border-purple-200 shadow-sm"><Edit3 size={12} /></button>
-                      </div>
+                const isPctBroken =
+                  rowPercentBaseIssues.length > 0 ||
+                  (row.percentBase && row.percentBase.includes("!REF!"));
+                const isFormulaBroken =
+                  rowFormulaIssues.length > 0 ||
+                  (row.formula && row.formula.includes("!REF!"));
+                const rowWarnings = rowWarningsById.get(row.id) || [];
+
+                return (
+                  <TableRow
+                    key={row.id}
+                    ref={(element) => {
+                      if (element) rowElementsRef.current.set(row.id, element);
+                      else rowElementsRef.current.delete(row.id);
+                    }}
+                    {...getItemProps(row.id)}
+                    className={cn(
+                      "row-configurator-row border-b border-border/60 even:bg-muted/20 hover:bg-muted/40 transition-[opacity,box-shadow,transform,background-color] duration-200 ease-out data-[dragging=true]:opacity-40 data-[drag-over=true]:bg-primary/5 data-[drag-over=true]:ring-2 data-[drag-over=true]:ring-inset data-[drag-over=true]:ring-primary/35 motion-reduce:transition-none",
+                      isTotal && "bg-muted/30",
+                      isHeader && "bg-muted/10",
+                      (isPctBroken || isFormulaBroken || rowWarnings.length > 0) && "border-l-2 border-l-destructive/70",
+                      row.isActive === false && "opacity-60",
+                      normalizedSearch && matchingRowIds.has(row.id) && "relative outline-2 -outline-offset-2 outline-primary/40",
                     )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
+                  >
+                    <TableCell className="px-2 py-2 align-middle">
+                      <Select
+                        value={rowType}
+                        onValueChange={(value) => {
+                          if (value === "F%" && !isTotal) return;
+                          if (value === "D")
+                            handleUpdateRowMulti(row.id, {
+                              isTotal: false,
+                              isHeader: false,
+                              numberFormat: "column",
+                            });
+                          else if (value === "H")
+                            handleUpdateRowMulti(row.id, {
+                              isTotal: false,
+                              isHeader: true,
+                              formula: "",
+                              percentBase: "",
+                              numberFormat: "column",
+                              dept: "",
+                              deptGroup: "",
+                              accCodes: "",
+                              groups: "",
+                            });
+                          else if (value === "F" || value === "F%") {
+                            const mappingFields = ["dept", "deptGroup", "accCodes", "groups", ...Array.from({ length: 10 }, (_, index) => `dim${index + 1}`)];
+                            const mappedFields = mappingFields.filter((field) => String(row[field] ?? "").trim());
+                            const updates = {
+                              isTotal: true,
+                              isHeader: false,
+                              numberFormat: value === "F%" ? "percent" : "column",
+                              ...Object.fromEntries(mappingFields.map((field) => [field, ""])),
+                            };
+                            if (!isHeader && !isTotal && mappedFields.length > 0) {
+                              const mappingLabels = { dept: t("Department"), deptGroup: t("Department group"), accCodes: t("Account codes"), groups: t("Account groups") };
+                              setConfirmAction({
+                                title: t("Change Data row to Formula?"),
+                                msg: t("Changing “{name}” to Formula will clear these mappings: {mappings}. The row will use a formula instead of mapped data.", {
+                                  name: row.desc || row.id,
+                                  mappings: mappedFields.map((field) => mappingLabels[field] || field).join(", "),
+                                }),
+                                actionLabel: "Change to Formula",
+                                onConfirm: () => handleUpdateRowMulti(row.id, updates),
+                              });
+                            } else handleUpdateRowMulti(row.id, updates);
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="mx-auto h-8 w-full max-w-[10rem] rounded-lg text-center">
+                          <SelectValue placeholder={t("Type")} />
+                        </SelectTrigger>
+                        <SelectContent position="popper">
+                          <SelectItem value="D">{t("Data (D)")}</SelectItem>
+                          <SelectItem value="H">{t("Header (H)")}</SelectItem>
+                          <SelectItem value="F">{t("Formula (F)")}</SelectItem>
+                          {isTotal && <SelectItem value="F%">{t("Formula %")}</SelectItem>}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell className="px-2 py-2 align-middle">
+                      <Input
+                        value={row.desc}
+                        onChange={(e) =>
+                          handleUpdateRow(row.id, "desc", e.target.value)
+                        }
+                        className="min-w-0"
+                      />
+                    </TableCell>
+                    <TableCell className="px-2 py-2 align-middle">
+                      <Select
+                        value={String(row.indent || 0)}
+                        onValueChange={(value) =>
+                          handleUpdateRow(row.id, "indent", parseInt(value, 10))
+                        }
+                      >
+                        <SelectTrigger className="mx-auto h-8 w-full max-w-[7rem] rounded-lg text-center">
+                          <SelectValue placeholder={t("Indent 0")} />
+                        </SelectTrigger>
+                        <SelectContent position="popper">
+                          <SelectItem value="0">{t("Indent 0")}</SelectItem>
+                          <SelectItem value="1">{t("Indent 1")}</SelectItem>
+                          <SelectItem value="2">{t("Indent 2")}</SelectItem>
+                          <SelectItem value="3">{t("Indent 3")}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell className="px-2 py-2 align-middle">
+                      <section className="flex flex-col items-center gap-1.5 whitespace-nowrap">
+                        <Badge variant="secondary" className="font-mono tabular-nums">R{idx + 1}</Badge>
+                        <section className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            {...getHandleProps(row.id, idx)}
+                            className="cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
+                          >
+                            <GripVertical />
+                          </Button>
+                          <MoveToPositionDialog
+                            currentPosition={idx + 1}
+                            itemCount={activeReport.rows.length}
+                            itemLabel={`row R${idx + 1}`}
+                            onMove={reorderRows}
+                          />
+                        </section>
+                      </section>
+                    </TableCell>
+                    <TableCell className="px-2 py-2 align-middle">
+                      {!isHeader ? (
+                        <Input
+                          value={row.percentBase}
+                          onChange={(e) =>
+                            handleUpdateRow(
+                              row.id,
+                              "percentBase",
+                              e.target.value.toUpperCase(),
+                            )
+                          }
+                          className={isPctBroken ? "border-destructive bg-destructive/5 font-mono" : "font-mono"}
+                          aria-invalid={Boolean(isPctBroken)}
+                          placeholder="R#"
+                        />
+                      ) : null}
+                    </TableCell>
+                    <TableCell className="w-96 min-w-96 max-w-96 whitespace-normal px-2 py-2 align-middle">
+                      {isHeader ? (
+                        <span className="inline-flex rounded-full border border-border bg-background px-2.5 py-1 text-sm text-muted-foreground">{t("Header row — no data mapping")}</span>
+                      ) : isTotal ? (
+                        <div
+                          className={`flex items-center gap-2 rounded-lg border p-2.5 ${isFormulaBroken ? "border-destructive/60 bg-destructive/5" : ""}`}
+                        >
+                          <Calculator
+                            className={
+                              isFormulaBroken
+                                ? "text-destructive"
+                                : "text-muted-foreground"
+                            }
+                          />
+                          <Input
+                            value={row.formula}
+                            onChange={(e) =>
+                              handleUpdateRow(row.id, "formula", e.target.value)
+                            }
+                            placeholder="e.g. R1+R2"
+                            className="min-w-0 font-mono"
+                          />
+                        </div>
+                      ) : (
+                        <section className="min-w-0 space-y-1 text-sm text-muted-foreground">
+                          <p className="truncate">
+                            <span className="font-medium text-foreground">
+                              DEPT:
+                            </span>{" "}
+                            {row.dept || "-"}
+                          </p>
+                          <p className="truncate">
+                            <span className="font-medium text-foreground">
+                              DEPT GRP:
+                            </span>{" "}
+                            {row.deptGroup || "-"}
+                          </p>
+                          <p className="truncate">
+                            <span className="font-medium text-foreground">
+                              GRP ({row.groupLevel || "L4"}):
+                            </span>{" "}
+                            {row.groups || "-"}
+                          </p>
+                          <p className="truncate">
+                            <span className="font-medium text-foreground">
+                              CODE:
+                            </span>{" "}
+                            {row.accCodes || "-"}
+                          </p>
+                          <p className="truncate">
+                            <span className="font-medium text-foreground">
+                              DIM:
+                            </span>{" "}
+                            {Array.from(
+                              { length: 10 },
+                              (_, index) => row[`dim${index + 1}`],
+                            )
+                              .filter(Boolean)
+                              .join(", ") || "-"}
+                          </p>
+                          {rowWarnings.length > 0 && (
+                            <section className="min-w-0 space-y-1 pt-1">
+                              {rowWarnings.map((warning) => {
+                                const isUnknown = /unknown/i.test(warning);
+                                return isUnknown ? (
+                                  <Badge
+                                    key={warning}
+                                    variant="destructive"
+                                    className="h-auto max-w-full whitespace-normal break-words rounded-md border-destructive/30 bg-destructive/15 px-2 py-1 text-left text-xs font-normal normal-case tracking-normal"
+                                  >
+                                    {warning}
+                                  </Badge>
+                                ) : (
+                                  <section
+                                    key={warning}
+                                    className="max-w-full break-words rounded-md border border-destructive/20 bg-destructive/5 px-2 py-1 text-xs text-destructive"
+                                  >
+                                    {warning}
+                                  </section>
+                                );
+                              })}
+                            </section>
+                          )}
+                        </section>
+                      )}
+                    </TableCell>
+                    <TableCell className="sticky right-0 z-10 w-40 min-w-40 max-w-40 border-l bg-background px-2 py-2 text-center align-middle">
+                      <section
+                        className="flex items-center justify-center gap-1.5 whitespace-nowrap"
+                        aria-label={`Actions for row ${row.id}`}
+                        data-testid="row-actions"
+                      >
+                        <Button
+                          variant="outline"
+                          size="icon-sm"
+                          className={cn(
+                            "border-border text-muted-foreground hover:bg-muted/60 focus-visible:bg-muted/60 hover:text-foreground",
+                            row.isActive !== false
+                              ? "bg-muted/60"
+                              : "bg-background",
+                          )}
+                          aria-label={`${row.isActive !== false ? "Hide" : "Show"} row ${row.id}`}
+                          aria-pressed={row.isActive === false}
+                          title={`${row.isActive !== false ? "Hide" : "Show"} row ${row.id}`}
+                          onClick={() =>
+                            handleUpdateRow(
+                              row.id,
+                              "isActive",
+                              row.isActive === false,
+                            )
+                          }
+                        >
+                          {row.isActive !== false ? (
+                            <Eye className="size-3.5" />
+                          ) : (
+                            <EyeOff className="size-3.5" />
+                          )}
+                        </Button>
+                        {!isHeader && !isTotal ? (
+                          <Button
+                            variant="outline"
+                            size="icon-sm"
+                            aria-label={`Edit mapping for row ${row.id}`}
+                            title={`Edit mapping for row ${row.id}`}
+                            onClick={() => setEditingRow({ ...row })}
+                          >
+                            <Edit3 className="size-3.5" />
+                          </Button>
+                        ) : null}
+                        <Button
+                          variant="destructive"
+                          size="icon-sm"
+                          className="border-destructive/30 bg-destructive/10 text-destructive hover:border-destructive/40 hover:bg-destructive/20"
+                          aria-label={`Delete row ${row.id}`}
+                          title={`Delete row ${row.id}`}
+                          onClick={() =>
+                            setConfirmAction({
+                              title: t("Delete row {id}?", { id: row.id }),
+                              msg: t("This permanently removes “{name}” and updates affected row references.", { name: row.desc || row.id }),
+                              actionLabel: "Delete row",
+                              onConfirm: () => handleDeleteRow(row.id),
+                            })
+                          }
+                        >
+                          <Trash2 className="size-3.5 text-destructive" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon-sm"
+                          aria-label={`Duplicate row ${row.id}`}
+                          title={`Duplicate row ${row.id}`}
+                          onClick={() => handleDuplicateRow(row.id)}
+                        >
+                          <Copy className="size-3.5" />
+                        </Button>
+                      </section>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

@@ -1,118 +1,417 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import App from './App.jsx';
+import App, { getSetupWarnings } from './App.jsx';
+import { getAccessibleReports } from './reportAccess.js';
+import { getDefaultReports } from '../features/report/data/defaultReports.js';
+import { INITIAL_MASTER_DATA } from '../features/report/lib/reportLogic.js';
 
 const reportApiMocks = vi.hoisted(() => ({
   isCarmenApiConfigured: vi.fn(() => false),
   getStoredCarmenSession: vi.fn(() => null),
+  fetchCarmenBusinessUnits: vi.fn(),
+  fetchCarmenDimensions: vi.fn(),
   fetchCarmenMasterData: vi.fn(),
   fetchCarmenReportOptions: vi.fn(),
   fetchCarmenReports: vi.fn(),
+  fetchCarmenReport: vi.fn(),
   fetchCarmenReportData: vi.fn(),
+  createCarmenReport: vi.fn(),
   saveCarmenReport: vi.fn(() => Promise.resolve()),
+  saveCarmenReports: vi.fn(() => Promise.resolve()),
   cloneCarmenReport: vi.fn(),
   deleteCarmenReport: vi.fn(),
 }));
 
+describe('report visibility', () => {
+  const reports = [
+    { id: 'owned-inactive', owner: 'owner', assignedUsers: [], isActive: false },
+    { id: 'assigned-inactive', owner: 'other', assignedUsers: ['viewer'], isActive: false },
+    { id: 'assigned-active', owner: 'other', assignedUsers: ['viewer'], isActive: true },
+    { id: 'hidden-active', owner: 'other', assignedUsers: [], isActive: true },
+  ];
+
+  it('shows every report to users with Carmen view permission', () => {
+    const owner = { id: 'owner', permissions: { financialReport: { view: true } } };
+    const viewer = { id: 'viewer', permissions: { financialReport: { view: true } } };
+
+    expect(getAccessibleReports(reports, owner)).toEqual(reports);
+    expect(getAccessibleReports(reports, viewer)).toEqual(reports);
+  });
+
+  it('keeps every report visible to report administrators', () => {
+    const admin = { id: 'admin', permissions: { financialReport: { view: true, update: true } } };
+    expect(getAccessibleReports(reports, admin)).toEqual(reports);
+  });
+
+  it('uses Carmen permission rather than report access entries', () => {
+    const report = { id: 'report', access: [{ userId: 'viewer', canView: false }] };
+    expect(getAccessibleReports([report], { permissions: { financialReport: { view: true } } })).toEqual([report]);
+    expect(getAccessibleReports([report], { permissions: { financialReport: { view: false } } })).toEqual([]);
+  });
+});
+
+describe('setup validation', () => {
+  it('allows Daily and Monthly data columns in the same report', () => {
+    const warnings = getSetupWarnings({
+      reportType: 'Monthly',
+      columns: [
+        { id: 'C1', type: 'AC', isFormula: false, isPercent: false },
+        { id: 'C2', type: 'DAC', isFormula: false, isPercent: false },
+      ],
+      rows: [],
+    }, INITIAL_MASTER_DATA);
+
+    expect(warnings).toEqual([]);
+  });
+
+  it('checks data column types without rejecting stale types on formula and mix columns', () => {
+    const warnings = getSetupWarnings({
+      reportType: 'Monthly',
+      columns: [
+        { id: 'C1', type: 'AC', isFormula: false, isPercent: false },
+        { id: 'C2', type: 'MIX', isFormula: false, isPercent: true, targetCol: 'C1' },
+        { id: 'C3', type: 'FORMULA', isFormula: true, isPercent: false, formula: 'C1' },
+      ],
+      rows: [],
+    }, INITIAL_MASTER_DATA);
+
+    expect(warnings).toEqual([]);
+  });
+});
+
 vi.mock('../features/report/lib/reportApi.js', () => reportApiMocks);
 
 describe('App shell', () => {
+  let localStorageStore = {};
   beforeEach(() => {
+    localStorageStore = {};
+    const mockLocalStorage = {
+      getItem: vi.fn((key) => localStorageStore[key] || null),
+      setItem: vi.fn((key, value) => {
+        localStorageStore[key] = String(value);
+      }),
+      removeItem: vi.fn((key) => {
+        delete localStorageStore[key];
+      }),
+      clear: vi.fn(() => {
+        localStorageStore = {};
+      }),
+    };
+    Object.defineProperty(window, 'localStorage', {
+      value: mockLocalStorage,
+      writable: true,
+      configurable: true,
+    });
+    vi.stubGlobal('localStorage', mockLocalStorage);
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(false);
     reportApiMocks.getStoredCarmenSession.mockReturnValue(null);
+    
     reportApiMocks.fetchCarmenMasterData.mockReset();
+    reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
+      currentUser: { id: 'admin', role: 'Admin' },
+      companyProfile: {},
+      depts: [],
+      accCodes: [],
+      periods: [],
+      budgetRevisions: [],
+      groups: {},
+    });
+
+    reportApiMocks.fetchCarmenBusinessUnits.mockReset();
+    reportApiMocks.fetchCarmenBusinessUnits.mockImplementation(async () => {
+      const session = reportApiMocks.getStoredCarmenSession();
+      return session?.businessUnit?.tenant ? [{ Tenant: session.businessUnit.tenant,
+        financialReport: { view: true, setup: session.user?.role === 'Admin', add: session.user?.role === 'Admin' } }] : [];
+    });
+    reportApiMocks.fetchCarmenDimensions.mockReset();
+    reportApiMocks.fetchCarmenDimensions.mockResolvedValue([]);
+
     reportApiMocks.fetchCarmenReportOptions.mockReset();
+    reportApiMocks.fetchCarmenReportOptions.mockResolvedValue({});
+
     reportApiMocks.fetchCarmenReports.mockReset();
+    reportApiMocks.fetchCarmenReports.mockResolvedValue([]);
+    reportApiMocks.fetchCarmenReport.mockReset();
+
     reportApiMocks.fetchCarmenReportData.mockReset();
+    reportApiMocks.fetchCarmenReportData.mockResolvedValue({ actualRows: [], budgetRows: [] });
+
+    reportApiMocks.createCarmenReport.mockReset();
     reportApiMocks.saveCarmenReport.mockClear();
+    reportApiMocks.saveCarmenReports.mockClear();
     reportApiMocks.cloneCarmenReport.mockClear();
     reportApiMocks.deleteCarmenReport.mockClear();
+    delete document.documentElement.dataset.shellTemplate;
   });
 
-  it('switches from VIEW to SETUP for the admin user', () => {
-    const { container } = render(<App />);
+  it('saves a sidebar group move to the report tenant without changing its mappings', async () => {
+    const user = { id: 'admin', role: 'Admin', permissions: { financialReport: { view: true, setup: true, update: true } } };
+    reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
+    reportApiMocks.getStoredCarmenSession.mockReturnValue({ accessToken: 'test-token', businessUnit: { tenant: 'unit-a' }, user });
+    reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
+      currentUser: user, companyProfile: {}, depts: [], accCodes: [], periods: [], budgetRevisions: [], groups: {},
+    });
+    const source = { ...getDefaultReports()[0], reportGroup: 'Operations', lastModified: '2026-10-26T10:00:00' };
+    const other = { ...getDefaultReports()[1], reportGroup: 'Daily Group Report' };
+    reportApiMocks.fetchCarmenReports.mockResolvedValue([source, other]);
+    render(<App />);
+    const nav = await screen.findByRole('navigation', { name: 'Report groups' });
+    const reportButton = await within(nav).findByRole('button', { name: source.name, exact: true });
+    const targetGroup = within(nav).getByRole('button', { name: 'Daily Report', exact: true });
+    const dataTransfer = { setData: vi.fn(), effectAllowed: '', dropEffect: '' };
+    fireEvent.dragStart(reportButton, { dataTransfer });
+    fireEvent.dragOver(targetGroup, { dataTransfer });
+    fireEvent.drop(targetGroup, { dataTransfer });
+    await waitFor(() => expect(reportApiMocks.saveCarmenReport).toHaveBeenCalledWith(
+      { ...source, tenant: 'unit-a', reportGroup: 'Daily Report' }, { tenant: 'unit-a' },
+    ));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Operations', exact: true })).not.toBeInTheDocument());
+  });
 
-    expect(screen.getByRole('button', { name: 'VIEW' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'SETUP' })).toBeInTheDocument();
+  it('keeps the default shell template applied without showing template compare controls', async () => {
+    render(<App />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
+    expect(document.documentElement.dataset.shellTemplate).toBe('classic-calm');
+    expect(screen.queryByText('Compare')).not.toBeInTheDocument();
 
-    expect(screen.getByText('Configuration Mode')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.queryByText('Compare')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument(), { timeout: 5000 });
+  });
+
+  it('shows Language beside Theme in account preferences', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Account preferences' }));
+    expect(screen.getByRole('button', { name: 'Theme' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Language' }));
+    fireEvent.click(screen.getByRole('button', { name: 'ไทย' }));
+    expect(window.localStorage.getItem('carmen_language')).toBe('th');
+    expect(screen.getByRole('button', { name: 'ไทย' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('opens report setup from Edit for the admin user', async () => {
+    render(<App />);
+
+    expect(within(screen.getByRole('region', { name: 'Report title and actions' })).getByRole('button', { name: 'Profit and Loss' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+
+    await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument(), { timeout: 5000 });
+  });
+
+  it('closes and remembers the getting started guide on desktop', async () => {
+    const { unmount } = render(<App />);
+    await screen.findByRole('dialog', { name: 'Choose a report' });
+    fireEvent.click(screen.getByRole('button', { name: 'Close getting started guide' }));
+    expect(screen.queryByRole('dialog', { name: 'Choose a report' })).not.toBeInTheDocument();
+    expect(window.localStorage.setItem).toHaveBeenCalledWith(
+      'carmen_bi_getting_started_v1:admin',
+      'done',
+    );
+
+    unmount();
+    render(<App />);
+    expect(screen.queryByRole('dialog', { name: 'Choose a report' })).not.toBeInTheDocument();
+  });
+
+  it('highlights the report actions and filter bar in the current View layout', async () => {
+    render(<App />);
+    await screen.findByRole('dialog', { name: 'Choose a report' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByRole('dialog', { name: 'Manage reports' })).toBeInTheDocument();
+    expect(document.querySelector('[data-tour="report-actions"]')).toHaveAttribute('data-tour-active', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByRole('dialog', { name: 'Filter and export' })).toBeInTheDocument();
+    expect(document.querySelector('[data-tour="report-filters"]')).toHaveAttribute('data-tour-active', 'true');
+  });
+
+  it('keeps the getting started guide interactive on mobile after login', async () => {
+    Object.defineProperty(window, 'innerWidth', { value: 390, configurable: true });
+    const originalMatchMedia = window.matchMedia;
+    Object.defineProperty(window, 'matchMedia', { configurable: true, value: (query) => ({
+      matches: query.includes('767px'),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }) });
+    try {
+      render(<App />);
+      await screen.findAllByText('Manage reports');
+      await waitFor(() => {
+        expect(document.querySelectorAll('[data-slot="sheet-content"]')).toHaveLength(1);
+        expect(screen.getByRole('button', { name: 'Close getting started guide' })).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Close getting started guide' }));
+      await waitFor(() => {
+        expect(screen.queryAllByText('Manage reports')).toHaveLength(0);
+      });
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { value: 1024, configurable: true });
+      Object.defineProperty(window, 'matchMedia', { configurable: true, value: originalMatchMedia });
+    }
+  });
+
+  it('opens report navigation below the desktop sidebar breakpoint', async () => {
+    Object.defineProperty(window, 'innerWidth', { value: 900, configurable: true });
+    try {
+      render(<App />);
+      fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
+      const navigation = await screen.findByRole('dialog', { name: 'Reports' });
+      fireEvent.click(within(navigation).getByRole('button', { name: 'Profit and Loss' }));
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Reports' })).not.toBeInTheDocument());
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { value: 1024, configurable: true });
+    }
+  });
+
+  it('keeps setup edits as a draft and restores them on Cancel changes', async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+
+    const reportName = await screen.findByDisplayValue('Profit and Loss');
+    fireEvent.change(reportName, { target: { value: 'Draft report name' } });
+
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel changes' }));
+    expect(screen.getByText('Discard unsaved changes?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+
+    await waitFor(() => expect(screen.getByDisplayValue('Profit and Loss')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+  });
+
+  it('opens the Excel template wizard as a separate admin page', async () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Import Excel' }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Excel report import' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/review its mappings before use/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Open import guide' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole('button', { name: 'Open import guide' }),
+    ).toHaveLength(1);
+    expect(
+      screen.queryByRole('button', { name: 'Open getting started guide' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('creates a blank report from the admin sidebar and opens setup', async () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'New Report' }));
+
+    expect(
+      await screen.findByDisplayValue('New Custom Report', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Report Details')).toBeInTheDocument();
   });
 
-  it('hides the setup tab when the role changes to a non-admin user', () => {
-    const { container } = render(<App />);
+  it('creates an API-backed blank report with a client-generated id', async () => {
+    const apiUser = {
+      id: 'finance-owner',
+      name: 'Finance Owner',
+      role: 'Admin',
+      permissions: { financialReport: { view: true, setup: true, add: true } },
+    };
+    const createdReport = {
+      id: 'rep-server-created',
+      name: 'New Custom Report',
+      companyName: 'Carmen Hotel & Resorts',
+      category: ['ALL'],
+      assignedUsers: ['finance-owner'],
+      isActive: true,
+      periodFormat: 'standard',
+      reportType: 'Monthly',
+      owner: 'finance-owner',
+      theme: 'blue',
+      descriptionPosition: 0,
+      columns: [],
+      rows: [],
+    };
+    reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
+    reportApiMocks.getStoredCarmenSession.mockReturnValue({ user: apiUser });
+    reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
+      currentUser: apiUser,
+      users: [apiUser],
+      companyProfile: { name: 'Carmen Hotel & Resorts' },
+      depts: [],
+      accCodes: [],
+      periods: [],
+      budgetRevisions: [],
+      groups: {},
+    });
+    reportApiMocks.createCarmenReport.mockResolvedValue(createdReport);
 
-    const roleSelector = screen.getAllByRole('combobox')[0];
-    fireEvent.change(roleSelector, { target: { value: 'u2' } });
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'New Report' }));
 
-    expect(screen.getByRole('button', { name: 'VIEW' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'SETUP' })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(reportApiMocks.createCarmenReport).toHaveBeenCalledTimes(1);
+    });
+    expect(reportApiMocks.createCarmenReport).toHaveBeenCalledWith(
+      expect.objectContaining({ id: expect.stringMatching(/^rep-\d+$/) }),
+    );
+    expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalled();
+    expect(
+      await screen.findByDisplayValue('New Custom Report', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
   });
 
-  it('handles GL CSV uploads through the file input flow', async () => {
-    const csv = [
-      'year,deptcode,acccode,accname,accnature,group1,group2,group3,group4,amt1,bfamt1',
-      '2025,101,4001,Rooms,I,FOOD,BEV,MAIN,DETAIL,100,25',
-    ].join('\n');
+  it('leaves the report workspace blank after deleting the selected report', async () => {
+    const [baseReport] = getDefaultReports();
+    const selectedReport = {
+      ...structuredClone(baseReport),
+      id: 'rep-9999999999999',
+      name: 'Report to delete',
+    };
+    localStorageStore.carmen_bi_reports_config_v5_23 = JSON.stringify([
+      baseReport,
+      selectedReport,
+    ]);
 
-    class MockFileReader {
-      readAsText() {
-        this.onload({ target: { result: csv } });
-      }
-    }
+    render(<App />);
+    expect(screen.getByRole('button', { name: 'New Report' })).toHaveAttribute('data-variant', 'default');
+    expect(screen.getByRole('button', { name: 'Delete' })).toHaveClass('border-destructive/50', 'text-destructive');
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    const confirmDelete = await screen.findByRole('button', { name: 'Delete report' });
+    expect(confirmDelete).toHaveClass('bg-destructive', 'text-white');
+    fireEvent.click(confirmDelete);
 
-    const originalFileReader = globalThis.FileReader;
-    globalThis.FileReader = MockFileReader;
-
-    try {
-      const { container } = render(<App />);
-      const glInput = container.querySelectorAll('input[type="file"]')[0];
-
-      fireEvent.change(glInput, { target: { files: [new File(['ignored'], 'gl.csv', { type: 'text/csv' })] } });
-
-      await waitFor(() => expect(screen.getByText(/Transaction \(GL\)/)).toBeInTheDocument());
-      fireEvent.click(screen.getAllByRole('button', { name: 'OK' })[0]);
-      await waitFor(() => expect(screen.queryByText(/Transaction \(GL\)/)).not.toBeInTheDocument());
-      expect(screen.getByDisplayValue('2025')).toBeInTheDocument();
-    } finally {
-      globalThis.FileReader = originalFileReader;
-    }
+    await waitFor(() => {
+      expect(screen.queryByText('Report Details')).not.toBeInTheDocument();
+    });
+    expect(screen.queryByRole('button', { name: 'Report to delete' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: baseReport.name })).not.toHaveAttribute('aria-current');
   });
 
-  it('handles Budget CSV uploads through the file input flow', async () => {
-    const csv = [
-      'deptcode,acccode,caption,amt1,amt2',
-      '102,5002,Budget Rooms,10,20',
-    ].join('\n');
+  it('does not show report color theme controls in setup', async () => {
+    render(<App />);
 
-    class MockFileReader {
-      readAsText() {
-        this.onload({ target: { result: csv } });
-      }
-    }
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
 
-    const originalFileReader = globalThis.FileReader;
-    globalThis.FileReader = MockFileReader;
-
-    try {
-      const { container } = render(<App />);
-      const budgetInput = container.querySelectorAll('input[type="file"]')[1];
-
-      fireEvent.change(budgetInput, { target: { files: [new File(['ignored'], 'budget.csv', { type: 'text/csv' })] } });
-
-      await waitFor(() => expect(screen.getByText(/Budget สำเร็จ/)).toBeInTheDocument());
-      fireEvent.click(screen.getAllByRole('button', { name: 'OK' })[0]);
-      await waitFor(() => expect(screen.queryByText(/Budget สำเร็จ/)).not.toBeInTheDocument());
-      expect(screen.getByText('Budget')).toBeInTheDocument();
-    } finally {
-      globalThis.FileReader = originalFileReader;
-    }
+    await screen.findByText('Report Details', {}, { timeout: 5000 });
+    expect(screen.queryByText('Report Theme')).not.toBeInTheDocument();
   });
 
-  it('ignores CSV file uploads when Carmen API sync is configured', async () => {
+  it('does not offer role simulation or report-level access management', () => {
+    render(<App />);
+    expect(screen.queryByRole('combobox', { name: 'User selector' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Access' })).not.toBeInTheDocument();
+  });
+
+  it('uses Apply as the only report data refresh action', async () => {
+    const onLogout = vi.fn();
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.getStoredCarmenSession.mockReturnValue({
       user: {
@@ -162,10 +461,10 @@ describe('App shell', () => {
       groups: { L1: [], L2: [], L3: [], L4: [] },
     });
     reportApiMocks.fetchCarmenReportOptions.mockResolvedValue({});
-    reportApiMocks.fetchCarmenReportData.mockResolvedValue({
-      actualRows: [{ deptcode: '101', acccode: '4001', amt1: 123 }],
-      budgetRows: [{ deptcode: '101', acccode: '4001', amt1: 456 }],
-    });
+    let resolveInitialLoad;
+    reportApiMocks.fetchCarmenReportData.mockImplementation(() => new Promise((resolve) => {
+      resolveInitialLoad = resolve;
+    }));
     reportApiMocks.fetchCarmenReports.mockResolvedValue([
       {
         id: 'rep-sync',
@@ -191,34 +490,113 @@ describe('App shell', () => {
       },
     ]);
 
-    class MockFileReader {
-      readAsText() {
-        throw new Error('CSV parsing should not run when Carmen API sync is configured.');
-      }
-    }
+    render(<App onLogout={onLogout} />);
+    await waitFor(() => expect(screen.getAllByText('API Sync Report').length).toBeGreaterThan(0));
+    await waitFor(() => expect(reportApiMocks.fetchCarmenReportData).toHaveBeenCalled());
+    expect(await screen.findByRole('dialog', { name: 'Loading report data' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Choose a report' })).not.toBeInTheDocument();
+    await act(async () => resolveInitialLoad({
+      actualRows: [{ deptcode: '101', acccode: '4001', amt1: 123 }],
+      budgetRows: [{ deptcode: '101', acccode: '4001', amt1: 456 }],
+    }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Loading report data' })).not.toBeInTheDocument());
+    expect(await screen.findByRole('dialog', { name: 'Choose a report' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close getting started guide' }));
+    expect(screen.queryByRole('dialog', { name: 'Choose a report' })).not.toBeInTheDocument();
 
-    const originalFileReader = globalThis.FileReader;
-    globalThis.FileReader = MockFileReader;
+    const resolveApply = [];
+    reportApiMocks.fetchCarmenReportData.mockImplementation(() => new Promise((resolve) => {
+      resolveApply.push(resolve);
+    }));
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(await screen.findByRole('dialog', { name: 'Loading report data' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Apply' })).not.toBeInTheDocument();
+    resolveApply.forEach((resolve) => resolve({ actualRows: [], budgetRows: [] }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Loading report data' })).not.toBeInTheDocument());
 
-    try {
-      const { container } = render(<App />);
-      await waitFor(() => expect(screen.getAllByText('API Sync Report').length).toBeGreaterThan(0));
+    const publishedApiError = Object.assign(
+      new Error('Unable to reach Carmen API. Check your network connection or contact the administrator.'),
+      { name: 'CarmenApiError' },
+    );
+    reportApiMocks.fetchCarmenReportData.mockRejectedValue(publishedApiError);
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Loading report data' })).not.toBeInTheDocument());
 
-      fireEvent.click(screen.getByRole('button', { name: /GL/i }));
-      await waitFor(() => expect(screen.getByText('GL data synced from Carmen API.')).toBeInTheDocument());
+    expect(await screen.findByText('Unable to load report data')).toBeInTheDocument();
+    expect(screen.getByText(publishedApiError.message)).toBeInTheDocument();
 
-      const glInput = container.querySelectorAll('input[type="file"]')[0];
-      fireEvent.change(glInput, { target: { files: [new File(['ignored'], 'gl.csv', { type: 'text/csv' })] } });
+    expect(screen.queryByRole('button', { name: /^GL$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^BUD$/i })).not.toBeInTheDocument();
 
-      await waitFor(() => expect(screen.queryByText(/Transaction \(GL\)/)).not.toBeInTheDocument());
-      expect(screen.getByText('Revenue')).toBeInTheDocument();
-      expect(reportApiMocks.fetchCarmenReportData).toHaveBeenCalled();
-    } finally {
-      globalThis.FileReader = originalFileReader;
-    }
+    reportApiMocks.fetchCarmenReportData.mockRejectedValue(Object.assign(
+      new Error('Your Carmen session expired. Please sign in again.'),
+      { kind: 'session', status: 401 },
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    await waitFor(() => expect(onLogout).toHaveBeenCalledOnce());
   });
 
-  it('clears the report catalog error after fixing broken references', async () => {
+  it('switches between single BUs and creates in the selected BU', async () => {
+    reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
+    reportApiMocks.getStoredCarmenSession.mockReturnValue({ accessToken: 'token', businessUnit: { tenant: 'a' }, user: { id: 'admin', role: 'Admin' } });
+    reportApiMocks.fetchCarmenBusinessUnits.mockResolvedValue([
+      { Tenant: 'a', Description: 'Unit A', financialReport: { view: true, setup: true } },
+      { Tenant: 'b', Description: 'Unit B', financialReport: { view: true, setup: true } },
+    ]);
+    const definition = { ...getDefaultReports()[0], id: 'same', name: 'P&L',
+      rows: [{ id: 'r1', desc: 'Sales', accCodes: '4001', isActive: true }],
+      columns: [{ id: 'C1', label: 'Actual', type: 'AC', isActive: true }] };
+    reportApiMocks.fetchCarmenReports.mockResolvedValue([definition]);
+    reportApiMocks.fetchCarmenReportData.mockImplementation(async ({ tenant, year, period }) => ({ actualRows: [{ year, acccode: '4001', [`amt${period}`]: tenant === 'b' ? 200 : 100 }], budgetRows: [] }));
+    reportApiMocks.createCarmenReport.mockImplementation(async (report) => ({ ...report, lastModified: 'version' }));
+    render(<App />);
+    await screen.findByRole('region', { name: 'Reports in a' });
+    await screen.findByText('100.00');
+    const callsBeforeReselect = reportApiMocks.fetchCarmenReportData.mock.calls.length;
+    fireEvent.click(within(screen.getByRole('region', { name: 'Reports in a' })).getByRole('button', { name: 'P&L' }));
+    expect(screen.getByText('100.00')).toBeInTheDocument();
+    expect(reportApiMocks.fetchCarmenReportData).toHaveBeenCalledTimes(callsBeforeReselect);
+    fireEvent.click(screen.getByRole('combobox', { name: 'BU' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Unit B', exact: true }));
+    const groupB = await screen.findByRole('region', { name: 'Reports in b' });
+    expect(await within(groupB).findByRole('button', { name: 'P&L' })).toHaveAttribute('aria-current', 'page');
+    await screen.findByText('200.00');
+    fireEvent.click(within(groupB).getByRole('button', { name: 'P&L' }));
+    fireEvent.click(within(groupB).getByRole('button', { name: 'P&L' }));
+    expect(screen.getByText('200.00')).toBeInTheDocument();
+    expect(reportApiMocks.fetchCarmenMasterData).toHaveBeenCalledWith(expect.objectContaining({ tenant: 'b' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New Report', exact: true }));
+    await waitFor(() => expect(reportApiMocks.createCarmenReport).toHaveBeenCalledWith(expect.objectContaining({ id: expect.any(String) }), { tenant: 'b' }));
+  });
+
+  it('keeps the newest report data when an older request finishes later', async () => {
+    const user = { id: 'finance-owner', role: 'Admin', permissions: { financialReport: { view: true, setup: true } } };
+    const report = {
+      id: 'rep-a', name: 'Report A', owner: user.id, assignedUsers: [user.id], isActive: true,
+      reportType: 'Monthly', periodFormat: 'standard', theme: 'blue', category: ['ALL'],
+      columns: [{ id: 'C1', label: 'Actual', isActive: true, type: 'AC', yearMode: 'current', periodMode: 'current' }],
+      rows: [{ id: 'r1', desc: 'Revenue', isActive: true, accCodes: '4001', dept: '', groupLevel: 'L4', groups: '', formula: '', percentBase: '' }],
+    };
+    const pending = [];
+    reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
+    reportApiMocks.getStoredCarmenSession.mockReturnValue({ user });
+    reportApiMocks.fetchCarmenMasterData.mockResolvedValue({ currentUser: user, users: [user], companyProfile: {}, depts: [], accCodes: [], periods: [], budgetRevisions: [], groups: {} });
+    reportApiMocks.fetchCarmenReports.mockResolvedValue([report, { ...report, id: 'rep-b', name: 'Report B' }]);
+    reportApiMocks.fetchCarmenReportData.mockImplementation(() => new Promise((resolve) => pending.push(resolve)));
+
+    render(<App />);
+    await waitFor(() => expect(pending).toHaveLength(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Report B', hidden: true }));
+    await waitFor(() => expect(pending).toHaveLength(2));
+
+    await act(async () => pending[1]({ actualRows: [{ year: Number(new Date().getFullYear()), period: 2, deptcode: '101', acccode: '4001', amt2: 222 }], budgetRows: [] }));
+    await waitFor(() => expect(screen.getByText('222.00')).toBeInTheDocument());
+    await act(async () => pending[0]({ actualRows: [{ year: Number(new Date().getFullYear()), period: 2, deptcode: '101', acccode: '4001', amt2: 111 }], budgetRows: [] }));
+    expect(screen.getByText('222.00')).toBeInTheDocument();
+    expect(screen.queryByText('111.00')).not.toBeInTheDocument();
+  });
+
+  it('warns about broken references but allows saving anyway', async () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.getStoredCarmenSession.mockReturnValue({
       user: {
@@ -229,7 +607,7 @@ describe('App shell', () => {
     });
     reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
       currentUser: {
-        id: 'u1',
+        id: 'admin',
         name: 'Admin User',
         role: 'Admin',
         permissions: {
@@ -244,7 +622,7 @@ describe('App shell', () => {
       },
       users: [
         {
-          id: 'u1',
+          id: 'admin',
           name: 'Admin User',
           role: 'Admin',
           permissions: {
@@ -275,11 +653,11 @@ describe('App shell', () => {
         name: 'Broken Report',
         companyName: 'Carmen Hotel & Resorts',
         category: ['ALL'],
-        assignedUsers: ['u1'],
+        assignedUsers: ['admin'],
         isActive: true,
         periodFormat: 'standard',
         reportType: 'Monthly',
-        owner: 'u1',
+        owner: 'admin',
         overrideDateDisplay: '',
         overridePeriodDisplay: '',
         day: '',
@@ -295,15 +673,21 @@ describe('App shell', () => {
 
     const { container } = render(<App />);
 
-    await waitFor(() => expect(screen.getByText('Report catalog error')).toBeInTheDocument());
-
-    fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
+    await waitFor(() => expect(screen.getAllByText('Broken Report').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    await screen.findByText('Rows Configurator');
 
     await waitFor(() => expect(screen.getByText(/Broken row references found/i)).toBeInTheDocument());
     const formulaInput = await screen.findByDisplayValue('R99');
-    fireEvent.change(formulaInput, { target: { value: 'R1' } });
+    fireEvent.change(formulaInput, { target: { value: Array(60).fill('R98').join('+') + '+!REF!' } });
+    expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(await screen.findByRole('alertdialog', { name: 'Save incomplete report template?' })).toBeInTheDocument();
+    expect(screen.getByText(/Row R1 \(Revenue\).*invalid reference R98/i)).toHaveClass('min-w-0', 'wrap-anywhere');
+    fireEvent.click(screen.getByRole('button', { name: 'Save anyway' }));
 
-    await waitFor(() => expect(screen.queryByText('Report catalog error')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('alertdialog', { name: 'Save incomplete report template?' })).not.toBeInTheDocument());
+    expect(reportApiMocks.saveCarmenReport).toHaveBeenCalledTimes(1);
   });
 
   it('does not fall back to localStorage report definitions when the API catalog load fails', async () => {
@@ -313,11 +697,11 @@ describe('App shell', () => {
         name: 'Local Storage Report',
         companyName: 'Old Company',
         category: ['ALL'],
-        assignedUsers: ['u1'],
+        assignedUsers: ['admin'],
         isActive: true,
         periodFormat: 'standard',
         reportType: 'Monthly',
-        owner: 'u1',
+        owner: 'admin',
         overrideDateDisplay: '',
         overridePeriodDisplay: '',
         day: '',
@@ -327,7 +711,7 @@ describe('App shell', () => {
       },
     ];
 
-    window.localStorage.setItem('carmen_bi_reports_config_v5_16', JSON.stringify(storedReports));
+    window.localStorage.setItem('carmen_bi_reports_config_v5_23', JSON.stringify(storedReports));
 
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.getStoredCarmenSession.mockReturnValue({
@@ -339,7 +723,7 @@ describe('App shell', () => {
     });
     reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
       currentUser: {
-        id: 'u1',
+        id: 'admin',
         name: 'Admin User',
         role: 'Admin',
         permissions: {
@@ -354,7 +738,7 @@ describe('App shell', () => {
       },
       users: [
         {
-          id: 'u1',
+          id: 'admin',
           name: 'Admin User',
           role: 'Admin',
           permissions: {
@@ -379,17 +763,20 @@ describe('App shell', () => {
     reportApiMocks.fetchCarmenReportData.mockResolvedValue({ actualRows: [], budgetRows: [] });
     reportApiMocks.fetchCarmenReports.mockRejectedValue(new Error('catalog unavailable'));
 
-    const { container } = render(<App />);
+    render(<App />);
 
-    await waitFor(() => expect(screen.getByText('No Reports Available')).toBeInTheDocument());
+    await waitFor(() => expect(reportApiMocks.fetchCarmenReports).toHaveBeenCalled());
     expect(screen.queryByText('Local Storage Report')).not.toBeInTheDocument();
+    await screen.findByText('catalog unavailable');
+    fireEvent.click(screen.getByRole('button', { name: 'Import Excel' }));
+    expect(await screen.findByRole('heading', { name: 'Excel report import' })).toBeInTheDocument();
   });
 
   it('ignores the revision selector for reports without budget columns', async () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
       currentUser: {
-        id: 'u1',
+        id: 'admin',
         name: 'Admin User',
         role: 'Admin',
         permissions: {
@@ -404,7 +791,7 @@ describe('App shell', () => {
       },
       users: [
         {
-          id: 'u1',
+          id: 'admin',
           name: 'Admin User',
           role: 'Admin',
           permissions: {
@@ -435,11 +822,11 @@ describe('App shell', () => {
         name: 'Actual Only',
         companyName: 'Carmen Hotel & Resorts',
         category: ['ALL'],
-        assignedUsers: ['u1'],
+        assignedUsers: ['admin'],
         isActive: true,
         periodFormat: 'standard',
         reportType: 'Monthly',
-        owner: 'u1',
+        owner: 'admin',
         overrideDateDisplay: '',
         overridePeriodDisplay: '',
         day: '',
@@ -456,9 +843,12 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Actual Only').length).toBeGreaterThan(0));
-    const revisionSelect = container.querySelectorAll('select')[2];
-    fireEvent.change(revisionSelect, { target: { value: '9' } });
-    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    const revisionSelect = screen.getAllByRole('combobox').find((select) =>
+      select.textContent?.includes('Rev 0')
+    );
+    fireEvent.click(revisionSelect);
+    fireEvent.click(screen.getByRole('option', { name: 'Rev 9' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
 
     await waitFor(() => {
       expect(reportApiMocks.fetchCarmenReportData).toHaveBeenLastCalledWith(
@@ -467,11 +857,11 @@ describe('App shell', () => {
     });
   });
 
-  it('blocks saving incompatible column types for daily reports', async () => {
+  it('allows Monthly data columns in reports previously marked Daily', async () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
       currentUser: {
-        id: 'u1',
+        id: 'admin',
         name: 'Admin User',
         role: 'Admin',
         permissions: {
@@ -486,7 +876,7 @@ describe('App shell', () => {
       },
       users: [
         {
-          id: 'u1',
+          id: 'admin',
           name: 'Admin User',
           role: 'Admin',
           permissions: {
@@ -515,11 +905,11 @@ describe('App shell', () => {
         name: 'Daily Invalid',
         companyName: 'Carmen Hotel & Resorts',
         category: ['ALL'],
-        assignedUsers: ['u1'],
+        assignedUsers: ['admin'],
         isActive: true,
         periodFormat: 'standard',
         reportType: 'Daily',
-        owner: 'u1',
+        owner: 'admin',
         overrideDateDisplay: '',
         overridePeriodDisplay: '',
         day: '1',
@@ -536,19 +926,17 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Daily Invalid').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
 
     await waitFor(() => expect(screen.getByText('Columns Configurator')).toBeInTheDocument());
-    expect(screen.getByText(/reports should only use compatible column types/i)).toBeInTheDocument();
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalledWith(expect.objectContaining({ id: 'rep-daily-invalid' }));
+    expect(screen.queryByText(/unsupported column types/i)).not.toBeInTheDocument();
   });
 
-  it('blocks saving duplicate row mappings before persist', async () => {
+  it('saves duplicate row mappings without showing a duplicate warning', async () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
       currentUser: {
-        id: 'u1',
+        id: 'admin',
         name: 'Admin User',
         role: 'Admin',
         permissions: {
@@ -563,7 +951,7 @@ describe('App shell', () => {
       },
       users: [
         {
-          id: 'u1',
+          id: 'admin',
           name: 'Admin User',
           role: 'Admin',
           permissions: {
@@ -592,11 +980,11 @@ describe('App shell', () => {
         name: 'Duplicate Mapping',
         companyName: 'Carmen Hotel & Resorts',
         category: ['ALL'],
-        assignedUsers: ['u1'],
+        assignedUsers: ['admin'],
         isActive: true,
         periodFormat: 'standard',
         reportType: 'Monthly',
-        owner: 'u1',
+        owner: 'admin',
         overrideDateDisplay: '',
         overridePeriodDisplay: '',
         day: '',
@@ -605,8 +993,8 @@ describe('App shell', () => {
           { id: 'C1', label: 'Actual', isActive: true, isFormula: false, isPercent: false, yearMode: 'current', periodMode: 'current', type: 'AC', width: '' },
         ],
         rows: [
-          { id: 'r1', desc: 'Revenue', isActive: true, isHeader: false, isTotal: false, dept: '101', groupLevel: 'L4', groups: 'FOOD', accCodes: '', dim1: 'A', dim2: 'X', percentBase: '', formula: '', indent: 0 },
-          { id: 'r2', desc: 'Revenue Copy', isActive: true, isHeader: false, isTotal: false, dept: '101', groupLevel: 'L4', groups: 'FOOD', accCodes: '', dim1: 'A', dim2: 'X', percentBase: '', formula: '', indent: 0 },
+          { id: 'r1', desc: 'Revenue', isActive: true, isHeader: false, isTotal: false, dept: '101', groupLevel: 'L4', groups: '', accCodes: '', dim1: 'A', dim2: 'X', percentBase: '', formula: '', indent: 0 },
+          { id: 'r2', desc: 'Revenue Copy', isActive: true, isHeader: false, isTotal: false, dept: '101', groupLevel: 'L4', groups: '', accCodes: '', dim1: 'A', dim2: 'X', percentBase: '', formula: '', indent: 0 },
         ],
       },
     ]);
@@ -614,15 +1002,20 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Duplicate Mapping').length).toBeGreaterThan(0));
-    await waitFor(() => expect(screen.getByTitle(/conflicting row mapping/i)).toBeInTheDocument());
-    expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalledWith(expect.objectContaining({ id: 'rep-duplicate-mapping' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    const reportName = await screen.findByDisplayValue('Duplicate Mapping');
+    fireEvent.change(reportName, { target: { value: 'Duplicate Mapping Edit' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(reportApiMocks.saveCarmenReport).toHaveBeenCalledWith(expect.objectContaining({ id: 'rep-duplicate-mapping' })));
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Loading report data' })).not.toBeInTheDocument());
+    expect(screen.queryByText(/double count/i)).not.toBeInTheDocument();
   });
 
   it('warns when manual row codes do not exist in API master data', async () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
       currentUser: {
-        id: 'u1',
+        id: 'admin',
         name: 'Admin User',
         role: 'Admin',
         permissions: {
@@ -637,7 +1030,7 @@ describe('App shell', () => {
       },
       users: [
         {
-          id: 'u1',
+          id: 'admin',
           name: 'Admin User',
           role: 'Admin',
           permissions: {
@@ -666,11 +1059,11 @@ describe('App shell', () => {
         name: 'Invalid Master Data Mapping',
         companyName: 'Carmen Hotel & Resorts',
         category: ['ALL'],
-        assignedUsers: ['u1'],
+        assignedUsers: ['admin'],
         isActive: true,
         periodFormat: 'standard',
         reportType: 'Monthly',
-        owner: 'u1',
+        owner: 'admin',
         overrideDateDisplay: '',
         overridePeriodDisplay: '',
         day: '',
@@ -687,18 +1080,19 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Invalid Master Data Mapping').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    await screen.findByText('Rows Configurator');
 
     await waitFor(() => expect(screen.getByText(/Unknown department code\(s\): 999/i)).toBeInTheDocument());
     await new Promise((resolve) => setTimeout(resolve, 500));
     expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalledWith(expect.objectContaining({ id: 'rep-invalid-master-data' }));
   });
 
-  it('saves the report after master data is refreshed with a valid account code', async () => {
+  it('does not save a report when master data refreshes', async () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.getStoredCarmenSession.mockReturnValue({
       user: {
-        id: 'u1',
+        id: 'admin',
         name: 'Admin User',
         role: 'Admin',
       },
@@ -706,7 +1100,7 @@ describe('App shell', () => {
     reportApiMocks.fetchCarmenMasterData
       .mockResolvedValueOnce({
         currentUser: {
-          id: 'u1',
+          id: 'admin',
           name: 'Admin User',
           role: 'Admin',
           permissions: {
@@ -721,7 +1115,7 @@ describe('App shell', () => {
         },
         users: [
           {
-            id: 'u1',
+            id: 'admin',
             name: 'Admin User',
             role: 'Admin',
             permissions: {
@@ -744,7 +1138,7 @@ describe('App shell', () => {
       })
       .mockResolvedValueOnce({
         currentUser: {
-          id: 'u1',
+          id: 'admin',
           name: 'Admin User',
           role: 'Admin',
           permissions: {
@@ -759,7 +1153,7 @@ describe('App shell', () => {
         },
         users: [
           {
-            id: 'u1',
+            id: 'admin',
             name: 'Admin User',
             role: 'Admin',
             permissions: {
@@ -788,11 +1182,11 @@ describe('App shell', () => {
         name: 'Validating Report',
         companyName: 'Carmen Hotel & Resorts',
         category: ['ALL'],
-        assignedUsers: ['u1'],
+        assignedUsers: ['admin'],
         isActive: true,
         periodFormat: 'standard',
         reportType: 'Monthly',
-        owner: 'u1',
+        owner: 'admin',
         overrideDateDisplay: '',
         overridePeriodDisplay: '',
         day: '',
@@ -812,24 +1206,32 @@ describe('App shell', () => {
     fireEvent.change(yearInput, { target: { value: String(new Date().getFullYear() + 1) } });
 
     await waitFor(() => expect(reportApiMocks.fetchCarmenMasterData).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(reportApiMocks.saveCarmenReport).toHaveBeenCalledWith(expect.objectContaining({
-      id: 'rep-validating',
-      rows: [expect.objectContaining({ accCodes: '4001' })],
-    })));
+    expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalled();
   });
 
-  it('persists edited account codes from the mapping modal to the API', async () => {
+  it.each([
+    { otherDimension: 'A', shouldConfirm: true },
+    { otherDimension: 'B', shouldConfirm: false },
+    { otherDimension: 'A, B', shouldConfirm: true },
+    { otherDimension: '', shouldConfirm: true },
+    { dept: '101', otherDept: '102', otherDimension: '', shouldConfirm: false },
+    { dept: '102', otherDept: '101', editingDimension: '', otherDimension: 'BF, LN, DN', shouldConfirm: false },
+    { dept: '102', otherDept: '101', deptGroup: '', otherDeptGroup: 'RESTAURANT', editingDimension: '', otherDimension: 'BF', shouldConfirm: false },
+    { dept: '101', otherDept: '102', otherDimension: 'A', shouldConfirm: false },
+    { dept: '101', otherDept: '101', otherDimension: 'A', shouldConfirm: true },
+    { dept: '101, 102', otherDept: '102', otherDimension: 'A', shouldConfirm: true },
+  ])('persists shared account mappings for dept $dept / $otherDept and dimension "$otherDimension" without clearing disjoint rows', async ({ otherDimension, shouldConfirm, dept = '', otherDept = '', editingDimension = 'A', deptGroup = '', otherDeptGroup = '' }) => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.getStoredCarmenSession.mockReturnValue({
       user: {
-        id: 'u1',
+        id: 'admin',
         name: 'Admin User',
         role: 'Admin',
       },
     });
     reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
       currentUser: {
-        id: 'u1',
+        id: 'admin',
         name: 'Admin User',
         role: 'Admin',
         permissions: {
@@ -844,7 +1246,7 @@ describe('App shell', () => {
       },
       users: [
         {
-          id: 'u1',
+          id: 'admin',
           name: 'Admin User',
           role: 'Admin',
           permissions: {
@@ -859,7 +1261,8 @@ describe('App shell', () => {
         },
       ],
       companyProfile: { name: 'Carmen Hotel & Resorts' },
-      depts: [{ id: '101', name: 'Front Office' }],
+      depts: [{ id: '101', name: 'Restaurant' }, { id: '102', name: 'Banquet' }],
+      deptGroups: [{ id: 'RESTAURANT', name: 'Restaurant', deptIds: ['101'] }],
       accCodes: [{ id: '4001', name: 'Rooms', type: 'I' }],
       periods: [],
       budgetRevisions: [],
@@ -873,11 +1276,11 @@ describe('App shell', () => {
         name: 'Edit Modal Report',
         companyName: 'Carmen Hotel & Resorts',
         category: ['ALL'],
-        assignedUsers: ['u1'],
+        assignedUsers: ['admin'],
         isActive: true,
         periodFormat: 'standard',
         reportType: 'Monthly',
-        owner: 'u1',
+        owner: 'admin',
         overrideDateDisplay: '',
         overridePeriodDisplay: '',
         day: '',
@@ -886,38 +1289,57 @@ describe('App shell', () => {
           { id: 'C1', label: 'Actual', isActive: true, isFormula: false, isPercent: false, yearMode: 'current', periodMode: 'current', type: 'AC', width: '' },
         ],
         rows: [
-          { id: 'r1', desc: 'Rooms', isActive: true, isHeader: false, isTotal: false, dept: '', groupLevel: 'L4', groups: '', accCodes: '', percentBase: '', formula: '', indent: 0 },
+          { id: 'r1', desc: 'Rooms', isActive: true, isHeader: false, isTotal: false, dept, deptGroup, groupLevel: 'L4', groups: '', accCodes: '', dim1: editingDimension, percentBase: '', formula: '', indent: 0 },
+          { id: 'r2', desc: 'Duplicate mapping', isActive: true, isHeader: false, isTotal: false, dept: otherDeptGroup ? '' : otherDept, deptGroup: otherDeptGroup, groupLevel: 'L4', groups: '', accCodes: '4001', dim1: otherDimension, percentBase: '', formula: '', indent: 0 },
+          { id: 'r3', desc: 'Separate dimension', isActive: true, isHeader: false, isTotal: false, dept: otherDept, groupLevel: 'L4', groups: '', accCodes: '4001', dim1: 'C', percentBase: '', formula: '', indent: 0 },
         ],
       },
     ]);
 
     const { container } = render(<App />);
 
-    await waitFor(() => expect(reportApiMocks.saveCarmenReport).toHaveBeenCalled());
-    reportApiMocks.saveCarmenReport.mockClear();
-
-    fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
+    await waitFor(() => expect(screen.getAllByText('Edit Modal Report').length).toBeGreaterThan(0));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument());
+    await screen.findByText('Rows Configurator');
 
     const rowInput = screen.getByDisplayValue('Rooms');
     const row = rowInput.closest('tr');
-    fireEvent.click(within(row).getAllByRole('button')[3]);
+    fireEvent.click(within(row).getByTitle('Edit mapping for row r1'));
 
     const accTextarea = screen.getByPlaceholderText('e.g. 4001, 4002');
     fireEvent.change(accTextarea, { target: { value: '4001' } });
     fireEvent.click(screen.getByRole('button', { name: 'Apply Mapping' }));
+    if (shouldConfirm) {
+      const preview = screen.getByRole('alertdialog', { name: 'Review mapping changes' });
+      expect(within(preview).getByText('Remove accounts', { exact: false })).toHaveTextContent('4001');
+      expect(within(preview).getByText('R2 · Duplicate mapping')).toBeInTheDocument();
+      fireEvent.click(within(preview).getByRole('button', { name: 'Cancel', exact: true }));
+      expect(screen.getByRole('dialog', { name: 'Edit Mapping' })).toBeInTheDocument();
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Apply Mapping' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Move accounts', exact: true }));
+    } else expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+
+    expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(reportApiMocks.saveCarmenReport).toHaveBeenCalledWith(expect.objectContaining({
       id: 'rep-edit-modal',
-      rows: [expect.objectContaining({ accCodes: '4001' })],
+      rows: [
+        expect.objectContaining({ id: 'r1', dept, accCodes: '4001', dim1: editingDimension, dimensions: editingDimension ? [{ key: 'dim1', value: editingDimension }] : [] }),
+        expect.objectContaining({ id: 'r2', dept: otherDeptGroup ? '' : otherDept, accCodes: shouldConfirm ? '' : '4001', dim1: otherDimension }),
+        expect.objectContaining({ id: 'r3', accCodes: '4001', dim1: 'C' }),
+      ],
     })));
   });
 
-  it('saves setup category and access edits through the API payload', async () => {
+  it('saves consecutive setup edits through the API payload', async () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
+    reportApiMocks.saveCarmenReport.mockResolvedValueOnce({ lastModified: '2026-09-23T10:01:00' });
     reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
       currentUser: {
-        id: 'u1',
+        id: 'admin',
         name: 'Admin User',
         role: 'Admin',
         permissions: {
@@ -932,7 +1354,7 @@ describe('App shell', () => {
       },
       users: [
         {
-          id: 'u1',
+          id: 'admin',
           name: 'Admin User',
           role: 'Admin',
           permissions: {
@@ -973,13 +1395,14 @@ describe('App shell', () => {
       {
         id: 'rep-setup-edits',
         name: 'Setup Edits',
+        lastModified: '2026-09-23T10:00:00',
         companyName: 'Carmen Hotel & Resorts',
         category: ['ALL'],
-        assignedUsers: ['u1'],
+        assignedUsers: ['admin'],
         isActive: true,
         periodFormat: 'standard',
         reportType: 'Monthly',
-        owner: 'u1',
+        owner: 'admin',
         overrideDateDisplay: '',
         overridePeriodDisplay: '',
         day: '',
@@ -988,7 +1411,7 @@ describe('App shell', () => {
           { id: 'C1', label: 'Actual', isActive: true, isFormula: false, isPercent: false, yearMode: 'current', periodMode: 'current', type: 'AC', width: '' },
         ],
         rows: [
-          { id: 'r1', desc: 'Revenue', isActive: true, isHeader: false, isTotal: false, dept: '', groupLevel: 'L4', groups: 'FOO', accCodes: '4001', percentBase: '', formula: '', indent: 0 },
+          { id: 'r1', desc: 'Revenue', isActive: true, isHeader: false, isTotal: false, dept: '', groupLevel: 'L4', groups: '', accCodes: '', percentBase: '', formula: '', indent: 0 },
         ],
       },
     ]);
@@ -996,25 +1419,32 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Setup Edits').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument());
 
-    const categorySelect = Array.from(container.querySelectorAll('select')).find((select) =>
-      Array.from(select.options).some((option) => option.textContent?.includes('+ Add Category'))
-    );
-    expect(categorySelect).toBeTruthy();
-    fireEvent.change(categorySelect, { target: { value: 'B' } });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Access' }));
-    const generalManagerLabel = screen.getByText('General Manager').closest('label');
-    expect(generalManagerLabel).toBeTruthy();
-    fireEvent.click(generalManagerLabel);
-
-    await waitFor(() => expect(screen.getByText('B')).toBeInTheDocument());
-    expect(screen.getByText(/Admin User, General Manager/i)).toBeInTheDocument();
+    fireEvent.change(screen.getByDisplayValue('Setup Edits'), { target: { value: 'Setup Edits Updated' } });
+    expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalled();
+    const saveChanges = screen.getByRole('button', { name: 'Save changes' });
+    expect(saveChanges).toBeEnabled();
+    fireEvent.click(saveChanges);
+    await waitFor(() => expect(reportApiMocks.saveCarmenReport).toHaveBeenCalledTimes(1));
+    expect(reportApiMocks.saveCarmenReport).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'rep-setup-edits',
+      name: 'Setup Edits Updated',
+    }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(await screen.findByDisplayValue('Setup Edits Updated'), { target: { value: 'Setup Edits Again' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(reportApiMocks.saveCarmenReport).toHaveBeenCalledTimes(2));
+    expect(reportApiMocks.saveCarmenReport).toHaveBeenLastCalledWith(expect.objectContaining({
+      id: 'rep-setup-edits',
+      name: 'Setup Edits Again',
+      lastModified: '2026-09-23T10:01:00',
+    }));
   });
 
-  it('renders API-backed users in the role selector and access modal', async () => {
+  it('does not show API-backed users as a report selector', async () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
       currentUser: {
@@ -1096,20 +1526,12 @@ describe('App shell', () => {
 
     const { container } = render(<App />);
 
-    await waitFor(() => expect(screen.getByDisplayValue('Finance Owner (Admin)')).toBeInTheDocument());
-    const roleSelector = screen.getAllByRole('combobox')[0];
-    expect(Array.from(roleSelector.options).map((option) => option.textContent)).toEqual(
-      expect.arrayContaining(['Finance Owner (Admin)', 'Regional Viewer (User)'])
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Access' }));
-
-    await waitFor(() => expect(screen.getByText('Regional Viewer')).toBeInTheDocument());
-    expect(screen.getAllByText('Finance Owner').length).toBeGreaterThan(1);
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'API Users' }).length).toBeGreaterThan(0));
+    expect(screen.queryByRole('combobox', { name: 'User selector' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Access' })).not.toBeInTheDocument();
   });
 
-  it('syncs GL and BUD data from the Carmen API buttons', async () => {
+  it('does not render separate GL and BUD refresh buttons', async () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.getStoredCarmenSession.mockReturnValue({
       user: {
@@ -1191,15 +1613,9 @@ describe('App shell', () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('API Sync Report').length).toBeGreaterThan(0));
-    const initialFetchCount = reportApiMocks.fetchCarmenReportData.mock.calls.length;
-
-    fireEvent.click(screen.getByRole('button', { name: /GL/i }));
-    await waitFor(() => expect(screen.getByText('GL data synced from Carmen API.')).toBeInTheDocument());
-    expect(reportApiMocks.fetchCarmenReportData.mock.calls.length).toBe(initialFetchCount + 1);
-
-    fireEvent.click(screen.getByRole('button', { name: /BUD/i }));
-    await waitFor(() => expect(screen.getByText('BUD data synced from Carmen API.')).toBeInTheDocument());
-    expect(reportApiMocks.fetchCarmenReportData.mock.calls.length).toBe(initialFetchCount + 2);
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Loading report data' })).not.toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /^GL$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^BUD$/i })).not.toBeInTheDocument();
   });
 
   it('renders API-loaded constant dropdown options in setup mode', async () => {
@@ -1257,7 +1673,7 @@ describe('App shell', () => {
       accountCategories: [{ id: 'S', label: 'Statistic' }],
       columnTypes: [{ id: 'AC', label: 'Actual Current' }, { id: 'FORMULA', label: 'Formula' }],
       yearModes: [{ id: 'current', label: 'Current Year' }],
-      periodModes: [{ id: 'FY', label: 'Fiscal Year' }],
+      periodModes: [{ id: 'current', label: 'Period (Parameter)' }],
       rowTypes: [{ id: 'header', label: 'Header' }],
       indentLevels: [{ id: '0', label: 'Level 0' }],
     });
@@ -1289,21 +1705,15 @@ describe('App shell', () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Options Report').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'SETUP' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument());
 
-    const themeSelect = screen.getAllByRole('combobox').find((select) =>
-      Array.from(select.options).some((option) => option.textContent === 'Amber Theme')
-    );
-    expect(themeSelect).toBeTruthy();
-    expect(Array.from(themeSelect.options).map((option) => option.textContent)).toEqual(
-      expect.arrayContaining(['Amber Theme'])
-    );
+    expect(screen.queryByText('Report Theme')).not.toBeInTheDocument();
 
     expect(screen.getByText('Columns Configurator')).toBeInTheDocument();
   });
 
-  it('renders API-loaded period and revision selector options in the report header', async () => {
+  it('renders API-loaded period options and applies the saved period format', async () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.getStoredCarmenSession.mockReturnValue({
       user: {
@@ -1363,7 +1773,7 @@ describe('App shell', () => {
         category: ['ALL'],
         assignedUsers: ['finance-owner'],
         isActive: true,
-        periodFormat: 'standard',
+        periodFormat: 'short',
         reportType: 'Monthly',
         owner: 'finance-owner',
         overrideDateDisplay: '',
@@ -1383,29 +1793,31 @@ describe('App shell', () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Period Selector Report').length).toBeGreaterThan(0));
+    expect(await screen.findByText(/^[A-Z][a-z]{2} 20\d{2}$/)).toBeInTheDocument();
 
     const periodSelect = screen.getAllByRole('combobox').find((select) =>
-      Array.from(select.options).some((option) => option.textContent === 'P2 - February 28, 2025')
+      select.textContent?.includes('P2 - February 28, 2025')
     );
     expect(periodSelect).toBeTruthy();
-    expect(Array.from(periodSelect.options).map((option) => option.textContent)).toEqual(
-      expect.arrayContaining(['P1 - January 31, 2025', 'P2 - February 28, 2025'])
-    );
+    fireEvent.click(periodSelect);
+    expect(await screen.findByRole('option', { name: 'P1 - January 31, 2025' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'P2 - February 28, 2025' })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' });
 
     const revisionSelect = screen.getAllByRole('combobox').find((select) =>
-      Array.from(select.options).some((option) => option.textContent === 'Rev 9')
+      select.textContent?.includes('Rev 0')
     );
     expect(revisionSelect).toBeTruthy();
-    expect(Array.from(revisionSelect.options).map((option) => option.textContent)).toEqual(
-      expect.arrayContaining(['Rev 0', 'Rev 9'])
-    );
+    fireEvent.click(revisionSelect);
+    expect(await screen.findByRole('option', { name: 'Rev 0' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Rev 9' })).toBeInTheDocument();
   });
 
   it('includes day in the report data API call when the report uses PTD columns', async () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
       currentUser: {
-        id: 'u1',
+        id: 'admin',
         name: 'Admin User',
         role: 'Admin',
         permissions: {
@@ -1420,7 +1832,7 @@ describe('App shell', () => {
       },
       users: [
         {
-          id: 'u1',
+          id: 'admin',
           name: 'Admin User',
           role: 'Admin',
           permissions: {
@@ -1451,11 +1863,11 @@ describe('App shell', () => {
         name: 'PTD Report',
         companyName: 'Carmen Hotel & Resorts',
         category: ['ALL'],
-        assignedUsers: ['u1'],
+        assignedUsers: ['admin'],
         isActive: true,
         periodFormat: 'standard',
         reportType: 'Monthly',
-        owner: 'u1',
+        owner: 'admin',
         overrideDateDisplay: '',
         overridePeriodDisplay: '',
         day: '28',
@@ -1473,8 +1885,34 @@ describe('App shell', () => {
 
     await waitFor(() => expect(reportApiMocks.fetchCarmenReportData).toHaveBeenCalled());
     expect(reportApiMocks.fetchCarmenReportData).toHaveBeenLastCalledWith(
-      expect.objectContaining({ day: '28' })
+      expect.objectContaining({ day: '1' })
     );
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Loading report data' })).not.toBeInTheDocument());
+    const initialCalls = reportApiMocks.fetchCarmenReportData.mock.calls.length;
+    fireEvent.change(screen.getByLabelText('Day'), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    await waitFor(() => expect(screen.getByText('As of February 2, 2025')).toBeInTheDocument());
+    expect(reportApiMocks.fetchCarmenReportData).toHaveBeenCalledTimes(initialCalls);
+    // Applying the same date remains an explicit refresh.
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    await waitFor(() => expect(reportApiMocks.fetchCarmenReportData).toHaveBeenCalledTimes(initialCalls + 1));
+  });
+
+  it('downloads an Excel-compatible report from the toolbar', async () => {
+    const createObjectURLSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:report-export');
+    let downloadedName = '';
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function captureDownload() {
+      downloadedName = this.download;
+    });
+    const { container } = render(<App />);
+
+    await waitFor(() => expect(screen.getByText('Carmen Hotel & Resorts')).toBeInTheDocument());
+    fireEvent.click(container.querySelector('button[title="Export to Excel"]'));
+
+    expect(createObjectURLSpy).toHaveBeenCalledWith(expect.any(Blob));
+    expect(downloadedName).toBe('Profit_and_Loss_Export.xls');
+    clickSpy.mockRestore();
+    createObjectURLSpy.mockRestore();
   });
 
   it('keeps the browser print action wired from the report toolbar', async () => {
@@ -1492,11 +1930,22 @@ describe('App shell', () => {
     printSpy.mockRestore();
   });
 
+  it('emphasizes New Report and Delete while keeping filters neutral', async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText('Carmen Hotel & Resorts')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'New Report' })).toHaveAttribute('data-variant', 'default');
+    expect(screen.getByRole('button', { name: 'Delete' })).toHaveClass('border-destructive/50', 'text-destructive');
+    expect(screen.getByRole('button', { name: /DEPT/i }).className).toMatch(/bg-stone|border-stone|text-stone|bg-muted|border-border|text-muted/);
+    expect(screen.getByRole('button', { name: 'Apply' })).toHaveAttribute('data-variant', 'default');
+    expect(screen.getByTitle('Export to Excel').className).toMatch(/bg-stone|border-stone|text-stone|bg-muted|border-border|text-muted/);
+  });
+
   it('rejects an out-of-range day for PTD reports before loading report data', async () => {
     reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
     reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
       currentUser: {
-        id: 'u1',
+        id: 'admin',
         name: 'Admin User',
         role: 'Admin',
         permissions: {
@@ -1511,7 +1960,7 @@ describe('App shell', () => {
       },
       users: [
         {
-          id: 'u1',
+          id: 'admin',
           name: 'Admin User',
           role: 'Admin',
           permissions: {
@@ -1542,11 +1991,11 @@ describe('App shell', () => {
         name: 'PTD Invalid Day',
         companyName: 'Carmen Hotel & Resorts',
         category: ['ALL'],
-        assignedUsers: ['u1'],
+        assignedUsers: ['admin'],
         isActive: true,
         periodFormat: 'standard',
         reportType: 'Monthly',
-        owner: 'u1',
+        owner: 'admin',
         overrideDateDisplay: '',
         overridePeriodDisplay: '',
         day: '31',
@@ -1563,7 +2012,16 @@ describe('App shell', () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('PTD Invalid Day').length).toBeGreaterThan(0));
+    await waitFor(() => expect(reportApiMocks.fetchCarmenReportData).toHaveBeenCalled());
+    const callsBeforeInvalidApply = reportApiMocks.fetchCarmenReportData.mock.calls.length;
+    fireEvent.change(screen.getByLabelText('Day'), { target: { value: '31' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
     await waitFor(() => expect(screen.getByText(/Day must be between 1 and 28/i)).toBeInTheDocument());
-    expect(reportApiMocks.fetchCarmenReportData).not.toHaveBeenCalled();
+    expect(reportApiMocks.fetchCarmenReportData).toHaveBeenCalledTimes(callsBeforeInvalidApply);
+    fireEvent.change(screen.getByLabelText('Day'), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    await waitFor(() => expect(screen.queryByText(/Day must be between 1 and 28/i)).not.toBeInTheDocument());
+    expect(reportApiMocks.fetchCarmenReportData).toHaveBeenCalledTimes(callsBeforeInvalidApply);
   });
 });
+

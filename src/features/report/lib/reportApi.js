@@ -1,24 +1,160 @@
 import {
   adaptCarmenAccountCodes,
+  adaptCarmenAccountGroups,
   adaptCarmenBudgetRevisions,
   adaptCarmenCompany,
+  adaptCarmenDepartmentGroups,
   adaptCarmenDepartments,
   adaptCarmenGlPeriods,
   adaptCarmenReportDefinition,
   adaptCarmenReportDefinitions,
   adaptCarmenLoginUser,
+  deriveCarmenFinancialReportAccess,
 } from './reportAdapters.js';
+import {
+  clearCarmenSession,
+  getBusinessUnitDisplayName,
+  getBusinessUnitTenant,
+  getStoredCarmenSession,
+  saveCarmenSession,
+} from './carmenSession.js';
+import { reportCarmenApiFailure } from '../../../lib/carmenApiFailure.js';
+
+export {
+  clearCarmenSession,
+  getBusinessUnitDisplayName,
+  getBusinessUnitTenant,
+  getStoredCarmenSession,
+  saveCarmenSession,
+};
 
 const DEFAULT_BASE_URL = 'http://localhost/Carmen.WebApi';
-const SESSION_KEYS = {
-  token: 'carmen_access_token',
-  username: 'carmen_username',
-  businessUnit: 'carmen_business_unit',
-  user: 'carmen_user',
+const normalizeColumnType = (value) => {
+  const type = String(value || '').trim().toUpperCase();
+  if (type === 'BUD') return 'BC';
+  if (type === 'BUDACC') return 'BCC';
+  return type;
 };
+const toTrimmedStringArray = (value) =>
+  Array.isArray(value)
+    ? value.flatMap((item) => {
+        const trimmed = String(item).trim();
+        return trimmed ? [trimmed] : [];
+      })
+    : [];
 
 const getWindowConfig = () => (typeof window !== 'undefined' ? window.__CARMEN_CONFIG__ || {} : {});
 const joinUrl = (baseUrl, path) => `${baseUrl.replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
+
+const publishCarmenApiError = (error) => {
+  if (error.affectsSession) {
+    clearCarmenSession();
+  }
+  reportCarmenApiFailure(error);
+  if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return;
+  window.dispatchEvent(new CustomEvent('carmen-api-error', {
+    detail: {
+      kind: error.kind || 'api',
+      message: error.message,
+      path: error.path || '',
+      status: error.status || null,
+    },
+  }));
+};
+
+const createCarmenApiError = (message, details = {}) => {
+  const error = new Error(message);
+  error.name = 'CarmenApiError';
+  Object.assign(error, details);
+  publishCarmenApiError(error);
+  return error;
+};
+
+const fetchWithNetworkHandling = async (url, options = {}, { path = '', affectsSession = false, timeoutMs = 30000 } = {}) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: options.signal || controller.signal });
+  } catch (cause) {
+    if (cause?.name === 'AbortError') {
+      throw createCarmenApiError(
+        'Carmen API request timed out. Please try again.',
+        { kind: 'timeout', path, cause, affectsSession: false },
+      );
+    }
+    const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+    throw createCarmenApiError(
+      isOffline
+        ? 'You are offline. Reconnect to the internet and try again.'
+        : 'Unable to reach Carmen API. Check your network connection or contact the administrator.',
+      { kind: isOffline ? 'offline' : 'network', path, cause, affectsSession: false },
+    );
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
+
+const extractApiErrorMessage = (payload) => {
+  if (!payload || typeof payload !== 'object') return '';
+  return String(
+    payload.UserMessage
+    || payload.userMessage
+    || payload.Message
+    || payload.message
+    || payload.title
+    || payload.InternalMessage
+    || payload.internalMessage
+    || '',
+  ).trim();
+};
+
+const readResponsePayload = async (response) => {
+  if (response.status === 204) return null;
+  if (typeof response.text === 'function') {
+    const text = await response.text();
+    if (!text) return null;
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
+    }
+  }
+  return typeof response.json === 'function' ? response.json() : null;
+};
+
+const throwResponseError = async (response, { path, context, isAuthenticated = false, authorizationFailureAffectsSession = true }) => {
+  let payload = null;
+  try {
+    payload = await readResponsePayload(response);
+  } catch {
+    payload = null;
+  }
+
+  const unauthorized = isAuthenticated && (response.status === 401 || (response.status === 403 && authorizationFailureAffectsSession));
+  if (unauthorized) {
+    throw createCarmenApiError(
+      'Your Carmen session expired. Please sign in again.',
+      { kind: 'session', status: response.status, path, affectsSession: true },
+    );
+  }
+
+  const isHtml = response.headers?.get?.('content-type')?.toLowerCase().includes('text/html')
+    || (typeof payload === 'string' && /^\s*(?:<!doctype html|<html\b)/i.test(payload));
+  const apiMessage = isHtml ? '' : typeof payload === 'string' ? payload.trim() : extractApiErrorMessage(payload);
+  const historyEndpointMissing = response.status === 404
+    && /\/api\/reports\/[^/]+\/history(?:\/|$)/.test(path);
+  const message = historyEndpointMissing
+    ? 'Report history is unavailable on this Carmen API server. The history endpoint returned HTTP 404.'
+    : apiMessage
+      ? `Carmen API: ${apiMessage}`
+      : `${context} failed with HTTP ${response.status}.`;
+  throw createCarmenApiError(message, {
+    kind: response.status === 401 || response.status === 403 ? 'authorization' : 'api',
+    status: response.status,
+    path,
+    affectsSession: false,
+  });
+};
 
 const getBusinessUnitApiBaseUrl = () => {
   const config = getWindowConfig();
@@ -33,61 +169,18 @@ export const getCarmenApiConfig = () => {
   };
 };
 
-export const getBusinessUnitTenant = (item) => String(item?.Tenant || item?.tenant || '').trim();
-export const getBusinessUnitDisplayName = (item) =>
-  String(item?.Description || item?.description || getBusinessUnitTenant(item)).trim();
-
 const buildUrl = (path, { useTenant = true, query = {} } = {}) => {
   const { baseUrl } = getCarmenApiConfig();
   const session = getStoredCarmenSession();
-  const url = new URL(joinUrl(baseUrl, path));
+  const requestUrl = joinUrl(baseUrl, path);
+  const url = new URL(requestUrl, typeof window !== 'undefined' ? window.location.origin : 'http://localhost');
   if (useTenant && session?.businessUnit?.tenant) url.searchParams.set('useTenant', session.businessUnit.tenant);
   Object.entries(query).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, value);
   });
-  return url.toString();
-};
-
-export const getStoredCarmenSession = () => {
-  if (typeof window === 'undefined' || !window.localStorage) return null;
-  const accessToken = window.localStorage.getItem(SESSION_KEYS.token) || '';
-  const username = window.localStorage.getItem(SESSION_KEYS.username) || '';
-  let businessUnit = null;
-  let user = null;
-  try {
-    businessUnit = JSON.parse(window.localStorage.getItem(SESSION_KEYS.businessUnit) || 'null');
-  } catch {
-    businessUnit = null;
-  }
-  try {
-    user = JSON.parse(window.localStorage.getItem(SESSION_KEYS.user) || 'null');
-  } catch {
-    user = null;
-  }
-  return {
-    accessToken,
-    username,
-    businessUnit,
-    user,
-  };
-};
-
-export const saveCarmenSession = ({ accessToken, username, businessUnit, user }) => {
-  if (typeof window === 'undefined' || !window.localStorage) return;
-  window.localStorage.setItem(SESSION_KEYS.token, accessToken || '');
-  window.localStorage.setItem(SESSION_KEYS.username, username || '');
-  window.localStorage.setItem(SESSION_KEYS.businessUnit, JSON.stringify(businessUnit || null));
-  window.localStorage.setItem(SESSION_KEYS.user, JSON.stringify(user || null));
-  window.dispatchEvent(new Event('carmen-session-changed'));
-};
-
-export const clearCarmenSession = () => {
-  if (typeof window === 'undefined' || !window.localStorage) return;
-  window.localStorage.removeItem(SESSION_KEYS.token);
-  window.localStorage.removeItem(SESSION_KEYS.username);
-  window.localStorage.removeItem(SESSION_KEYS.businessUnit);
-  window.localStorage.removeItem(SESSION_KEYS.user);
-  window.dispatchEvent(new Event('carmen-session-changed'));
+  return /^https?:\/\//i.test(requestUrl)
+    ? url.toString()
+    : `${url.pathname}${url.search}`;
 };
 
 export const isCarmenApiConfigured = () => Boolean(getStoredCarmenSession()?.accessToken);
@@ -95,14 +188,18 @@ export const isCarmenApiConfigured = () => Boolean(getStoredCarmenSession()?.acc
 export const fetchBusinessUnitsByUsername = async (username) => {
   const trimmedUserName = String(username || '').trim();
   const { adminToken } = getCarmenApiConfig();
-  if (!adminToken) throw new Error('Carmen adminToken not found in public/config.js.');
+  if (!adminToken) throw new Error('Carmen adminToken not found in config.js.');
   if (!trimmedUserName) return [];
 
   const url = `${getBusinessUnitApiBaseUrl().replace(/\/$/, '')}/api/userTenant/tenantListIn/${encodeURIComponent(adminToken)}/${encodeURIComponent(trimmedUserName)}`;
-  const response = await fetch(url);
+  const response = await fetchWithNetworkHandling(url, undefined, { path: '/api/userTenant/tenantListIn' });
   if (!response.ok) {
-    throw new Error(`Business unit request failed with HTTP ${response.status}.`);
+    await throwResponseError(response, {
+      path: '/api/userTenant/tenantListIn',
+      context: 'Business unit request',
+    });
   }
+  if (response.status === 204) return [];
   const payload = await response.json();
   if (!Array.isArray(payload)) return [];
   return payload;
@@ -110,6 +207,14 @@ export const fetchBusinessUnitsByUsername = async (username) => {
 
 const extractAccessToken = (loginResponse) =>
   loginResponse?.AccessToken || loginResponse?.accessToken || loginResponse?.access_token || loginResponse?.Token || '';
+
+const normalizeLanguageCode = (language) => {
+  const value = String(language || '').trim().toLowerCase();
+  if (!value) return 'EN';
+  if (value.startsWith('th')) return 'TH';
+  if (value.startsWith('vi')) return 'VI';
+  return 'EN';
+};
 
 const normalizeReportRowDimensions = (row) => {
   const dimensions = [];
@@ -132,7 +237,7 @@ const normalizeReportRowDimensions = (row) => {
     });
   }
 
-  ['dim1', 'dim2', 'dim3', 'dim4'].forEach((field) => {
+  Array.from({ length: 10 }, (_, index) => `dim${index + 1}`).forEach((field) => {
     pushDimension(field, row?.[field]);
   });
 
@@ -142,8 +247,17 @@ const normalizeReportRowDimensions = (row) => {
 const normalizeReportRowForPayload = (row) => {
   if (!row || typeof row !== 'object') return row;
   const dimensions = normalizeReportRowDimensions(row);
+  const normalizedType = String(row.type ?? row.Type ?? '').trim().toUpperCase();
+  const isFormulaRow = row.isTotal === true || ['F', 'FORMULA', 'TOTAL'].includes(normalizedType);
+  const requestedNumberFormat = row.numberFormat ?? row.NumberFormat;
+  const numberFormat = requestedNumberFormat == null || requestedNumberFormat === ''
+    ? null
+    : requestedNumberFormat === 'percent' && isFormulaRow
+        ? 'percent'
+        : 'column';
   return {
     ...row,
+    ...(numberFormat ? { numberFormat } : {}),
     ...(dimensions.length > 0 ? { dimensions } : {}),
   };
 };
@@ -163,52 +277,28 @@ const resolveReportOwner = (report) => {
   return firstAccessUser;
 };
 
-const getSessionUserIdentity = () => {
-  const session = getStoredCarmenSession();
-  return String(
-    session?.user?.id
-    || session?.user?.UserId
-    || session?.user?.userId
-    || session?.username
-    || ''
-  ).trim();
-};
-
-const canAccessCarmenReportDefinition = (report, userId) => {
-  const normalizedUserId = String(userId || '').trim();
-  if (!normalizedUserId) return false;
-
-  if (String(report?.owner || report?.Owner || '').trim() === normalizedUserId) return true;
-  if (Array.isArray(report?.assignedUsers || report?.AssignedUsers) && (report.assignedUsers || report.AssignedUsers).includes(normalizedUserId)) {
-    return true;
-  }
-
-  const accessRows = Array.isArray(report?.access || report?.Access) ? (report.access || report.Access) : [];
-  return accessRows.some((item) => String(item?.userId || item?.UserId || '').trim() === normalizedUserId && item?.canView !== false && item?.CanView !== false);
-};
-
 export const loginWithCarmenCredentials = async ({ userName, password, tenant, language }) => {
   const { adminToken } = getCarmenApiConfig();
   if (!adminToken) {
-    throw new Error('Carmen adminToken not found in public/config.js.');
+    throw new Error('Carmen adminToken not found in config.js.');
   }
 
-  const response = await fetch(buildUrl('/api/login', {
+  const response = await fetchWithNetworkHandling(buildUrl('/api/login', {
     useTenant: false,
     query: { adminToken },
   }), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      Language: language,
+      Language: normalizeLanguageCode(language),
       Tenant: tenant,
       Password: password,
       UserName: userName,
     }),
-  });
+  }, { path: '/api/login' });
 
   if (!response.ok) {
-    throw new Error(`Carmen login failed with HTTP ${response.status}.`);
+    await throwResponseError(response, { path: '/api/login', context: 'Carmen login' });
   }
 
   const payload = await response.json();
@@ -223,42 +313,81 @@ export const loginWithCarmenCredentials = async ({ userName, password, tenant, l
   };
 };
 
+const pendingReadRequests = new Map();
+
+export const fetchCarmenBusinessUnits = async () => {
+  const username = getStoredCarmenSession()?.username;
+  if (!username) throw new Error('Carmen session username is missing.');
+  const response = await requestCarmenJson(`/api/userTenant/UserName/${encodeURIComponent(username)}`, {
+    useTenant: false, authorizationFailureAffectsSession: false,
+  });
+  const items = Array.isArray(response) ? response : response?.Data;
+  if (!Array.isArray(items)) throw new Error('Invalid business unit response.');
+  return items.map((item) => ({
+    Tenant: getBusinessUnitTenant(item.Tenant),
+    Description: getBusinessUnitDisplayName(item.Tenant),
+    IsDefault: item.IsDefault,
+    financialReport: deriveCarmenFinancialReportAccess(item.Permission),
+  }));
+};
+
 const requestCarmenJson = async (path, options = {}) => {
   const session = getStoredCarmenSession();
   if (!session?.accessToken) throw new Error('Carmen session is missing.');
+  const method = options.method || 'GET';
+  const url = options.tenant
+    ? buildUrl(path, { ...options, useTenant: false, query: { ...options.query, useTenant: options.tenant } })
+    : buildUrl(path, options);
 
-  const response = await fetch(buildUrl(path, options), {
-    method: options.method || 'GET',
-    headers: {
-      Authorization: session.accessToken,
-      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(options.headers || {}),
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
+  const executeRequest = async () => {
+    const response = await fetchWithNetworkHandling(url, {
+      method,
+      headers: {
+        Authorization: session.accessToken,
+        'Accept-Language': session.language,
+        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(options.headers || {}),
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined,
+    }, { path, affectsSession: true, timeoutMs: options.timeoutMs });
 
-  if (!response.ok) {
-    if (response.status === 401) {
-      clearCarmenSession();
-      throw new Error('Carmen session expired. Please sign in again.');
+    if (!response.ok) {
+      await throwResponseError(response, {
+        path,
+        context: `Carmen API request for ${path}`,
+        isAuthenticated: true,
+        authorizationFailureAffectsSession: options.tenant ? false : options.authorizationFailureAffectsSession,
+      });
     }
-    throw new Error(`Carmen API request failed for ${path} with HTTP ${response.status}.`);
-  }
 
-  return response.json();
+    return readResponsePayload(response);
+  };
+
+  const isReadRequest = method === 'GET' || (method === 'POST' && /\/search(?:\?|$)/.test(path));
+  if (!isReadRequest) return executeRequest();
+
+  const requestKey = JSON.stringify([session.accessToken, session.language, method, url, options.body || null]);
+  if (!pendingReadRequests.has(requestKey)) {
+    pendingReadRequests.set(
+      requestKey,
+      executeRequest().finally(() => pendingReadRequests.delete(requestKey)),
+    );
+  }
+  return pendingReadRequests.get(requestKey);
 };
 
-export const fetchCarmenReportOptions = async () => {
+export const fetchCarmenReportOptions = async (context = {}) => {
   if (!isCarmenApiConfigured()) {
     throw new Error('Carmen API session is not configured.');
   }
 
-  const options = await requestCarmenJson('/api/report-options');
+  const options = await requestCarmenJson('/api/report-options', context);
   return {
     themes: Array.isArray(options?.themes) ? options.themes : [],
     periodFormats: Array.isArray(options?.periodFormats) ? options.periodFormats : [],
     accountCategories: Array.isArray(options?.accountCategories) ? options.accountCategories : [],
     columnTypes: Array.isArray(options?.columnTypes) ? options.columnTypes : [],
+    columnLogicTypes: Array.isArray(options?.columnLogicTypes) ? options.columnLogicTypes : [],
     yearModes: Array.isArray(options?.yearModes) ? options.yearModes : [],
     periodModes: Array.isArray(options?.periodModes) ? options.periodModes : [],
     rowTypes: Array.isArray(options?.rowTypes) ? options.rowTypes : [],
@@ -267,48 +396,148 @@ export const fetchCarmenReportOptions = async () => {
   };
 };
 
-export const fetchCarmenReportPeriods = async ({ year } = {}) => {
+export const fetchCarmenDimensions = async (context = {}) => {
+  if (!isCarmenApiConfigured()) {
+    throw new Error('Carmen API session is not configured.');
+  }
+
+  const response = await requestCarmenJson('/api/dimension/search', {
+    ...context,
+    method: 'POST',
+    body: {
+      Limit: 0,
+      Page: 1,
+      WhereGroupList: [{
+        AndOr: 'And',
+        ConditionList: [{ AndOr: 'And', Field: 'Active', Operator: '=', Value: true }],
+      }],
+    },
+  });
+
+  const parseValues = (value) => {
+    if (Array.isArray(value)) return toTrimmedStringArray(value);
+    const text = String(value || '').trim();
+    if (!text) return [];
+    try {
+      return toTrimmedStringArray(JSON.parse(text));
+    } catch {
+      return text.split(/[\r\n,|]+/).map((item) => item.trim()).filter(Boolean);
+    }
+  };
+
+  const definitions = (Array.isArray(response?.Data) ? response.Data : [])
+    .sort((left, right) => String(left?.Id || '').localeCompare(String(right?.Id || ''), undefined, { numeric: true }))
+    .slice(0, 10)
+    .map((item, index) => ({
+      key: `dim${index + 1}`,
+      caption: String(item?.Caption || '').trim() || `DIM ${index + 1}`,
+      values: [...new Set(parseValues(item?.ListOfValues))],
+    }));
+
+  return {
+    ...Object.fromEntries(definitions.map(({ key, values }) => [key, values])),
+    definitions,
+  };
+};
+
+export const fetchCarmenUsers = async () => {
+  if (!isCarmenApiConfigured()) {
+    throw new Error('Carmen API session is not configured.');
+  }
+
+  const response = await requestCarmenJson('/api/user/search', {
+    method: 'POST',
+    body: {
+      Limit: 0,
+      Page: 0,
+      WhereGroupList: [{
+        AndOr: 'And',
+        ConditionList: [{ AndOr: 'And', Field: 'Active', Operator: '=', Value: true }],
+      }],
+    },
+  });
+
+  return (Array.isArray(response?.Data) ? response.Data : [])
+    .filter((user) => user?.Active !== false)
+    .map((user) => {
+      const userName = String(user?.UserName || '').trim();
+      return {
+        id: userName,
+        name: userName,
+        role: 'User',
+        source: 'carmen-api',
+        userName,
+      };
+    })
+    .filter((user) => user.id)
+    .sort((left, right) => left.name.localeCompare(right.name));
+};
+
+const fetchCarmenLookupSearch = async (path, context) => requestCarmenJson(path, {
+  ...context,
+  method: 'POST',
+  body: {
+    Limit: 0,
+    Page: 1,
+    WhereGroupList: [],
+  },
+});
+
+export const fetchCarmenAccountGroups = async (context = {}) => {
+  if (!isCarmenApiConfigured()) {
+    throw new Error('Carmen API session is not configured.');
+  }
+  const response = await fetchCarmenLookupSearch('/api/accountGroup/search', context);
+  return adaptCarmenAccountGroups(response);
+};
+
+export const fetchCarmenDepartmentGroups = async (context = {}) => {
+  if (!isCarmenApiConfigured()) {
+    throw new Error('Carmen API session is not configured.');
+  }
+  const response = await fetchCarmenLookupSearch('/api/DepartmentCategory/search', context);
+  return adaptCarmenDepartmentGroups(response);
+};
+
+export const fetchCarmenReportPeriods = async ({ year, tenant } = {}) => {
   if (!isCarmenApiConfigured()) {
     throw new Error('Carmen API session is not configured.');
   }
 
   const periods = await requestCarmenJson('/api/report-periods', {
+    tenant,
     query: { year },
   });
   return Array.isArray(periods) ? periods : [];
 };
 
-export const fetchCarmenReports = async () => {
+export const fetchCarmenReports = async (context = {}) => {
   if (!isCarmenApiConfigured()) {
     throw new Error('Carmen API session is not configured.');
   }
 
-  const reports = await requestCarmenJson('/api/reports');
+  const reports = await requestCarmenJson('/api/reports', context);
   return adaptCarmenReportDefinitions(reports);
 };
 
-export const fetchCarmenReport = async (id) => {
+export const fetchCarmenReport = async (id, context = {}) => {
   if (!isCarmenApiConfigured()) {
     throw new Error('Carmen API session is not configured.');
   }
 
-  const report = await requestCarmenJson(`/api/reports/${encodeURIComponent(id)}`);
-  const userId = getSessionUserIdentity();
-  if (!canAccessCarmenReportDefinition(report, userId)) {
-    throw new Error('You do not have access to this report.');
-  }
-  return adaptCarmenReportDefinition(report);
+  return adaptCarmenReportDefinition(await requestCarmenJson(`/api/reports/${encodeURIComponent(id)}`, context));
 };
 
 export const buildReportDefinitionPayload = (report) => ({
   id: String(report?.id || '').trim(),
   name: String(report?.name || '').trim(),
+  reportGroup: String(report?.reportGroup || '').trim(),
   companyName: String(report?.companyName || '').trim(),
   category: Array.isArray(report?.category) && report.category.length > 0
-    ? report.category.map((item) => String(item).trim()).filter(Boolean)
+    ? toTrimmedStringArray(report.category)
     : ['ALL'],
   assignedUsers: Array.isArray(report?.assignedUsers)
-    ? report.assignedUsers.map((item) => String(item).trim()).filter(Boolean)
+    ? toTrimmedStringArray(report.assignedUsers)
     : [],
   isActive: report?.isActive !== false,
   periodFormat: String(report?.periodFormat || 'standard').trim() || 'standard',
@@ -316,32 +545,101 @@ export const buildReportDefinitionPayload = (report) => ({
   customPeriodLabel: String(report?.customPeriodLabel || '').trim(),
   overrideDateDisplay: String(report?.overrideDateDisplay || '').trim(),
   overridePeriodDisplay: String(report?.overridePeriodDisplay || '').trim(),
+  remark: String(report?.remark || '').trim(),
   owner: resolveReportOwner(report),
   reportType: String(report?.reportType || 'Monthly').trim() || 'Monthly',
   day: String(report?.day || '').trim(),
   theme: String(report?.theme || 'blue').trim() || 'blue',
-  columns: Array.isArray(report?.columns) ? report.columns : [],
+  ...(report?.lastModified ? { lastModified: report.lastModified } : {}),
+  descriptionPosition: Number.isInteger(Number(report?.descriptionPosition))
+    ? Number(report.descriptionPosition)
+    : 0,
+  columns: Array.isArray(report?.columns)
+    ? report.columns.map((column) => {
+        const { Type: _legacyType, ...normalizedColumn } = column || {};
+        if (column?.isFormula || column?.isPercent) {
+          const { type: _staleDataType, ...logicColumn } = normalizedColumn;
+          return logicColumn;
+        }
+        const rawType = column?.type ?? column?.Type;
+        return rawType == null
+          ? normalizedColumn
+          : { ...normalizedColumn, type: normalizeColumnType(rawType) };
+      })
+    : [],
   rows: Array.isArray(report?.rows) ? report.rows.map(normalizeReportRowForPayload) : [],
   access: Array.isArray(report?.access) && report.access.length > 0
     ? report.access
     : Array.isArray(report?.assignedUsers)
-      ? report.assignedUsers.map((userId) => {
+      ? report.assignedUsers.reduce((entries, userId) => {
         const trimmedUserId = String(userId).trim();
-        return trimmedUserId
-          ? {
-              userId: trimmedUserId,
-              userName: trimmedUserId,
-              displayName: trimmedUserId,
-              role: 'User',
-              canView: true,
-              canEdit: true,
-            }
-          : null;
-      }).filter(Boolean)
+        if (!trimmedUserId) return entries;
+        entries.push({
+          userId: trimmedUserId,
+          userName: trimmedUserId,
+          displayName: trimmedUserId,
+          role: 'User',
+          canView: true,
+          canEdit: true,
+        });
+        return entries;
+      }, [])
       : [],
 });
 
-export const saveCarmenReport = async (report) => {
+export const createCarmenReport = async (report, context = {}) => {
+  if (!isCarmenApiConfigured()) {
+    throw new Error('Carmen API session is not configured.');
+  }
+
+  const payload = buildReportDefinitionPayload(report);
+  if (!payload.id) {
+    throw new Error('Report id is required before creating a report.');
+  }
+  const response = await requestCarmenJson('/api/reports', {
+    ...context,
+    method: 'POST',
+    body: payload,
+  });
+  const wrappedReport = response?.report
+    || response?.Report
+    || response?.data
+    || response?.Data
+    || response;
+  const createdReport = Array.isArray(wrappedReport) ? wrappedReport[0] : wrappedReport;
+  const createdId = String(createdReport?.id || createdReport?.Id || payload.id).trim();
+
+  if (!createdId) {
+    throw new Error('Carmen API did not return an id for the new report.');
+  }
+
+  // POST returns a success flag on Carmen API. Read the stored timestamp before
+  // the first edit, because PUT requires it for optimistic concurrency.
+  const savedReport = adaptCarmenReportDefinition(
+    await requestCarmenJson(`/api/reports/${encodeURIComponent(createdId)}`, context),
+  );
+  if (!savedReport?.lastModified) {
+    throw new Error('Carmen API did not return a version for the new report.');
+  }
+  return savedReport;
+};
+
+export const fetchCarmenReportHistory = (id, context = {}) =>
+  requestCarmenJson(`/api/reports/${encodeURIComponent(id)}/history`, context);
+
+export const fetchCarmenReportHistoryVersion = async (id, historyId, context = {}) =>
+  adaptCarmenReportDefinition(await requestCarmenJson(
+    `/api/reports/${encodeURIComponent(id)}/history/${encodeURIComponent(historyId)}`,
+    context,
+  ));
+
+export const restoreCarmenReportHistoryVersion = async (id, historyId, lastModified, context = {}) =>
+  adaptCarmenReportDefinition(await requestCarmenJson(
+    `/api/reports/${encodeURIComponent(id)}/history/${encodeURIComponent(historyId)}/restore`,
+    { ...context, method: 'POST', body: { lastModified } },
+  ));
+
+export const saveCarmenReport = async (report, context = {}) => {
   if (!isCarmenApiConfigured()) {
     throw new Error('Carmen API session is not configured.');
   }
@@ -353,6 +651,7 @@ export const saveCarmenReport = async (report) => {
     : '/api/reports';
 
   const response = await requestCarmenJson(path, {
+    ...context,
     method,
     body: payload,
   });
@@ -360,43 +659,75 @@ export const saveCarmenReport = async (report) => {
   return response;
 };
 
-export const deleteCarmenReport = async (id) => {
+export const saveCarmenReports = async (reports, context = {}) => {
+  if (!isCarmenApiConfigured()) {
+    throw new Error('Carmen API session is not configured.');
+  }
+  if (!Array.isArray(reports) || reports.length === 0) return [];
+
+  return requestCarmenJson('/api/reports/batch', {
+    ...context,
+    method: 'POST',
+    body: reports.map(buildReportDefinitionPayload),
+  });
+};
+
+export const deleteCarmenReport = async (id, context = {}) => {
   if (!isCarmenApiConfigured()) {
     throw new Error('Carmen API session is not configured.');
   }
 
   const response = await requestCarmenJson(`/api/reports/${encodeURIComponent(id)}`, {
+    ...context,
     method: 'DELETE',
   });
 
   return response;
 };
 
-export const cloneCarmenReport = async (id) => {
+export const cloneCarmenReport = async (id, context = {}) => {
   if (!isCarmenApiConfigured()) {
     throw new Error('Carmen API session is not configured.');
   }
 
   const report = await requestCarmenJson(`/api/reports/${encodeURIComponent(id)}/clone`, {
+    ...context,
     method: 'POST',
   });
   return adaptCarmenReportDefinition(report);
 };
 
-export const fetchCarmenMasterData = async ({ year }) => {
+export const fetchCarmenMasterData = async ({ year, tenant }) => {
   if (!isCarmenApiConfigured()) {
     throw new Error('Carmen API session is not configured.');
   }
 
   const session = getStoredCarmenSession();
+  const context = { tenant };
+  const usersPromise = tenant ? Promise.resolve([]) : fetchCarmenUsers().catch(() => []);
+  // Group maintenance permissions are separate from Financial Report View.
+  const optionalGroupLookup = (error) => {
+    if (error.status === 403) return [];
+    throw error;
+  };
   try {
-    const masterData = await requestCarmenJson(`/api/report-master-data?year=${encodeURIComponent(year)}`);
+    const [masterData, users, accountGroups, deptGroups] = await Promise.all([
+      requestCarmenJson(`/api/report-master-data?year=${encodeURIComponent(year)}`, context),
+      usersPromise,
+      tenant ? fetchCarmenAccountGroups(context).catch(optionalGroupLookup) : fetchCarmenAccountGroups().catch(() => []),
+      tenant ? fetchCarmenDepartmentGroups(context).catch(optionalGroupLookup) : fetchCarmenDepartmentGroups().catch(() => []),
+    ]);
+    const currentUser = masterData?.currentUser || session?.user || null;
     return {
-      currentUser: masterData?.currentUser || session?.user || null,
-      users: Array.isArray(masterData?.users) ? masterData.users : [],
+      currentUser,
+      users: currentUser
+        ? [currentUser, ...(tenant ? masterData.users || [] : users).filter((user) => String(user.id) !== String(currentUser.id))]
+        : users,
       companyProfile: adaptCarmenCompany(masterData?.companyProfile),
       depts: adaptCarmenDepartments(masterData?.depts),
       accCodes: adaptCarmenAccountCodes(masterData?.accCodes),
+      accountGroups,
+      deptGroups,
       periods: adaptCarmenGlPeriods(masterData?.periods),
       budgetRevisions: adaptCarmenBudgetRevisions(masterData?.budgetRevisions),
       groups: {
@@ -406,18 +737,20 @@ export const fetchCarmenMasterData = async ({ year }) => {
         L4: Array.isArray(masterData?.groups?.L4) ? masterData.groups.L4 : [],
       },
     };
-  } catch {
+  } catch (error) {
+    if (tenant) throw error;
     const session = getStoredCarmenSession();
     if (!session?.accessToken) {
       throw new Error('Carmen session expired. Please sign in again.');
     }
 
-    const [company, departments, accountCodes, periods, budgets] = await Promise.all([
+    const [company, departments, accountCodes, periods, budgets, users] = await Promise.all([
       requestCarmenJson('/api/company'),
       requestCarmenJson('/api/department'),
       requestCarmenJson('/api/accountCode'),
       requestCarmenJson(`/api/glPeriod/year/${encodeURIComponent(year)}`),
       requestCarmenJson('/api/budget'),
+      usersPromise,
     ]);
 
     const currentUser = session?.user || {
@@ -429,10 +762,15 @@ export const fetchCarmenMasterData = async ({ year }) => {
     };
     return {
       currentUser,
-      users: [currentUser],
+      users: [currentUser, ...users.filter((user) =>
+        String(user.id) !== String(currentUser.id)
+        && String(user.userName) !== String(currentUser.userName || session?.username)
+      )],
       companyProfile: adaptCarmenCompany(company),
       depts: adaptCarmenDepartments(departments),
       accCodes: adaptCarmenAccountCodes(accountCodes),
+      accountGroups: [],
+      deptGroups: [],
       periods: adaptCarmenGlPeriods(periods),
       budgetRevisions: adaptCarmenBudgetRevisions(budgets),
       groups: {
@@ -445,12 +783,14 @@ export const fetchCarmenMasterData = async ({ year }) => {
   }
 };
 
-export const fetchCarmenReportData = async ({ reportId = '', year, period, revision, deptIds = [], day = '' }) => {
+export const fetchCarmenReportData = async ({ reportId = '', year, period, revision, deptIds = [], day = '', tenant }) => {
   if (!isCarmenApiConfigured()) {
     throw new Error('Carmen API session is not configured.');
   }
 
   const response = await requestCarmenJson('/api/report-data', {
+    tenant,
+    timeoutMs: 120000,
     query: {
       reportId,
       year,

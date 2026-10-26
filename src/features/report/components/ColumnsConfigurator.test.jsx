@@ -1,68 +1,332 @@
 import React from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import ColumnsConfigurator from './ColumnsConfigurator.jsx';
+import ColumnsConfigurator, { buildColumnLogicTypeUpdates } from './ColumnsConfigurator.jsx';
 
 describe('ColumnsConfigurator', () => {
-  it('adds, updates, moves, and deletes columns', () => {
+  it('offers Daily data types even when a report was saved as Monthly', async () => {
+    render(
+      <ColumnsConfigurator
+        activeReport={{ reportType: 'Monthly', columns: [{ id: 'C1', label: 'Actual', type: 'AC', isActive: true }] }}
+        handleAddCol={vi.fn()}
+        handleUpdateCol={vi.fn()}
+        updateActiveReport={vi.fn()}
+        handleDeleteCol={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Type' }));
+    expect(await screen.findByRole('option', { name: 'DAC' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'PTD' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'DACBG' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'PTDBG' })).toBeInTheDocument();
+  });
+
+  it('does not flag stale source types on formula and mix columns as monthly incompatibilities', () => {
+    render(
+      <ColumnsConfigurator
+        activeReport={{
+          reportType: 'Monthly',
+          columns: [
+            { id: 'C1', label: 'Actual', isFormula: false, isPercent: false, type: 'AC' },
+            { id: 'C2', label: 'Mix', isFormula: false, isPercent: true, type: 'MIX', targetCol: 'C1' },
+            { id: 'C3', label: 'Variance', isFormula: true, isPercent: false, type: 'FORMULA', formula: 'C1' },
+          ],
+        }}
+        handleAddCol={vi.fn()}
+        handleUpdateCol={vi.fn()}
+        updateActiveReport={vi.fn()}
+        handleDeleteCol={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText(/reports should only use compatible column types/i)).not.toBeInTheDocument();
+  });
+
+  it('normalizes fields when changing between every column logic type', () => {
+    const columns = [
+      { id: 'C1', isFormula: true, formula: 'C2*2' },
+      { id: 'C2', isFormula: false, isPercent: false, type: 'BC' },
+    ];
+
+    expect(buildColumnLogicTypeUpdates(columns[0], 'MIX', columns, 'AC')).toEqual(expect.objectContaining({
+      isFormula: false,
+      isPercent: true,
+      formula: '',
+      targetCol: 'C2',
+      type: undefined,
+    }));
+    expect(buildColumnLogicTypeUpdates(columns[0], 'DATA', columns, 'AC')).toEqual(expect.objectContaining({
+      isFormula: false,
+      isPercent: false,
+      formula: '',
+      targetCol: '',
+      type: 'AC',
+      yearMode: 'current',
+      periodMode: 'current',
+    }));
+  });
+
+  it('adds, updates, moves, and deletes columns', async () => {
     const handleAddCol = vi.fn();
+    const handleDuplicateCol = vi.fn();
     const handleUpdateCol = vi.fn();
-    const moveCol = vi.fn();
     const handleDeleteCol = vi.fn();
+    const setConfirmAction = vi.fn();
 
     render(
       <ColumnsConfigurator
         activeReport={{
+          descriptionPosition: 2,
           columns: [
             { id: 'C1', label: 'Actual', isActive: true, type: 'AC', yearMode: 'current', periodMode: 'current', width: '' },
             { id: 'C2', label: 'Budget', isActive: false, type: 'BUD', yearMode: 'current', periodMode: 'current', width: '120' },
           ],
         }}
         handleAddCol={handleAddCol}
+        handleDuplicateCol={handleDuplicateCol}
         handleUpdateCol={handleUpdateCol}
-        moveCol={moveCol}
+        updateActiveReport={vi.fn()}
         handleDeleteCol={handleDeleteCol}
+        setConfirmAction={setConfirmAction}
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '+ Data' }));
+    fireEvent.change(screen.getByRole('searchbox', { name: /Search columns/i }), { target: { value: 'Budget' } });
+    expect(screen.getByText('1 match')).toBeInTheDocument();
+    expect(screen.getAllByTestId('column-card')).toHaveLength(2);
+    expect(screen.getAllByTestId('column-card')[1]).toHaveClass('ring-2');
+    fireEvent.change(screen.getByRole('searchbox', { name: /Search columns/i }), { target: { value: '' } });
+
+    fireEvent.click(screen.getByRole('combobox', { name: '+ Add column' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Data' }));
     expect(handleAddCol).toHaveBeenCalledWith('data');
 
-    fireEvent.click(screen.getByRole('button', { name: '+ Formula' }));
+    fireEvent.click(screen.getByRole('combobox', { name: '+ Add column' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Formula' }));
     expect(handleAddCol).toHaveBeenCalledWith('formula');
 
-    fireEvent.click(screen.getByRole('button', { name: /Mix %/i }));
+    fireEvent.click(within(screen.getAllByTestId('column-card')[0]).getByRole('button', { name: 'Duplicate column C1' }));
+    expect(handleDuplicateCol).toHaveBeenCalledWith('C1');
+
+    fireEvent.click(screen.getByRole('combobox', { name: '+ Add column' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Mix %' }));
     expect(handleAddCol).toHaveBeenCalledWith('percent');
 
     const labelInput = screen.getByDisplayValue('Actual');
-    const row = labelInput.closest('tr');
+    const row = labelInput.closest('[data-testid="column-card"]');
 
     fireEvent.change(labelInput, {
       target: { value: 'Operating Revenue' },
     });
     expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'label', 'Operating Revenue');
 
-    const rowButtons = within(row).getAllByRole('button');
+    fireEvent.change(labelInput, {
+      target: { value: 'Actual\nThis Month\nExtra' },
+    });
+    expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'label', 'Actual\nThis Month');
 
-    fireEvent.click(rowButtons[0]);
+    fireEvent.click(within(row).getByRole('button', { name: /Hide column C1/i }));
+    expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'isActive', false);
+    expect(within(row).queryByTestId('column-actions')).not.toBeInTheDocument();
+
+    fireEvent.click(within(row).getByRole('button', { name: /Delete column C1/i }));
+    expect(setConfirmAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Delete column C1?',
+        actionLabel: 'Delete column',
+      }),
+    );
+    setConfirmAction.mock.calls[0][0].onConfirm();
     expect(handleDeleteCol).toHaveBeenCalledWith('C1');
 
-    fireEvent.click(rowButtons[1]);
-    expect(moveCol).toHaveBeenCalledWith(0, 'left');
+    fireEvent.click(within(row).getAllByRole('combobox')[1]);
+    fireEvent.click(await screen.findByText('BCC'));
+    expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'type', 'BCC');
 
-    fireEvent.click(rowButtons[2]);
-    expect(moveCol).toHaveBeenCalledWith(0, 'right');
-
-    fireEvent.change(screen.getByDisplayValue('AC'), { target: { value: 'BUDACC' } });
-    expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'type', 'BUDACC');
-
-    fireEvent.change(within(row).getAllByRole('combobox')[2], { target: { value: '-1' } });
+    fireEvent.click(within(row).getAllByRole('combobox')[3]);
+    fireEvent.click(await screen.findByText('Prev'));
     expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'yearMode', '-1');
 
-    fireEvent.change(within(row).getAllByRole('combobox')[3], { target: { value: 'FY' } });
-    expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'periodMode', 'FY');
+    fireEvent.click(within(row).getAllByRole('combobox')[4]);
+    fireEvent.click(await screen.findByText('Period -1'));
+    expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'periodMode', '-1');
+  });
 
-    fireEvent.click(screen.getAllByRole('checkbox')[0]);
+  it('offers every specific period from P01 through P12', async () => {
+    const handleUpdateCol = vi.fn();
+
+    render(
+      <ColumnsConfigurator
+        activeReport={{
+          reportType: 'Monthly',
+          columns: [
+            { id: 'C1', label: 'Actual', isActive: true, type: 'AC', yearMode: 'current', periodMode: 'current' },
+          ],
+        }}
+        handleAddCol={vi.fn()}
+        handleUpdateCol={handleUpdateCol}
+        updateActiveReport={vi.fn()}
+        handleDeleteCol={vi.fn()}
+      />,
+    );
+
+    const card = screen.getByTestId('column-card');
+    fireEvent.click(within(card).getAllByRole('combobox')[4]);
+
+    expect(await screen.findByRole('option', { name: 'P01 (Period 1)' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'P12 (Period 12)' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('option', { name: 'P07 (Period 7)' }));
+    expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'periodMode', 'P07');
+  });
+
+  it('changes an existing column logic type immediately', async () => {
+    const updateActiveReport = vi.fn();
+
+    render(
+      <ColumnsConfigurator
+        activeReport={{
+          reportType: 'Monthly',
+          columns: [
+            { id: 'C1', label: 'Actual', isActive: true, isFormula: false, isPercent: false, type: 'AC', yearMode: 'current', periodMode: 'current' },
+            { id: 'C2', label: 'Budget', isActive: true, isFormula: false, isPercent: false, type: 'BC', yearMode: 'current', periodMode: 'current' },
+          ],
+        }}
+        handleAddCol={vi.fn()}
+        handleUpdateCol={vi.fn()}
+        updateActiveReport={updateActiveReport}
+        handleDeleteCol={vi.fn()}
+      />
+    );
+
+    const actualCard = screen.getByDisplayValue('Actual').closest('[data-testid="column-card"]');
+    fireEvent.click(within(actualCard).getByLabelText('Logic type'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Formula' }));
+
+    expect(updateActiveReport).toHaveBeenCalledWith({
+      columns: [
+        expect.objectContaining({
+          id: 'C1',
+          isFormula: true,
+          isPercent: false,
+          formula: 'C1-C2',
+          type: undefined,
+          yearMode: undefined,
+          periodMode: undefined,
+        }),
+        expect.objectContaining({ id: 'C2', type: 'BC' }),
+      ],
+    });
+  });
+
+  it('toggles column visibility from the eye action', () => {
+    const handleUpdateCol = vi.fn();
+
+    render(
+      <ColumnsConfigurator
+        activeReport={{
+          descriptionPosition: 2,
+          columns: [
+            { id: 'C1', label: 'Actual', isActive: true, type: 'AC', yearMode: 'current', periodMode: 'current', width: '' },
+          ],
+        }}
+        handleAddCol={vi.fn()}
+        handleUpdateCol={handleUpdateCol}
+        updateActiveReport={vi.fn()}
+        moveCol={vi.fn()}
+        handleDeleteCol={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Hide column C1/i }));
     expect(handleUpdateCol).toHaveBeenCalledWith('C1', 'isActive', false);
+  });
+
+  it('summarizes and visually distinguishes hidden columns', () => {
+    render(
+      <ColumnsConfigurator
+        activeReport={{
+          descriptionPosition: 2,
+          columns: [
+            { id: 'C1', label: 'Actual', isActive: false, type: 'AC', yearMode: 'current', periodMode: 'current', width: '' },
+          ],
+        }}
+        handleAddCol={vi.fn()}
+        handleUpdateCol={vi.fn()}
+        updateActiveReport={vi.fn()}
+        moveCol={vi.fn()}
+        handleDeleteCol={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('1 columns')).toBeInTheDocument();
+    expect(screen.getByText('1 hidden')).toBeInTheDocument();
+    expect(screen.getByTestId('column-card')).toHaveClass('border-dashed', 'opacity-60');
+    expect(screen.getByRole('button', { name: /Show column C1/i })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('moves Description by drag and drop without reordering calculation columns', () => {
+    const updateActiveReport = vi.fn();
+    const dataTransfer = {
+      effectAllowed: '',
+      dropEffect: '',
+      setData: vi.fn(),
+      setDragImage: vi.fn(),
+    };
+
+    render(
+      <ColumnsConfigurator
+        activeReport={{
+          descriptionPosition: 1,
+          columns: [
+            { id: 'C1', label: 'Actual', isActive: true, type: 'AC', yearMode: 'current', periodMode: 'current', width: '' },
+          ],
+        }}
+        handleAddCol={vi.fn()}
+        handleUpdateCol={vi.fn()}
+        updateActiveReport={updateActiveReport}
+        handleDeleteCol={vi.fn()}
+      />
+    );
+
+    fireEvent.dragStart(screen.getByRole('button', { name: /Reorder Description column/i }), { dataTransfer });
+    const target = screen.getByTestId('column-card');
+    fireEvent.dragOver(target, { dataTransfer });
+    fireEvent.drop(target, { dataTransfer });
+
+    expect(updateActiveReport).toHaveBeenCalledWith(expect.objectContaining({
+      descriptionPosition: 0,
+      columns: [expect.objectContaining({ id: 'C1' })],
+    }));
+  });
+
+  it('moves a column directly to an exact position', () => {
+    const updateActiveReport = vi.fn();
+
+    render(
+      <ColumnsConfigurator
+        activeReport={{
+          descriptionPosition: 2,
+          columns: [
+            { id: 'C1', label: 'Actual', type: 'AC', formula: '' },
+            { id: 'C2', label: 'Budget', type: 'BC', formula: '' },
+          ],
+        }}
+        handleAddCol={vi.fn()}
+        handleUpdateCol={vi.fn()}
+        updateActiveReport={updateActiveReport}
+        handleDeleteCol={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move column C1 to position' }));
+    fireEvent.change(screen.getByLabelText('New position'), { target: { value: '3' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Move to position' }));
+
+    expect(updateActiveReport).toHaveBeenCalledWith(expect.objectContaining({
+      descriptionPosition: 1,
+      columns: [expect.objectContaining({ id: 'C2' }), expect.objectContaining({ id: 'C1' })],
+    }));
   });
 });

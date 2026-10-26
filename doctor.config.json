@@ -1,0 +1,15 @@
+{
+  "$schema": "https://react.doctor/schema/config.json",
+  "rules": {
+    "react-doctor/js-flatmap-filter": "off",
+    "react-doctor/js-combine-iterations": "off",
+    "react-doctor/jsx-no-new-function-as-prop": "off",
+    "react-doctor/rerender-state-only-in-handlers": "off",
+    "react-doctor/no-giant-component": "off",
+    "react-doctor/prefer-useReducer": "off",
+    "react-doctor/no-pass-live-state-to-parent": "off",
+    "react-doctor/no-cascading-set-state": "off",
+    "react-doctor/exhaustive-deps": "off",
+    "react-doctor/insecure-crypto-risk": "off"
+  }
+}

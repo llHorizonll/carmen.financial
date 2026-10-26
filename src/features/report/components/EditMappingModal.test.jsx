@@ -4,7 +4,42 @@ import { describe, expect, it, vi } from 'vitest';
 import EditMappingModal from './EditMappingModal.jsx';
 
 describe('EditMappingModal', () => {
-  it('updates fields and invokes detail selector and apply handlers', () => {
+  it('renders dimension selectors through DIM 10', () => {
+    const definitions = Array.from({ length: 10 }, (_, index) => ({
+      key: `dim${index + 1}`,
+      caption: `Dimension ${index + 1}`,
+      values: [`VALUE-${index + 1}`],
+    }));
+
+    render(
+      <EditMappingModal
+        isOpen={true}
+        editingRow={{ desc: 'Revenue' }}
+        setEditingRow={() => {}}
+        masterData={{ depts: [], groups: {}, accCodes: [] }}
+        dimensionDefinitions={definitions}
+        modalAccCategory="ALL"
+        setModalAccCategory={() => {}}
+        onOpenDetailSelector={() => {}}
+        onApply={() => {}}
+        onClose={() => {}}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /^Department/ })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: /^Account/ })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: /^Dimensions/ })).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(screen.getByRole('button', { name: /^Department/ }));
+    expect(screen.getByRole('button', { name: /^Department/ })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('button', { name: 'Select departments' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Department/ }));
+    expect(screen.getByRole('button', { name: 'Select departments' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Dimensions/ }));
+    expect(screen.getByRole('button', { name: /Dimension 10/i })).toBeInTheDocument();
+    expect(screen.getByTestId('selected-value-mapping-dim1')).toHaveTextContent('Not selected');
+  });
+
+  it('updates fields and invokes detail selector and apply handlers', async () => {
     const setEditingRow = vi.fn();
     const setModalAccCategory = vi.fn();
     const onOpenDetailSelector = vi.fn();
@@ -20,6 +55,8 @@ describe('EditMappingModal', () => {
           groupLevel: 'L4',
           groups: 'FOO',
           accCodes: '4001',
+          dim1: 'OTA',
+          dim2: 'LUNCH',
         }}
         setEditingRow={setEditingRow}
         masterData={{
@@ -27,6 +64,10 @@ describe('EditMappingModal', () => {
           groups: { L4: [{ id: 'FOO', name: 'Food' }] },
           accCodes: [{ id: '4001', type: 'I' }],
         }}
+        dimensionDefinitions={[
+          { key: 'dim1', caption: 'Market Segment', values: ['OTA', 'Corporate'] },
+          { key: 'dim2', caption: 'Meal Period', values: ['LUNCH', 'DINNER'] },
+        ]}
         modalAccCategory="ALL"
         setModalAccCategory={setModalAccCategory}
         onOpenDetailSelector={onOpenDetailSelector}
@@ -38,14 +79,23 @@ describe('EditMappingModal', () => {
     fireEvent.change(screen.getByDisplayValue('Revenue'), { target: { value: 'New Revenue' } });
     expect(setEditingRow).toHaveBeenCalledWith(expect.objectContaining({ desc: 'New Revenue' }));
 
-    fireEvent.click(screen.getAllByText('Select')[0]);
+    fireEvent.click(screen.getByRole('button', { name: /Select departments/i }));
     expect(onOpenDetailSelector).toHaveBeenCalledWith(expect.objectContaining({ field: 'dept' }));
+    expect(screen.getByRole('button', { name: /Select departments/i }).className).toMatch(/bg-stone|border-stone|text-stone|bg-muted|border-border|text-muted/);
 
-    fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: 'B' } });
+    fireEvent.click(screen.getAllByRole('combobox')[2]);
+    fireEvent.click(await screen.findByText('Balance Sheet'));
     expect(setModalAccCategory).toHaveBeenCalledWith('B');
+
+    fireEvent.click(screen.getByRole('button', { name: /^Dimensions/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Market Segment/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Corporate' }));
+    expect(setEditingRow).toHaveBeenCalledWith(expect.objectContaining({ dim1: 'OTA, Corporate' }));
 
     fireEvent.click(screen.getByText('Apply Mapping'));
     expect(onApply).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Apply Mapping')).toHaveAttribute('data-variant', 'default');
+    expect(screen.getByText('Cancel')).toHaveAttribute('data-variant', 'outline');
 
     fireEvent.click(screen.getByText('Cancel'));
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -69,8 +119,8 @@ describe('EditMappingModal', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('uses API-backed group master data for the group selector', () => {
-    const onOpenDetailSelector = vi.fn();
+  it('selects an API-backed account group and clears individual account codes', async () => {
+    const setEditingRow = vi.fn();
 
     render(
       <EditMappingModal
@@ -82,9 +132,14 @@ describe('EditMappingModal', () => {
           groups: '',
           accCodes: '',
         }}
-        setEditingRow={() => {}}
+        setEditingRow={setEditingRow}
         masterData={{
           depts: [],
+          deptGroups: [],
+          accountGroups: [
+            { id: 'ROOMS', name: 'Rooms', level: 'L2', accountIds: ['4001', '4002'] },
+            { id: 'FOOD', name: 'Food', level: 'L3', accountIds: ['4101'] },
+          ],
           groups: {
             L1: [],
             L2: [
@@ -98,20 +153,128 @@ describe('EditMappingModal', () => {
         }}
         modalAccCategory="ALL"
         setModalAccCategory={() => {}}
-        onOpenDetailSelector={onOpenDetailSelector}
+        onOpenDetailSelector={() => {}}
         onApply={() => {}}
         onClose={() => {}}
       />
     );
 
-    fireEvent.click(screen.getAllByText('Select')[1]);
+    fireEvent.click(screen.getByRole('combobox', { name: 'Account group' }));
+    fireEvent.click(await screen.findByText(/L2 · ROOMS/));
 
-    expect(onOpenDetailSelector).toHaveBeenCalledWith(expect.objectContaining({
-      field: 'groups',
-      items: [
-        { id: 'ROOMS', name: 'Rooms' },
-        { id: 'FOOD', name: 'Food' },
-      ],
+    expect(setEditingRow).toHaveBeenCalledWith(expect.objectContaining({
+      groups: 'ROOMS',
+      groupLevel: 'L2',
+      accCodes: '',
     }));
+  });
+
+  it('selects a department group and clears individual departments', async () => {
+    const setEditingRow = vi.fn();
+
+    render(
+      <EditMappingModal
+        isOpen={true}
+        editingRow={{
+          desc: 'Revenue',
+          dept: '',
+          deptGroup: '',
+          groupLevel: 'L4',
+          groups: '',
+          accCodes: '',
+        }}
+        setEditingRow={setEditingRow}
+        masterData={{
+          depts: [{ id: '101', name: 'Rooms' }, { id: '201', name: 'Restaurant' }],
+          deptGroups: [{ id: 'OPS', name: 'Operations', deptIds: ['101', '201'] }],
+          accountGroups: [],
+          groups: { L4: [] },
+          accCodes: [],
+        }}
+        modalAccCategory="ALL"
+        setModalAccCategory={() => {}}
+        onOpenDetailSelector={() => {}}
+        onApply={() => {}}
+        onClose={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Department group' }));
+    fireEvent.click(await screen.findByText(/OPS — Operations/));
+
+    expect(setEditingRow).toHaveBeenCalledWith(expect.objectContaining({
+      deptGroup: 'OPS',
+      dept: '',
+    }));
+  });
+
+  it('disables individual selectors while their group mapping is selected', () => {
+    render(
+      <EditMappingModal
+        isOpen={true}
+        editingRow={{
+          desc: 'Revenue',
+          dept: '',
+          deptGroup: 'OPS',
+          groupLevel: 'L2',
+          groups: 'ROOMS',
+          accCodes: '',
+        }}
+        setEditingRow={() => {}}
+        masterData={{
+          depts: [{ id: '101', name: 'Rooms' }],
+          deptGroups: [{ id: 'OPS', name: 'Operations', deptIds: ['101'] }],
+          accountGroups: [{ id: 'ROOMS', name: 'Rooms', level: 'L2', accountIds: ['4001'] }],
+          accCodes: [{ id: '4001', type: 'I' }],
+        }}
+        modalAccCategory="ALL"
+        setModalAccCategory={() => {}}
+        onOpenDetailSelector={() => {}}
+        onApply={() => {}}
+        onClose={() => {}}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /Select departments/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Select account details/i })).toBeDisabled();
+    expect(screen.getByRole('textbox', { name: 'Account codes' })).toBeDisabled();
+  });
+
+  it('keeps more than 100 account codes fully editable without duplicate chips', () => {
+    const setEditingRow = vi.fn();
+    const accountCodes = Array.from(
+      { length: 120 },
+      (_, index) => String(6000000 + index),
+    ).join(', ');
+
+    render(
+      <EditMappingModal
+        isOpen={true}
+        editingRow={{
+          desc: 'Wages & Benefits',
+          dept: '',
+          groupLevel: 'L4',
+          groups: '',
+          accCodes: accountCodes,
+        }}
+        setEditingRow={setEditingRow}
+        masterData={{ depts: [], deptGroups: [], groups: { L4: [] }, accCodes: [] }}
+        modalAccCategory="ALL"
+        setModalAccCategory={() => {}}
+        onOpenDetailSelector={() => {}}
+        onApply={() => {}}
+        onClose={() => {}}
+      />,
+    );
+
+    const accountCodesInput = screen.getByRole('textbox', { name: 'Account codes' });
+    expect(accountCodesInput).toHaveValue(accountCodes);
+    expect(document.querySelector('[data-slot="badge"]')).not.toBeInTheDocument();
+
+    const updatedCodes = `${accountCodes}, 7000000`;
+    fireEvent.change(accountCodesInput, { target: { value: updatedCodes } });
+    expect(setEditingRow).toHaveBeenCalledWith(
+      expect.objectContaining({ accCodes: updatedCodes }),
+    );
   });
 });

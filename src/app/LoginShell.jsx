@@ -1,209 +1,140 @@
-import React, { useMemo, useState } from 'react';
-import App from './App.jsx';
+import { useTranslation, useLanguage } from "@/lib/i18n.js";
+import React, { Suspense, lazy, useCallback, useSyncExternalStore } from 'react';
+import { BarChart3 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge.jsx';
+import { Skeleton } from '@/components/ui/skeleton.jsx';
 import {
-  clearCarmenSession,
-  fetchBusinessUnitsByUsername,
-  getBusinessUnitDisplayName,
-  getBusinessUnitTenant,
-  getStoredCarmenSession,
-  loginWithCarmenCredentials,
-  saveCarmenSession,
-} from '../features/report/lib/reportApi.js';
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog.jsx';
+import { clearCarmenSession, getStoredCarmenSession } from '../features/report/lib/carmenSession.js';
+import {
+  clearCarmenApiFailure,
+  getCarmenApiFailure,
+  reportCarmenApiFailure,
+  subscribeToCarmenApiFailure,
+} from '../lib/carmenApiFailure.js';
+import { initializeTheme } from '../lib/theme.js';
+import LanguagePreference from './LanguagePreference.jsx';
 
-const languageList = [
-  {
-    value: 'en-US',
-    label: 'English (United States)',
-  },
-  {
-    value: 'th-TH',
-    label: 'ไทย',
-  },
-  {
-    value: 'vi-VN',
-    label: 'Việt Nam',
-  },
-];
 
+const App = lazy(() => import('./App.jsx'));
+const LoginForm = lazy(() => import('./LoginForm.jsx'));
+const LoginFeatures = lazy(() => import('./LoginFeatures.jsx'));
 const hasSession = () => Boolean(getStoredCarmenSession()?.accessToken);
+const subscribeToCarmenSession = (listener) => {
+  if (typeof window === 'undefined') return () => {};
+  window.addEventListener('storage', listener);
+  window.addEventListener('carmen-session-changed', listener);
+  return () => {
+    window.removeEventListener('storage', listener);
+    window.removeEventListener('carmen-session-changed', listener);
+  };
+};
 
 export default function LoginShell() {
-  const [isAuthenticated, setIsAuthenticated] = useState(hasSession);
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [language, setLanguage] = useState('en-US');
-  const [businessUnits, setBusinessUnits] = useState([]);
-  const [selectedTenant, setSelectedTenant] = useState('');
-  const [isLoadingBusinessUnits, setIsLoadingBusinessUnits] = useState(false);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [error, setError] = useState('');
-  const [usernameUsedForBusinessUnits, setUsernameUsedForBusinessUnits] = useState('');
-
-  React.useEffect(() => {
-    const syncSessionState = () => setIsAuthenticated(hasSession());
-    window.addEventListener('storage', syncSessionState);
-    window.addEventListener('carmen-session-changed', syncSessionState);
-    return () => {
-      window.removeEventListener('storage', syncSessionState);
-      window.removeEventListener('carmen-session-changed', syncSessionState);
-    };
+  const language = useLanguage();
+  const t = useTranslation();
+  React.useEffect(() => { document.documentElement.lang = language; }, [language]);
+  const isAuthenticated = useSyncExternalStore(
+    subscribeToCarmenSession,
+    hasSession,
+    () => false,
+  );
+  const apiFailure = useSyncExternalStore(
+    subscribeToCarmenApiFailure,
+    getCarmenApiFailure,
+    () => null,
+  );
+  const sessionNotice = apiFailure?.kind === 'session' ? {
+    title: 'Session expired',
+    message: 'Your Carmen session has expired. Please sign in again.',
+    action: 'Back to sign in',
+  } : null;
+  // The authenticated workspace already renders API failures inline. Keep the
+  // global modal for sign-in failures only so it cannot block in-app guides.
+  const apiErrorNotice = !isAuthenticated && apiFailure && apiFailure.kind !== 'session' ? {
+    title: 'API request failed',
+    message: apiFailure.message,
+    action: 'Close',
+  } : null;
+  const handleLogout = useCallback(() => {
+    clearCarmenSession();
+    clearCarmenApiFailure();
+  }, []);
+  const handleAuthenticated = useCallback(() => {
+    clearCarmenApiFailure();
   }, []);
 
-  const selectedBusinessUnit = useMemo(
-    () => businessUnits.find((item) => getBusinessUnitTenant(item) === selectedTenant) || null,
-    [businessUnits, selectedTenant],
+  React.useEffect(() => {
+    initializeTheme();
+  }, []);
+
+  React.useEffect(() => {
+    const handleApiError = (event) => {
+      if (!isAuthenticated) return;
+      if (event?.detail?.kind === 'session') clearCarmenSession();
+      reportCarmenApiFailure(event?.detail || {});
+    };
+
+    window.addEventListener('carmen-api-error', handleApiError);
+    return () => window.removeEventListener('carmen-api-error', handleApiError);
+  }, [isAuthenticated]);
+
+  const content = isAuthenticated ? (
+      <Suspense fallback={<div className="flex min-h-dvh items-center justify-center bg-background text-sm text-muted-foreground">{t("Loading Carmen Blue Financial Report...")}</div>}>
+        <App
+          onLogout={handleLogout}
+        />
+      </Suspense>
+  ) : (
+    <main className="relative min-h-dvh bg-background text-foreground">
+      <header className="absolute top-4 right-4 z-10 sm:right-6">
+        <LanguagePreference compact />
+      </header>
+      <div className="mx-auto flex min-h-dvh max-w-5xl items-center px-4 py-20 sm:px-6 lg:px-8 lg:py-6">
+        <div className="grid w-full gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
+          <section className="order-2 hidden flex-col justify-center gap-8 lg:flex">
+            <header className="login-enter-from-right max-w-2xl space-y-5">
+              <Badge variant="outline" className="w-fit rounded-full px-3 py-1"><BarChart3 className="size-3.5" />Carmen Blue Financial Report</Badge>
+              <div className="space-y-4">
+                <h1 className="max-w-xl text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl lg:text-5xl">{t("A focused workspace for financial reporting.")}</h1>
+                <p className="max-w-xl text-base leading-7 text-pretty text-muted-foreground">{t("Sign in to review reports, adjust report structure, and manage access in one consistent workspace.")}</p>
+              </div>
+            </header>
+            <Suspense fallback={<Skeleton className="h-56 w-full max-w-2xl rounded-xl" aria-hidden="true" />}>
+              <LoginFeatures />
+            </Suspense>
+          </section>
+          <Suspense fallback={<Skeleton className="order-1 h-148 w-full max-w-md justify-self-center self-center rounded-xl lg:justify-self-start" aria-label={t("Loading sign-in form")} />}>
+            <LoginForm onAuthenticated={handleAuthenticated} />
+          </Suspense>
+        </div>
+      </div>
+    </main>
   );
 
-  const loadBusinessUnits = async () => {
-    const trimmedUserName = username.trim();
-    if (!trimmedUserName) return;
-    if (trimmedUserName === usernameUsedForBusinessUnits) return;
-
-    setError('');
-    setIsLoadingBusinessUnits(true);
-    try {
-      const items = await fetchBusinessUnitsByUsername(trimmedUserName);
-      setBusinessUnits(items);
-      setUsernameUsedForBusinessUnits(trimmedUserName);
-      const defaultItem = items.find((item) => item?.IsDefault === true) || items[0] || null;
-      setSelectedTenant(defaultItem ? getBusinessUnitTenant(defaultItem) : '');
-      if (!defaultItem) {
-        setError('No business unit found for this username.');
-      }
-    } catch (fetchError) {
-      setBusinessUnits([]);
-      setSelectedTenant('');
-      setError(fetchError?.message || 'Unable to load business units.');
-    } finally {
-      setIsLoadingBusinessUnits(false);
-    }
-  };
-
-  const onUsernameChange = (event) => {
-    const next = event.target.value;
-    setUsername(next);
-    if (next.trim() !== usernameUsedForBusinessUnits) {
-      setBusinessUnits([]);
-      setSelectedTenant('');
-    }
-  };
-
-  const handleLogin = async (event) => {
-    event.preventDefault();
-    const trimmedUserName = username.trim();
-    if (!trimmedUserName || !password || !selectedTenant) return;
-
-    setError('');
-    setIsLoggingIn(true);
-    try {
-      const loginResult = await loginWithCarmenCredentials({
-        userName: trimmedUserName,
-        password,
-        tenant: selectedTenant,
-        language,
-      });
-      saveCarmenSession({
-        accessToken: loginResult.accessToken,
-        username: trimmedUserName,
-        businessUnit: {
-          description: selectedBusinessUnit
-            ? getBusinessUnitDisplayName(selectedBusinessUnit)
-            : selectedTenant,
-          tenant: selectedTenant,
-        },
-        user: loginResult.user,
-      });
-      setIsAuthenticated(true);
-    } catch (loginError) {
-      clearCarmenSession();
-      setError(loginError?.message || 'Login failed.');
-    } finally {
-      setIsLoggingIn(false);
-    }
-  };
-
-  if (isAuthenticated) {
-    return <App onLogout={() => {
-      clearCarmenSession();
-      setIsAuthenticated(false);
-      setPassword('');
-    }}
-    />;
-  }
-
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-      <form onSubmit={handleLogin} className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-lg p-6 space-y-4">
-        <h1 className="text-xl font-black text-slate-800">Carmen BI Login</h1>
-
-        <label className="block text-sm font-semibold text-slate-700">
-          Username
-          <input
-            type="text"
-            value={username}
-            onChange={onUsernameChange}
-            onBlur={loadBusinessUnits}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            autoComplete="username"
-          />
-        </label>
-
-        <label className="block text-sm font-semibold text-slate-700">
-          Password
-          <input
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            autoComplete="current-password"
-          />
-        </label>
-
-        <label className="block text-sm font-semibold text-slate-700">
-          Business Unit
-          <select
-            value={selectedTenant}
-            onChange={(event) => setSelectedTenant(event.target.value)}
-            disabled={!username.trim() || isLoadingBusinessUnits || businessUnits.length === 0}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
-          >
-            <option value="">{isLoadingBusinessUnits ? 'Loading...' : 'Select Business Unit'}</option>
-            {businessUnits.map((item) => {
-              const tenant = getBusinessUnitTenant(item);
-              return (
-                <option key={tenant} value={tenant}>
-                  {getBusinessUnitDisplayName(item)}
-                </option>
-              );
-            })}
-          </select>
-        </label>
-
-        <label className="block text-sm font-semibold text-slate-700">
-          Language
-          <select
-            value={language}
-            onChange={(event) => setLanguage(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          >
-            {languageList.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        {error && <p className="text-sm font-semibold text-red-600">{error}</p>}
-
-        <button
-          type="submit"
-          disabled={!username.trim() || !password || !selectedTenant || isLoggingIn}
-          className="w-full rounded-lg bg-blue-600 text-white py-2.5 text-sm font-bold disabled:bg-slate-300"
-        >
-          {isLoggingIn ? 'Signing in...' : 'Sign in'}
-        </button>
-      </form>
-    </div>
+    <>
+      {content}
+      <AlertDialog open={Boolean(sessionNotice || apiErrorNotice)} onOpenChange={(open) => !open && clearCarmenApiFailure()}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t(sessionNotice?.title || apiErrorNotice?.title)}</AlertDialogTitle>
+            <AlertDialogDescription>{t(sessionNotice?.message || apiErrorNotice?.message)}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={clearCarmenApiFailure}>
+              {t(sessionNotice?.action || apiErrorNotice?.action)}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

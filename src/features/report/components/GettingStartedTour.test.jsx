@@ -1,0 +1,118 @@
+import React from "react";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import GettingStartedTour from "./GettingStartedTour.jsx";
+
+describe("GettingStartedTour", () => {
+  afterEach(() => {
+    Object.defineProperty(window, "innerWidth", { value: 1024, configurable: true });
+  });
+
+  it("guides admins through the current report actions and filters", () => {
+    const onStepChange = vi.fn();
+    document.body.innerHTML = '<button data-tour="reports">Reports</button>';
+
+    const { rerender } = render(
+      <GettingStartedTour
+        canSetup
+        open
+        stepIndex={0}
+        onStepChange={onStepChange}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Choose a report")).toBeInTheDocument();
+    expect(screen.getByTestId("tour-backdrop")).toHaveClass(
+      "fixed",
+      "inset-0",
+      "bg-foreground/35",
+    );
+    expect(screen.getByRole("dialog", { name: "Choose a report" })).toHaveClass(
+      "top-1/2",
+      "left-1/2",
+      "-translate-x-1/2",
+      "-translate-y-1/2",
+    );
+    expect(document.querySelector('[data-tour="reports"]')).toHaveAttribute(
+      "data-tour-active",
+      "true",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(onStepChange).toHaveBeenCalledWith(1);
+    document.body.insertAdjacentHTML(
+      "afterbegin",
+      '<div data-tour="report-actions">New Report · Import Excel · Edit</div>',
+    );
+    rerender(
+      <GettingStartedTour
+        canSetup
+        open
+        stepIndex={1}
+        onStepChange={onStepChange}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Manage reports")).toBeInTheDocument();
+    expect(document.querySelector('[data-tour="report-actions"]')).toHaveAttribute("data-tour-active", "true");
+
+    document.querySelector('[data-tour="report-actions"]').remove();
+    document.body.insertAdjacentHTML("afterbegin", '<div data-tour="report-filters">Filters</div>');
+    rerender(
+      <GettingStartedTour
+        canSetup
+        open
+        stepIndex={2}
+        onStepChange={onStepChange}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Filter and export")).toBeInTheDocument();
+    expect(document.querySelector('[data-tour="report-filters"]')).toHaveAttribute("data-tour-active", "true");
+  });
+
+  it("renders an accessible dialog title on mobile", () => {
+    Object.defineProperty(window, "innerWidth", { value: 390, configurable: true });
+    document.body.innerHTML = '<div data-tour="report-actions">Actions</div><div data-tour="report-filters">Filters</div>';
+
+    render(
+      <GettingStartedTour
+        canSetup
+        open
+        stepIndex={0}
+        onStepChange={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("dialog", { name: "Manage reports" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Getting started · 1 of 2")).toBeInTheDocument();
+  });
+
+  it("anchors the desktop guide to the viewport from inside an animated pane", () => {
+    document.body.innerHTML = '<button data-tour="setup-details">Report details</button>';
+    const onClose = vi.fn();
+    const { container } = render(
+      <section className="app-pane-enter-from-right">
+        <GettingStartedTour
+          canSetup
+          steps={[{ target: "setup-details", title: "Define the report", description: "Set details." }]}
+          open
+          stepIndex={0}
+          onStepChange={vi.fn()}
+          onClose={onClose}
+        />
+      </section>,
+    );
+
+    expect(container.contains(screen.getByRole("dialog", { name: "Define the report" }))).toBe(false);
+    expect(screen.getByRole("dialog", { name: "Define the report" }).parentElement).toBe(document.body);
+    expect(container.contains(screen.getByTestId("tour-backdrop"))).toBe(false);
+    expect(screen.getByTestId("tour-backdrop").parentElement).toBe(document.body);
+    fireEvent.click(screen.getByTestId("tour-backdrop"));
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+});

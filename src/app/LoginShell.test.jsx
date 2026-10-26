@@ -1,0 +1,141 @@
+import React from 'react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { hydrateRoot } from 'react-dom/client';
+import { renderToString } from 'react-dom/server';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import LoginShell from './LoginShell.jsx';
+import { clearCarmenApiFailure, reportCarmenApiFailure } from '../lib/carmenApiFailure.js';
+import { clearCarmenSession } from '../features/report/lib/carmenSession.js';
+import { fetchBusinessUnitsByUsername, loginWithCarmenCredentials } from '../features/report/lib/reportApi.js';
+
+vi.mock('./App.jsx', () => ({
+  default: () => <main>Report workspace</main>,
+}));
+
+vi.mock('../features/report/lib/reportApi.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  fetchBusinessUnitsByUsername: vi.fn(),
+  loginWithCarmenCredentials: vi.fn(),
+}));
+
+describe('LoginShell', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    clearCarmenApiFailure();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('renders the login hero and form content', async () => {
+    render(<LoginShell />);
+
+    expect(screen.getByText('Carmen Blue Financial Report')).toBeInTheDocument();
+    expect(await screen.findByText('Carmen Blue Financial Report Login')).toBeInTheDocument();
+    expect(await screen.findByText('Report viewing')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
+    const languageButton = screen.getByRole('button', { name: 'EN' });
+    expect(languageButton.closest('header')).toHaveClass('right-4');
+    expect(languageButton).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'ไทย' }));
+    expect(screen.getByRole('button', { name: 'ไทย' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('ชื่อผู้ใช้')).toBeInTheDocument();
+  });
+
+  it('hydrates prerendered login markup without mismatch when a session is stored', async () => {
+    const preload = render(<LoginShell />);
+    await screen.findByRole('button', { name: 'Sign in' });
+    preload.unmount();
+
+    window.localStorage.setItem('carmen_access_token', 'token');
+    const browserWindow = window;
+    vi.stubGlobal('window', undefined);
+    const serverMarkup = renderToString(<LoginShell />);
+    vi.stubGlobal('window', browserWindow);
+
+    const container = document.createElement('div');
+    container.innerHTML = serverMarkup;
+    document.body.appendChild(container);
+    const recoverableErrors = [];
+    let root;
+
+    await act(async () => {
+      root = hydrateRoot(container, <LoginShell />, {
+        onRecoverableError: (error) => recoverableErrors.push(error),
+      });
+    });
+
+    await waitFor(() => expect(screen.getByText('Report workspace')).toBeInTheDocument());
+    expect(recoverableErrors).toEqual([]);
+
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
+  it('logs in to the default business unit without showing login dropdowns', async () => {
+    fetchBusinessUnitsByUsername.mockResolvedValue([
+      { Tenant: 'tenant-a', Description: 'Business Unit A', IsDefault: false },
+      { Tenant: 'tenant-b', Description: 'Business Unit B', IsDefault: true },
+    ]);
+    loginWithCarmenCredentials.mockResolvedValue({ accessToken: 'token', user: { id: 'admin' } });
+    render(<LoginShell />);
+
+    const usernameInput = await screen.findByLabelText('Username');
+    fireEvent.change(usernameInput, { target: { value: 'admin' } });
+    await waitFor(() => expect(usernameInput).toHaveValue('admin'));
+    fireEvent.blur(usernameInput);
+
+    await waitFor(() => expect(fetchBusinessUnitsByUsername).toHaveBeenCalledWith('admin'));
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'test-password' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    await screen.findByText('Report workspace');
+    expect(loginWithCarmenCredentials).toHaveBeenCalledWith({
+      userName: 'admin', password: 'test-password', tenant: 'tenant-b', language: 'EN',
+    });
+  });
+
+  it('shows a session-expired popup and returns to login for a 401/403 session failure', async () => {
+    window.localStorage.setItem('carmen_access_token', 'token');
+    render(<LoginShell />);
+
+    expect(await screen.findByText('Report workspace')).toBeInTheDocument();
+    window.dispatchEvent(new CustomEvent('carmen-api-error', {
+      detail: { kind: 'session', status: 401, message: 'Your Carmen session expired.' },
+    }));
+
+    expect(await screen.findByRole('alertdialog', { name: 'Session expired' })).toBeInTheDocument();
+    expect(window.localStorage.getItem('carmen_access_token')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to sign in' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog', { name: 'Session expired' })).not.toBeInTheDocument());
+    expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument();
+  });
+
+  it('keeps non-session API errors non-blocking inside the authenticated workspace', async () => {
+    window.localStorage.setItem('carmen_access_token', 'token');
+    render(<LoginShell />);
+
+    expect(await screen.findByText('Report workspace')).toBeInTheDocument();
+    window.dispatchEvent(new CustomEvent('carmen-api-error', {
+      detail: { kind: 'api', status: 500, message: 'Carmen API: Database unavailable.' },
+    }));
+
+    expect(screen.queryByRole('alertdialog', { name: 'API request failed' })).not.toBeInTheDocument();
+    expect(screen.getByText('Report workspace')).toBeInTheDocument();
+    expect(window.localStorage.getItem('carmen_access_token')).toBe('token');
+  });
+
+  it('shows the popup even when the API fails before LoginShell mounts', async () => {
+    window.localStorage.setItem('carmen_access_token', 'token');
+    reportCarmenApiFailure({ kind: 'session', status: 401, message: 'Your Carmen session expired.' });
+    clearCarmenSession();
+
+    render(<LoginShell />);
+
+    expect(await screen.findByRole('alertdialog', { name: 'Session expired' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to sign in' }));
+    expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument();
+  });
+});

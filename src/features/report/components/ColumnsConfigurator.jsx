@@ -1,149 +1,880 @@
-import React from 'react';
-import { ArrowLeft, ArrowRight, Percent, Plus, Trash2 } from 'lucide-react';
-import { findBrokenReferences } from '../lib/reportLogic.js';
+import { useTranslation } from "@/lib/i18n.js";
+import React from "react";
+import { ScrollArea as ScrollAreaPrimitive } from "radix-ui";
+import { ScrollBar } from "@/components/ui/scroll-area.jsx";
+import { Copy, Eye, EyeOff, GripVertical, Trash2 } from "lucide-react";
+import { cn } from "@/lib/utils.js";
+import { Button } from "@/components/ui/button.jsx";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card.jsx";
+import { Checkbox } from "@/components/ui/checkbox.jsx";
+import { Input } from "@/components/ui/input.jsx";
+import { Textarea } from "@/components/ui/textarea.jsx";
+import { Badge } from "@/components/ui/badge.jsx";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select.jsx";
+import {
+  findBrokenReferences,
+  getReportDisplayColumns,
+  moveDisplayColumnsAndRewriteReferences,
+} from "../lib/reportLogic.js";
+import useDragReorder from "../hooks/useDragReorder.js";
+import MoveToPositionDialog from "./MoveToPositionDialog.jsx";
+
+const EMPTY_REPORT_OPTIONS = {};
+
+const COLUMN_CLASY_MAP = {
+  formula: {
+    label: "Formula",
+    badgeClass: "border-border bg-muted text-foreground",
+  },
+  percent: {
+    label: "Mix %",
+    badgeClass: "border-border bg-muted text-foreground",
+  },
+  data: {
+    label: "Data",
+    badgeClass: "border-border bg-muted text-foreground",
+  },
+};
+
+const getColumnLogicType = (column) =>
+  column.isFormula ? "FORMULA" : column.isPercent ? "MIX" : "DATA";
+
+export const buildColumnLogicTypeUpdates = (
+  column,
+  logicType,
+  columns,
+  defaultDataType,
+) => {
+  if (logicType === "FORMULA") {
+    return {
+      isFormula: true,
+      isPercent: false,
+      formatAsPercent: false,
+      formula: column.formula || "C1-C2",
+      targetCol: undefined,
+      yearMode: undefined,
+      periodMode: undefined,
+      type: undefined,
+    };
+  }
+
+  if (logicType === "MIX") {
+    const targetColumn = columns.find(
+      (candidate) => candidate.id !== column.id && !candidate.isPercent,
+    );
+    return {
+      isFormula: false,
+      isPercent: true,
+      formatAsPercent: false,
+      formula: "",
+      targetCol: targetColumn?.id || "",
+      yearMode: undefined,
+      periodMode: undefined,
+      type: undefined,
+    };
+  }
+
+  return {
+    isFormula: false,
+    isPercent: false,
+    formatAsPercent: false,
+    formula: "",
+    targetCol: "",
+    yearMode: "current",
+    periodMode: "current",
+    type: defaultDataType,
+  };
+};
 
 export default function ColumnsConfigurator({
   activeReport,
-  reportOptions = {},
+  reportOptions = EMPTY_REPORT_OPTIONS,
   handleAddCol,
+  handleDuplicateCol,
   handleUpdateCol,
-  moveCol,
+  updateActiveReport,
   handleDeleteCol,
+  setConfirmAction,
 }) {
-  const reportType = activeReport?.reportType || 'Monthly';
-  const allowedColumnTypes = reportType === 'Daily'
-    ? new Set(['DAC', 'PTD', 'DACBG', 'PTDBG'])
-    : new Set(['AC', 'ACC', 'BUD', 'BUDACC']);
-  const columnTypeOptions = (reportOptions.columnTypes?.length > 0
-    ? reportOptions.columnTypes
-    : [
-        { id: 'AC', label: 'AC' },
-        { id: 'ACC', label: 'ACC' },
-        { id: 'BUD', label: 'BUD' },
-        { id: 'BUDACC', label: 'BUDACC' },
-        { id: 'DAC', label: 'DAC' },
-        { id: 'PTD', label: 'PTD' },
-        { id: 'DACBG', label: 'DACBG' },
-        { id: 'PTDBG', label: 'PTDBG' },
-      ]).filter((option) => allowedColumnTypes.has(option.id));
-  const yearModeOptions = reportOptions.yearModes?.length > 0
-    ? reportOptions.yearModes
-    : [
-        { id: 'current', label: 'Current' },
-        { id: '-1', label: 'Prev' },
-      ];
-  const periodModeOptions = reportOptions.periodModes?.length > 0
-    ? reportOptions.periodModes
-    : [
-        { id: 'current', label: 'Current' },
-        { id: '-1', label: 'Prev' },
-        { id: 'FY', label: 'FY' },
-        { id: 'Q1', label: 'Q1' },
-        { id: 'Q2', label: 'Q2' },
-        { id: 'Q3', label: 'Q3' },
-        { id: 'Q4', label: 'Q4' },
-      ];
-  const hasIncompatibleColumns = activeReport.columns.some((col) => col.type && !allowedColumnTypes.has(String(col.type).trim().toUpperCase()));
-  const brokenColumnReferences = findBrokenReferences(activeReport).filter((issue) => issue.scope === 'column');
+  const t = useTranslation();
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const columnElementsRef = React.useRef(new Map());
+  const columnsCountRef = React.useRef(activeReport.columns.length);
 
+  React.useEffect(() => {
+    let scrollTimer;
+    if (activeReport.columns.length > columnsCountRef.current) {
+      scrollTimer = setTimeout(() => {
+        const cards = document.querySelectorAll(".column-card");
+        if (cards.length > 0) {
+          const lastCard = cards[cards.length - 1];
+          lastCard.scrollIntoView({
+            behavior: "smooth",
+            block: "nearest",
+            inline: "end",
+          });
+          const input = lastCard.querySelector("input");
+          if (input) {
+            input.focus();
+            input.select();
+          }
+        }
+      }, 50);
+    }
+    columnsCountRef.current = activeReport.columns.length;
+    return () => clearTimeout(scrollTimer);
+  }, [activeReport.columns.length]);
+
+  const defaultDataType = activeReport.columns.some((column) => ["DAC", "PTD"].includes(String(column.type).toUpperCase())) ? "DAC" : "AC";
+  const supportedColumnTypes = new Set(["DAC", "PTD", "YTD", "DACBG", "PTDBG", "YTDBG", "AC", "ACC", "BC", "BCC", "BUD", "BUDACC"]);
+  const columnTypeOptions = (
+    reportOptions.columnTypes?.length > 0
+      ? reportOptions.columnTypes
+      : [
+          { id: "DAC", label: "DAC" },
+          { id: "PTD", label: "PTD" },
+          { id: "YTD", label: "YTD" },
+          { id: "AC", label: "AC" },
+          { id: "ACC", label: "ACC" },
+          { id: "DACBG", label: "DACBG" },
+          { id: "PTDBG", label: "PTDBG" },
+          { id: "YTDBG", label: "YTDBG" },
+          { id: "BC", label: "BC" },
+          { id: "BCC", label: "BCC" },
+        ]
+  ).filter((option) => supportedColumnTypes.has(String(option.id).toUpperCase()));
+  const logicTypeLabels = new Map(
+    (reportOptions.columnLogicTypes?.length > 0
+      ? reportOptions.columnLogicTypes
+      : [
+          { id: "DATA", label: "Data" },
+          { id: "FORMULA", label: "Formula" },
+          { id: "MIX", label: "Mix %" },
+        ]
+    ).map((option) => [String(option.id).toUpperCase(), option.label]),
+  );
+  const logicTypeOptions = Array.from(logicTypeLabels, ([id, label]) => ({
+    id,
+    label,
+  }));
+  const yearModeOptions =
+    reportOptions.yearModes?.length > 0
+      ? reportOptions.yearModes
+      : [
+          { id: "current", label: "Current" },
+          { id: "-1", label: "Prev" },
+          { id: "+1", label: "Next" },
+          { id: "specific", label: "Specific" },
+        ];
+  const periodModeOptions =
+    reportOptions.periodModes?.length > 0
+      ? reportOptions.periodModes
+      : [
+          { id: "current", label: "Period (Parameter)" },
+          { id: "-1", label: "Period -1" },
+          { id: "Q1", label: "Q1" },
+          { id: "Q2", label: "Q2" },
+          { id: "Q3", label: "Q3" },
+          { id: "Q4", label: "Q4" },
+          ...Array.from({ length: 12 }, (_, index) => {
+            const period = String(index + 1).padStart(2, "0");
+            return {
+              id: `P${period}`,
+              label: `P${period} (Period ${index + 1})`,
+            };
+          }),
+        ];
+  const hasUnsupportedColumns = activeReport.columns.some(
+    (col) =>
+      !col.isFormula &&
+      !col.isPercent &&
+      col.type &&
+      !supportedColumnTypes.has(String(col.type).trim().toUpperCase()),
+  );
+  const brokenColumnReferences = React.useMemo(
+    () =>
+      findBrokenReferences(activeReport).filter(
+        (issue) => issue.scope === "column",
+      ),
+    [activeReport],
+  );
+  const displayColumns = React.useMemo(
+    () => getReportDisplayColumns(activeReport),
+    [activeReport],
+  );
+  const columnIndexById = React.useMemo(
+    () =>
+      new Map(activeReport.columns.map((column, index) => [column.id, index])),
+    [activeReport.columns],
+  );
+  const normalizedSearch = searchQuery.trim().toLocaleLowerCase();
+  const matchingColumns = normalizedSearch
+    ? displayColumns.filter((column) => {
+        if (column.isDescription) {
+          return "description row description".includes(normalizedSearch);
+        }
+        const index = columnIndexById.get(column.id) ?? -1;
+        const logicType = getColumnLogicType(column);
+        return [
+          `c${index + 1}`,
+          column.id,
+          column.label,
+          logicType,
+          logicTypeLabels.get(logicType),
+          column.type,
+          column.formula,
+          column.targetCol,
+        ].join(" ").toLocaleLowerCase().includes(normalizedSearch);
+      })
+    : [];
+  const matchingColumnIds = React.useMemo(
+    () => new Set(matchingColumns.map((column) => column.id)),
+    [matchingColumns],
+  );
+  const firstMatchingColumnId = matchingColumns[0]?.id;
+  const displayColumnIds = displayColumns.map((column) => column.id);
+  const hiddenColumnCount = activeReport.columns.filter(
+    (column) => column.isActive === false,
+  ).length;
+  const reorderColumns = React.useCallback(
+    (fromIndex, toIndex) => {
+      updateActiveReport(
+        moveDisplayColumnsAndRewriteReferences(
+          activeReport,
+          fromIndex,
+          toIndex,
+        ),
+      );
+    },
+    [activeReport, updateActiveReport],
+  );
+  const changeColumnLogicType = React.useCallback(
+    (column, logicType) => {
+      const updates = buildColumnLogicTypeUpdates(
+        column,
+        logicType,
+        activeReport.columns,
+        defaultDataType,
+      );
+      updateActiveReport({
+        columns: activeReport.columns.map((candidate) =>
+          candidate.id === column.id ? { ...candidate, ...updates } : candidate,
+        ),
+      });
+    },
+    [activeReport.columns, defaultDataType, updateActiveReport],
+  );
+  const { announcement, containerRef, getHandleProps, getItemProps } =
+    useDragReorder({
+      items: displayColumnIds,
+      onReorder: reorderColumns,
+      axis: "horizontal",
+      itemLabel: (id) =>
+        id === "__description__" ? "Description column" : `column ${id}`,
+    });
+  React.useEffect(() => {
+    if (!normalizedSearch || !firstMatchingColumnId) return;
+    columnElementsRef.current.get(firstMatchingColumnId)?.scrollIntoView?.({
+      behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? "auto" : "smooth",
+      block: "nearest",
+      inline: "center",
+    });
+  }, [normalizedSearch, firstMatchingColumnId]);
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-purple-100 overflow-hidden flex-shrink-0">
-      <div className="p-3 bg-purple-50/80 flex items-center justify-between border-b border-purple-200">
-        <h3 className="text-xs font-black text-slate-800 flex items-center gap-2 uppercase tracking-widest">Columns Configurator</h3>
-        <div className="flex gap-2 flex-wrap justify-end">
-          <button onClick={() => handleAddCol('data')} className="px-2.5 py-1 bg-purple-600 text-white rounded text-[9px] font-black uppercase tracking-widest hover:bg-purple-700 shadow-sm">+ Data</button>
-          <button onClick={() => handleAddCol('formula')} className="px-2.5 py-1 bg-purple-500 text-white rounded text-[9px] font-black uppercase tracking-widest hover:bg-purple-600 shadow-sm">+ Formula</button>
-          <button onClick={() => handleAddCol('percent')} className="px-2.5 py-1 bg-purple-400 text-white rounded text-[9px] font-black uppercase tracking-widest hover:bg-purple-500 shadow-sm flex items-center gap-1"><Percent size={10} /> Mix %</button>
+    <Card className="w-full max-w-full min-h-0 overflow-hidden border border-border bg-card/95 shadow-none ring-0 pt-0">
+      <CardHeader className="border-b bg-card/95 px-4 py-4 sm:px-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-1.5">
+            <CardTitle className="flex flex-wrap items-center gap-2 text-base font-semibold tracking-tight text-foreground">
+              <span>{t("Columns Configurator")}</span>
+              <Badge variant="secondary" className="tabular-nums">
+                {activeReport.columns.length}{" "}{t("columns")}</Badge>
+              {hiddenColumnCount > 0 ? (
+                <Badge variant="outline" className="tabular-nums text-muted-foreground">
+                  {hiddenColumnCount}{" "}{t("hidden")}</Badge>
+              ) : null}
+            </CardTitle>
+            <CardDescription className="text-sm text-muted-foreground">{t("Drag for nearby changes, or choose an exact position for long moves.")}</CardDescription>
+          </div>
+          <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+            <div className="w-full sm:w-56">
+              <Input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder={t("Search columns…")}
+                aria-label={t("Search columns by reference, name, type, or formula")}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              {normalizedSearch ? (
+                <span className="whitespace-nowrap text-xs text-muted-foreground" aria-live="polite">
+                  {matchingColumns.length} {matchingColumns.length === 1 ? "match" : "matches"}
+                </span>
+              ) : null}
+              <Select value="" onValueChange={(value) => handleAddCol(value)}>
+                <SelectTrigger className="w-full sm:w-44" aria-label={t("+ Add column")}>
+                  <SelectValue placeholder={t("+ Add Column")} />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  <SelectItem value="data">{logicTypeLabels.get("DATA") || t("Data")}</SelectItem>
+                  <SelectItem value="formula">{logicTypeLabels.get("FORMULA") || t("Formula")}</SelectItem>
+                  <SelectItem value="percent">{logicTypeLabels.get("MIX") || t("Mix %")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </div>
-      </div>
-      {hasIncompatibleColumns && (
-        <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest bg-amber-50 text-amber-800 border-b border-amber-100">
-          {reportType} reports should only use compatible column types. Update any mismatched columns before saving.
-        </div>
-      )}
-      {brokenColumnReferences.length > 0 && (
-        <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest bg-red-50 text-red-700 border-b border-red-100">
-          Broken column references found. Fix {brokenColumnReferences.length} invalid reference(s) before saving.
-        </div>
-      )}
+      </CardHeader>
 
-      <div className="overflow-auto">
-        <table className="w-full text-left border-collapse min-w-max">
-          <thead className="sticky top-0 z-30 bg-purple-100 shadow-sm">
-            <tr className="text-purple-900 text-[9px] font-black uppercase tracking-widest">
-              <th className="p-2 border-r border-purple-200 w-24 text-center">Del</th>
-              <th className="p-2 border-r border-purple-200 w-20 text-center">Move</th>
-              <th className="p-2 border-r border-purple-200 w-40">Label</th>
-              <th className="p-2 border-r border-purple-200 w-24 text-center">Active</th>
-              <th className="p-2 border-r border-purple-200 w-24 text-center">Type</th>
-              <th className="p-2 border-r border-purple-200 w-28 text-center">Target</th>
-              <th className="p-2 border-r border-purple-200 w-24 text-center">Year</th>
-              <th className="p-2 border-r border-purple-200 w-24 text-center">Period</th>
-              <th className="p-2 border-r border-purple-200 w-16 text-center">Pct</th>
-              <th className="p-2 border-r border-purple-200 w-24 text-center">Width</th>
-            </tr>
-          </thead>
-          <tbody>
-            {activeReport.columns.map((col, idx) => (
-              <tr key={col.id} className="border-b border-purple-50 hover:bg-purple-50/40">
-                <td className="p-1 border-r border-purple-100 text-center">
-                  <button onClick={() => handleDeleteCol(col.id)} className="text-slate-300 hover:text-red-400 p-1"><Trash2 size={14} /></button>
-                </td>
-                <td className="p-1 border-r border-purple-100 text-center">
-                  <div className="flex items-center justify-center gap-1">
-                    <button onClick={() => moveCol(idx, 'left')} className="p-1 hover:bg-purple-50 rounded text-slate-400"><ArrowLeft size={12} /></button>
-                    <span className="text-[9px] font-bold text-purple-700 bg-purple-100 px-1 rounded">C{idx + 1}</span>
-                    <button onClick={() => moveCol(idx, 'right')} className="p-1 hover:bg-purple-50 rounded text-slate-400"><ArrowRight size={12} /></button>
-                  </div>
-                </td>
-                <td className="p-1 border-r border-purple-100">
-                  <input value={col.label} onChange={e => handleUpdateCol(col.id, 'label', e.target.value)} className="w-full text-[11px] font-bold border-b border-transparent focus:border-purple-200 outline-none mb-1 bg-transparent text-center text-slate-700" placeholder="Column Label" />
-                </td>
-                <td className="p-1 border-r border-purple-100 text-center">
-                  <input type="checkbox" checked={col.isActive} onChange={e => handleUpdateCol(col.id, 'isActive', e.target.checked)} />
-                </td>
-                <td className="p-1 border-r border-purple-100 text-center">
-                  <select value={col.type || (reportType === 'Daily' ? 'DAC' : 'AC')} onChange={e => handleUpdateCol(col.id, 'type', e.target.value)} className="w-full text-[9px] font-bold bg-purple-50 border border-purple-200 rounded p-1 outline-none text-purple-700">
-                    {columnTypeOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
-                    {col.type && !allowedColumnTypes.has(String(col.type).trim().toUpperCase()) && (
-                      <option value={col.type}>{col.type}</option>
-                    )}
-                  </select>
-                </td>
-                <td className="p-1 border-r border-purple-100 text-center">
-                  <select
-                    value={col.targetCol || ''}
-                    onChange={e => handleUpdateCol(col.id, 'targetCol', e.target.value)}
-                    className={`w-full text-[10px] font-bold bg-white rounded p-1 outline-none text-purple-800 border ${String(col.targetCol || '').includes('!REF!') || brokenColumnReferences.some((issue) => issue.id === col.id && issue.field === 'targetCol') ? 'border-red-400 bg-red-50' : 'border-purple-200'}`}
-                    title={brokenColumnReferences.some((issue) => issue.id === col.id && issue.field === 'targetCol')
-                      ? 'Reference Error! Please update the target column.'
-                      : ''}
+      <CardContent className="p-0 w-full overflow-hidden">
+        <p className="sr-only" aria-live="polite">
+          {announcement}
+        </p>
+        {hasUnsupportedColumns && (
+          <div className="border-b bg-amber-500/5 px-4 py-2 text-sm text-amber-700">{t("Unsupported column types may produce incomplete report data.")}</div>
+        )}
+        {brokenColumnReferences.length > 0 && (
+          <div className="border-b bg-destructive/5 px-4 py-2 text-sm text-destructive">{t("Broken column references found. These")}{" "}
+            {brokenColumnReferences.length}{t("invalid reference(s) may produce incomplete report data.")}</div>
+        )}
+
+        <ScrollAreaPrimitive.Root type="always" role="region" aria-label={t("Scrollable columns")} className="relative w-full overflow-hidden">
+          <ScrollAreaPrimitive.Viewport ref={containerRef} data-slot="columns-scroll-viewport" tabIndex={0} className="w-full outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <section className="flex w-max min-w-full gap-4 px-4 pt-1 pb-6">
+            {displayColumns.map((col, visualIndex) => {
+              if (col.isDescription) {
+                return (
+                  <section
+                    key={col.id}
+                    ref={(element) => {
+                      if (element) columnElementsRef.current.set(col.id, element);
+                      else columnElementsRef.current.delete(col.id);
+                    }}
+                    {...getItemProps(col.id)}
+                    data-testid="description-column-card"
+                    className={cn("column-card flex min-h-0 w-[310px] shrink-0 flex-col rounded-xl border border-border bg-card transition-[opacity,box-shadow,transform] duration-200 ease-out data-[dragging=true]:opacity-40 data-[drag-over=true]:ring-2 data-[drag-over=true]:ring-primary/40 motion-reduce:transition-none", normalizedSearch && matchingColumnIds.has(col.id) && "ring-2 ring-primary/40")}
                   >
-                    <option value="">-</option>
-                    {activeReport.columns.map(c => <option key={c.id} value={c.id}>{c.id}</option>)}
-                  </select>
-                </td>
-                <td className="p-1 border-r border-purple-100 text-center">
-                  <select value={col.yearMode || 'current'} onChange={e => handleUpdateCol(col.id, 'yearMode', e.target.value)} className="w-full text-[9px] font-bold bg-slate-50 border border-slate-200 rounded p-1 outline-none text-slate-700">
-                    {yearModeOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
-                  </select>
-                </td>
-                <td className="p-1 border-r border-purple-100 text-center">
-                  <select value={col.periodMode || 'current'} onChange={e => handleUpdateCol(col.id, 'periodMode', e.target.value)} className="w-full text-[9px] font-bold bg-slate-50 border border-slate-200 rounded p-1 outline-none text-slate-700">
-                    {periodModeOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
-                  </select>
-                </td>
-                <td className="p-1 border-r border-purple-100 text-center">
-                  <input type="checkbox" checked={col.isPercent || false} onChange={e => handleUpdateCol(col.id, 'isPercent', e.target.checked)} />
-                </td>
-                <td className="p-1 border-r border-purple-100 text-center">
-                  <input value={col.width || ''} onChange={e => handleUpdateCol(col.id, 'width', e.target.value)} type="number" placeholder="Auto" className="w-full text-[10px] text-right font-bold outline-none bg-transparent" />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+                    <header className="flex w-full flex-row items-center justify-between gap-2 overflow-hidden rounded-t-xl border-b border-border bg-muted/30 px-3 py-2.5">
+                      <h3 className="flex min-w-0 flex-1 items-center gap-1.5">
+                        <Badge
+                          variant="secondary"
+                          className="shrink-0 px-2 py-0.5 text-xs font-semibold"
+                        >{t("Description")}</Badge>
+                        <Badge
+                          variant="outline"
+                          className="shrink-0 rounded-md bg-muted px-1.5 py-0 text-xs font-medium text-muted-foreground"
+                        >{t("Label")}</Badge>
+                      </h3>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        {...getHandleProps(col.id, visualIndex)}
+                        className="h-7 w-7 shrink-0 cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
+                      >
+                        <GripVertical className="size-4" />
+                      </Button>
+                      <MoveToPositionDialog
+                        currentPosition={visualIndex + 1}
+                        itemCount={displayColumns.length}
+                        itemLabel="Description column"
+                        onMove={reorderColumns}
+                        triggerSize="icon-xs"
+                      />
+                    </header>
+                    <section className="space-y-2 p-4">
+                      <p className="text-sm font-semibold text-foreground">{t("Row description")}</p>
+                      <p className="text-xs leading-5 text-muted-foreground">{t("Display-only column. Moving it does not change C references or calculations.")}</p>
+                    </section>
+                  </section>
+                );
+              }
+
+              const idx = columnIndexById.get(col.id) ?? -1;
+              const fieldId = (field) => `${col.id}-${field}`;
+              const colClassy = col.isFormula
+                ? COLUMN_CLASY_MAP.formula
+                : col.isPercent
+                  ? COLUMN_CLASY_MAP.percent
+                  : COLUMN_CLASY_MAP.data;
+              const columnIssues = brokenColumnReferences.filter((issue) => issue.id === col.id);
+
+              return (
+                <section
+                  key={col.id}
+                  ref={(element) => {
+                    if (element) columnElementsRef.current.set(col.id, element);
+                    else columnElementsRef.current.delete(col.id);
+                  }}
+                  {...getItemProps(col.id)}
+                  data-testid="column-card"
+                  className={cn(
+                    "column-card flex min-h-0 w-[310px] shrink-0 flex-col rounded-xl border border-border bg-card transition-[opacity,box-shadow,transform] duration-200 ease-out data-[dragging=true]:opacity-40 data-[drag-over=true]:ring-2 data-[drag-over=true]:ring-primary/40 motion-reduce:transition-none",
+                    col.isActive === false && "border-dashed opacity-60",
+                    columnIssues.length > 0 && "border-destructive/60",
+                    normalizedSearch && matchingColumnIds.has(col.id) && "ring-2 ring-primary/40",
+                  )}
+                >
+                  {/* Card Header: identify, reorder, and control the column */}
+                  <div className="flex flex-row items-center justify-between border-b border-border bg-muted/60 px-3 py-2.5 rounded-t-xl gap-2 w-full overflow-hidden">
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                      <Badge
+                        variant="secondary"
+                        className="font-mono tabular-nums text-xs font-semibold px-2 py-0.5 shrink-0"
+                      >
+                        C{idx + 1}
+                      </Badge>
+                      <Badge
+                        variant="outline"
+                        className={`shrink-0 rounded-md px-1.5 py-0 text-xs font-medium ${colClassy.badgeClass}`}
+                      >
+                        {t(colClassy.label)}
+                      </Badge>
+                      <span
+                        className="truncate font-mono text-xs font-medium text-muted-foreground"
+                        title={col.id}
+                      >
+                        {col.id}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        variant="outline"
+                        size="icon-sm"
+                        className={
+                          col.isActive !== false
+                            ? "h-7 w-7 border-border bg-muted/60 text-muted-foreground hover:bg-muted/60 focus-visible:bg-muted/60 hover:text-foreground transition-colors duration-150"
+                            : "h-7 w-7 border-border bg-background text-muted-foreground hover:bg-muted/60 focus-visible:bg-muted/60"
+                        }
+                        aria-label={`${col.isActive !== false ? "Hide" : "Show"} column ${col.id}`}
+                        aria-pressed={col.isActive === false}
+                        title={`${col.isActive !== false ? "Hide" : "Show"} column ${col.id}`}
+                        onClick={() =>
+                          handleUpdateCol(
+                            col.id,
+                            "isActive",
+                            !(col.isActive !== false),
+                          )
+                        }
+                      >
+                        {col.isActive !== false ? (
+                          <Eye className="size-3.5" />
+                        ) : (
+                          <EyeOff className="size-3.5" />
+                        )}
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="icon-sm"
+                        className="h-7 w-7 border-destructive/30 bg-destructive/10 text-destructive hover:border-destructive/40 hover:bg-destructive/20"
+                        aria-label={`Delete column ${col.id}`}
+                        title={`Delete column ${col.id}`}
+                        onClick={() =>
+                          setConfirmAction({
+                            title: t("Delete column {id}?", { id: col.id }),
+                            msg: t("This permanently removes “{name}” and updates affected column references.", { name: col.label || col.id }),
+                            actionLabel: "Delete column",
+                            onConfirm: () => handleDeleteCol(col.id),
+                          })
+                        }
+                      >
+                        <Trash2 className="size-3.5 text-destructive" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon-sm"
+                        className="h-7 w-7"
+                        aria-label={`Duplicate column ${col.id}`}
+                        title={`Duplicate column ${col.id}`}
+                        onClick={() => handleDuplicateCol(col.id)}
+                      >
+                        <Copy className="size-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        {...getHandleProps(col.id, visualIndex)}
+                        className="h-7 w-7 cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
+                      >
+                        <GripVertical className="size-4" />
+                      </Button>
+                      <MoveToPositionDialog
+                        currentPosition={visualIndex + 1}
+                        itemCount={displayColumns.length}
+                        itemLabel={`column C${idx + 1}`}
+                        onMove={reorderColumns}
+                        triggerSize="icon-xs"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Card Content: Inputs and configurations */}
+                  <div className="p-4 space-y-4">
+                    {columnIssues.length > 0 && (
+                      <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1 text-xs text-destructive">{t("Broken")}{" "}{columnIssues.map((issue) => issue.field).join(', ')}{" "}{t("reference. Check the highlighted field.")}</p>
+                    )}
+                    <div className="space-y-1.5">
+                      <label
+                        htmlFor={fieldId("logic-type")}
+                        className="text-sm font-medium text-foreground"
+                      >{t("Logic type")}</label>
+                      <Select
+                        value={getColumnLogicType(col)}
+                        onValueChange={(value) =>
+                          changeColumnLogicType(col, value)
+                        }
+                      >
+                        <SelectTrigger
+                          id={fieldId("logic-type")}
+                          className="h-9 w-full text-sm"
+                        >
+                          <SelectValue placeholder={t("Logic type")} />
+                        </SelectTrigger>
+                        <SelectContent position="popper">
+                          {logicTypeOptions.map((option) => (
+                            <SelectItem key={option.id} value={option.id}>
+                              {t(option.label)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Label */}
+                    <div className="space-y-1.5">
+                      <label
+                        htmlFor={fieldId("label")}
+                        className="text-sm font-medium text-foreground"
+                      >{t("Column label")}</label>
+                      <Textarea
+                        id={fieldId("label")}
+                        value={col.label}
+                        onChange={(e) =>
+                          handleUpdateCol(col.id, "label", e.target.value.replace(/\r\n?/g, "\n").split("\n").slice(0, 2).join("\n"))
+                        }
+                        placeholder={t("Column label")}
+                        rows={2}
+                        className="min-h-16 resize-none text-sm"
+                      />
+                    </div>
+
+                    {col.isFormula ? (
+                      <div className="grid grid-cols-2 gap-3.5">
+                        {/* Formula (Span 2) */}
+                        <div className="col-span-2 space-y-1.5">
+                          <label
+                            htmlFor={fieldId("formula")}
+                            className="text-xs font-medium text-muted-foreground"
+                          >{t("Formula")}</label>
+                          <Input
+                            id={fieldId("formula")}
+                            value={col.formula || ""}
+                            aria-invalid={columnIssues.some((issue) => issue.field === 'formula')}
+                            onChange={(e) =>
+                              handleUpdateCol(col.id, "formula", e.target.value)
+                            }
+                            placeholder="e.g. C1-C2+C3"
+                            className={cn('h-9 font-mono text-sm', columnIssues.some((issue) => issue.field === 'formula') && 'border-destructive bg-destructive/5')}
+                          />
+                        </div>
+
+                        {/* Width */}
+                        <div className="space-y-1.5">
+                          <label
+                            htmlFor={fieldId("formula-width")}
+                            className="text-xs font-medium text-muted-foreground"
+                          >{t("Width (px)")}</label>
+                          <Input
+                            id={fieldId("formula-width")}
+                            value={col.width || ""}
+                            onChange={(e) =>
+                              handleUpdateCol(col.id, "width", e.target.value)
+                            }
+                            type="number"
+                            placeholder={t("Auto")}
+                            className="h-9 text-center text-sm"
+                          />
+                        </div>
+
+                        {/* Show data as percentage checkbox */}
+                        <div className="flex flex-col justify-center pl-2">
+                          <label className="flex items-center gap-2 cursor-pointer text-xs text-foreground/80 font-medium select-none">
+                            <Checkbox
+                              checked={col.formatAsPercent || false}
+                              onCheckedChange={(checked) =>
+                                handleUpdateCol(
+                                  col.id,
+                                  "formatAsPercent",
+                                  Boolean(checked),
+                                )
+                              }
+                            />
+                            <span>{t("Show as %")}</span>
+                          </label>
+                        </div>
+                      </div>
+                    ) : col.isPercent ? (
+                      <div className="grid grid-cols-2 gap-3.5">
+                        {/* Target Column (Span 2) */}
+                        <div className="col-span-2 space-y-1.5">
+                          <label
+                            htmlFor={fieldId("target-column")}
+                            className="text-xs font-medium text-muted-foreground"
+                          >{t("Target column")}</label>
+                          <Input
+                            id={fieldId("target-column")}
+                            value={col.targetCol || ""}
+                            onChange={(e) =>
+                              handleUpdateCol(
+                                col.id,
+                                "targetCol",
+                                e.target.value,
+                              )
+                            }
+                            placeholder="e.g. C1"
+                            className="h-9 font-mono text-sm"
+                          />
+                        </div>
+
+                        {/* Width */}
+                        <div className="col-span-2 space-y-1.5">
+                          <label
+                            htmlFor={fieldId("percent-width")}
+                            className="text-xs font-medium text-muted-foreground"
+                          >{t("Width (px)")}</label>
+                          <Input
+                            id={fieldId("percent-width")}
+                            value={col.width || ""}
+                            onChange={(e) =>
+                              handleUpdateCol(col.id, "width", e.target.value)
+                            }
+                            type="number"
+                            placeholder={t("Auto")}
+                            className="h-9 text-center text-sm"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-3.5">
+                        {/* Type */}
+                        <div className="space-y-1.5">
+                          <label
+                            htmlFor={fieldId("type")}
+                            className="text-xs font-medium text-muted-foreground"
+                          >{t("Type")}</label>
+                          <Select
+                            value={
+                              col.type || defaultDataType
+                            }
+                            onValueChange={(value) =>
+                              handleUpdateCol(col.id, "type", value)
+                            }
+                          >
+                            <SelectTrigger
+                              id={fieldId("type")}
+                              className="h-9 w-full text-sm"
+                            >
+                              <SelectValue placeholder={t("Type")} />
+                            </SelectTrigger>
+                            <SelectContent position="popper">
+                              {columnTypeOptions.map((option) => (
+                                <SelectItem key={option.id} value={option.id}>
+                                  {t(option.label)}
+                                </SelectItem>
+                              ))}
+                              {col.type &&
+                                !supportedColumnTypes.has(
+                                  String(col.type).trim().toUpperCase(),
+                                ) && (
+                                  <SelectItem value={col.type}>
+                                    {col.type}
+                                  </SelectItem>
+                                )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {['DAC', 'PTD', 'YTD', 'DACBG', 'PTDBG', 'YTDBG'].includes(String(col.type || '').toUpperCase()) && (
+                          <div className="space-y-1.5">
+                            <label htmlFor={fieldId('day-mode')} className="text-xs font-medium text-muted-foreground">{t("Day")}</label>
+                            <Select value={col.dayMode || 'current'} onValueChange={(value) => handleUpdateCol(col.id, 'dayMode', value)}>
+                              <SelectTrigger id={fieldId('day-mode')} className="h-9 w-full text-sm"><SelectValue placeholder={t("Day")} /></SelectTrigger>
+                              <SelectContent position="popper">
+                                <SelectItem value="current">{t("Day (Parameter)")}</SelectItem>
+                                <SelectItem value="-1">{t("Day -1 (Yesterday)")}</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
+                        {['DACBG', 'PTDBG', 'YTDBG', 'BC', 'BCC', 'BUD', 'BUDACC'].includes(String(col.type || '').toUpperCase()) && (
+                          <div className="space-y-1.5">
+                            <label htmlFor={fieldId('budget-revision')} className="text-xs font-medium text-muted-foreground">BudRev</label>
+                            <Select value={col.budRev || 'REV'} onValueChange={(value) => handleUpdateCol(col.id, 'budRev', value)}>
+                              <SelectTrigger id={fieldId('budget-revision')} className="h-9 w-full text-sm"><SelectValue placeholder={t("Revision")} /></SelectTrigger>
+                              <SelectContent position="popper">
+                                <SelectItem value="REV">REV (Parameter)</SelectItem>
+                                {['0', '1', '2', '3', '4'].map((revision) => <SelectItem key={revision} value={revision}>{t("Rev")} {revision}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
+                        {/* Target */}
+                        <div className="space-y-1.5">
+                          <label
+                            htmlFor={fieldId("target")}
+                            className="text-xs font-medium text-muted-foreground"
+                          >{t("Target")}</label>
+                          <Select
+                            value={col.targetCol || "__blank__"}
+                            onValueChange={(value) =>
+                              handleUpdateCol(
+                                col.id,
+                                "targetCol",
+                                value === "__blank__" ? "" : value,
+                              )
+                            }
+                          >
+                            <SelectTrigger
+                              id={fieldId("target")}
+                              className={`h-9 w-full text-sm ${
+                                String(col.targetCol || "").includes("!REF!") ||
+                                brokenColumnReferences.some(
+                                  (issue) =>
+                                    issue.id === col.id &&
+                                    issue.field === "targetCol",
+                                )
+                                  ? "border-destructive bg-destructive/5 text-destructive"
+                                  : ""
+                              }`}
+                            >
+                              <SelectValue placeholder="-" />
+                            </SelectTrigger>
+                            <SelectContent position="popper">
+                              <SelectItem value="__blank__">-</SelectItem>
+                              {activeReport.columns.map((column) => (
+                                <SelectItem key={column.id} value={column.id}>
+                                  {column.id}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {/* Year */}
+                        <div className="space-y-1.5">
+                          <label
+                            htmlFor={fieldId("year")}
+                            className="text-xs font-medium text-muted-foreground"
+                          >{t("Year")}</label>
+                          <Select
+                            value={col.yearMode || "current"}
+                            onValueChange={(value) =>
+                              handleUpdateCol(col.id, "yearMode", value)
+                            }
+                          >
+                            <SelectTrigger
+                              id={fieldId("year")}
+                              className="h-9 w-full text-sm"
+                            >
+                              <SelectValue placeholder={t("Year")} />
+                            </SelectTrigger>
+                            <SelectContent position="popper">
+                              {yearModeOptions.map((option) => (
+                                <SelectItem key={option.id} value={option.id}>
+                                  {t(option.label)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {col.yearMode === "specific" && (
+                            <Input
+                              aria-label={"Specific year for " + col.id}
+                              type="number"
+                              value={col.specificYear || ""}
+                              onChange={(event) =>
+                                handleUpdateCol(
+                                  col.id,
+                                  "specificYear",
+                                  event.target.value,
+                                )
+                              }
+                              placeholder="2026"
+                              className="mt-2 h-9 text-sm"
+                            />
+                          )}
+                        </div>
+
+                        {/* Period */}
+                        <div className="space-y-1.5">
+                          <label
+                            htmlFor={fieldId("period")}
+                            className="text-xs font-medium text-muted-foreground"
+                          >{t("Period")}</label>
+                          <Select
+                            value={col.periodMode || "current"}
+                            onValueChange={(value) =>
+                              handleUpdateCol(col.id, "periodMode", value)
+                            }
+                          >
+                            <SelectTrigger
+                              id={fieldId("period")}
+                              className="h-9 w-full text-sm"
+                            >
+                              <SelectValue placeholder={t("Period")} />
+                            </SelectTrigger>
+                            <SelectContent position="popper">
+                              {periodModeOptions.map((option) => (
+                                <SelectItem key={option.id} value={option.id}>
+                                  {t(option.label)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {/* Width */}
+                        <div className="col-span-2 space-y-1.5">
+                          <label
+                            htmlFor={fieldId("data-width")}
+                            className="text-xs font-medium text-muted-foreground"
+                          >{t("Width (px)")}</label>
+                          <Input
+                            id={fieldId("data-width")}
+                            value={col.width || ""}
+                            onChange={(e) =>
+                              handleUpdateCol(col.id, "width", e.target.value)
+                            }
+                            type="number"
+                            placeholder={t("Auto")}
+                            className="h-9 text-center text-sm"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              );
+            })}
+          </section>
+          </ScrollAreaPrimitive.Viewport>
+          <ScrollBar orientation="horizontal" className="rounded-full bg-muted data-horizontal:h-3 [&_[data-slot=scroll-area-thumb]]:bg-muted-foreground/60" />
+        </ScrollAreaPrimitive.Root>
+      </CardContent>
+    </Card>
   );
 }

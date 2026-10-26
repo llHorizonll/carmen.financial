@@ -1,37 +1,124 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation, getLocale } from "@/lib/i18n.js";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
-  FileText,
-  Printer, Menu, BarChart3,
-  ShieldCheck,
-  ZoomIn, ZoomOut, UploadCloud, Download, RefreshCw
-} from 'lucide-react';
+  FilePlus,
+  FileSpreadsheet,
+  PanelLeftClose,
+  PanelLeftOpen,
+  ChevronDown,
+  ChevronRight,
+  Check,
+  Monitor,
+  Type,
+  ZoomIn,
+  ZoomOut,
+  Download,
+  RefreshCw,
+  Printer,
+  LogOut,
+  MoonStar,
+  SunMedium,
+  AlertTriangle,
+  ArrowUp,
+  CircleHelp,
+  LoaderCircle,
+  Pencil,
+  Copy,
+  Trash2,
+} from "lucide-react";
 
-import DetailSelectorModal from '../features/report/components/DetailSelectorModal.jsx';
-import MultiSelectDropdown from '../features/report/components/MultiSelectDropdown.jsx';
-import ReportView from '../features/report/components/ReportView.jsx';
-import ReportSetup from '../features/report/components/ReportSetup.jsx';
-import AccessModal from '../features/report/components/AccessModal.jsx';
-import EditMappingModal from '../features/report/components/EditMappingModal.jsx';
-import usePersistentState from '../hooks/usePersistentState.js';
-import { getDefaultReports } from '../features/report/data/defaultReports.js';
-import { createBlankReport, createOcrReport } from '../features/report/data/reportTemplates.js';
+import { useIsMobile } from "@/hooks/use-mobile.js";
+import { Button } from "@/components/ui/button.jsx";
 import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card.jsx";
+import { Badge } from "@/components/ui/badge.jsx";
+import ReportGroupNavigation from "@/features/report/components/ReportGroupNavigation.jsx";
+import ReportHistory from "@/features/report/components/ReportHistory.jsx";
+import { Input } from "@/components/ui/input.jsx";
+import { Slider } from "@/components/ui/slider";
+import { ScrollArea } from "@/components/ui/scroll-area.jsx";
+import { Skeleton } from "@/components/ui/skeleton.jsx";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet.jsx";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover.jsx";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select.jsx";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog.jsx";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog.jsx";
+import {
+  applyShellTemplate,
+  DEFAULT_SHELL_TEMPLATE,
+  getStoredTheme,
+  setStoredTheme,
+} from "../lib/theme.js";
+
+import MultiSelectDropdown from "../features/report/components/MultiSelectDropdown.jsx";
+import LanguagePreference from "./LanguagePreference.jsx";
+import useBusinessUnitReports, { reportKey } from "../features/report/hooks/useBusinessUnitReports.js";
+import { BusinessUnitSelector, BusinessUnitReportList, BusinessUnitTargetDialog } from "../features/report/components/BusinessUnitReports.jsx";
+import usePersistentState from "../hooks/usePersistentState.js";
+import { getDefaultReports } from "../features/report/data/defaultReports.js";
+import { createBlankReport } from "../features/report/data/reportTemplates.js";
+import {
+  createCarmenReport,
   cloneCarmenReport,
   deleteCarmenReport,
+  fetchCarmenDimensions,
   fetchCarmenMasterData,
+  fetchCarmenReport,
   fetchCarmenReportData,
   fetchCarmenReportOptions,
   fetchCarmenReports,
   getStoredCarmenSession,
   isCarmenApiConfigured,
   saveCarmenReport,
-} from '../features/report/lib/reportApi.js';
+  saveCarmenReports,
+} from "../features/report/lib/reportApi.js";
+import { clearCarmenApiFailure } from "../lib/carmenApiFailure.js";
 import {
   THEMES,
   INITIAL_MASTER_DATA,
-  parseGlCsvText,
-  parseBudgetCsvText,
-  mergeAndSort,
   formatAutoPeriod,
   getIndentClass,
   cloneReport,
@@ -43,104 +130,192 @@ import {
   buildExcelHtml,
   findBrokenReferences,
   findRowMappingConflicts,
-} from '../features/report/lib/reportLogic.js';
+  rowDimensionsOverlap,
+  rowDepartmentsOverlap,
+  getLatestCreatedReport,
+} from "../features/report/lib/reportLogic.js";
+import { mergeCarmenMasterData } from "../features/report/lib/reportAdapters.js";
+import { normalizeAccLookupCode } from "../features/report/lib/normalizeCode.js";
+import {
+  canSetupFinancialReports,
+  canViewFinancialReports,
+  getAccessibleReports,
+} from "./reportAccess.js";
 
-const hasFinancialReportPermission = (user) => Boolean(user?.permissions?.financialReport);
+import ReportFiltersPanel from '../features/report/components/ReportFiltersPanel.jsx';
+import MappingConflictPreview from '../features/report/components/MappingConflictPreview.jsx';
 
-const canSetupFinancialReports = (user) => {
-  const permission = user?.permissions?.financialReport;
-  if (permission) {
-    return Boolean(permission.setup || permission.add || permission.update || permission.delete);
-  }
-  return user?.role === 'Admin';
-};
-
-const canViewFinancialReports = (user) => {
-  const permission = user?.permissions?.financialReport;
-  if (permission) {
-    return Boolean(permission.view || permission.setup || permission.add || permission.update || permission.delete);
-  }
-  return Boolean(user);
-};
-
-const getAccessibleReports = (reports, user) => {
-  if (!canViewFinancialReports(user)) return [];
-  if (canSetupFinancialReports(user)) return reports;
-  const userId = String(user?.id || '').trim();
-  return reports.filter((report) => {
-    if (report?.isActive === false) return false;
-    if (String(report?.owner || '').trim() === userId) return true;
-    if (Array.isArray(report?.assignedUsers) && report.assignedUsers.includes(userId)) return true;
-    return Array.isArray(report?.access) && report.access.some((item) => String(item?.userId || '').trim() === userId && item?.canView !== false);
-  });
-};
+const ReportView = React.lazy(
+  () => import("../features/report/components/ReportView.jsx"),
+);
+const ReportSetup = React.lazy(
+  () => import("../features/report/components/ReportSetup.jsx"),
+);
+const ExcelTemplateImportWizard = React.lazy(
+  () => import("../features/report/components/ExcelTemplateImportWizard.jsx"),
+);
+const EditMappingModal = React.lazy(
+  () => import("../features/report/components/EditMappingModal.jsx"),
+);
+const DetailSelectorModal = React.lazy(
+  () => import("../features/report/components/DetailSelectorModal.jsx"),
+);
+const GettingStartedTour = React.lazy(
+  () => import("../features/report/components/GettingStartedTour.jsx"),
+);
 
 const DEFAULT_REPORT_OPTIONS = {
   themes: [
-    { id: 'blue', label: 'Classic Blue' },
-    { id: 'green', label: 'Emerald Green' },
-    { id: 'gray', label: 'Slate Gray' },
+    { id: "blue", label: "Classic Blue" },
+    { id: "green", label: "Emerald Green" },
+    { id: "gray", label: "Slate Gray" },
   ],
   periodFormats: [
-    { id: 'standard', label: 'Standard (Period : YYYY-MM)' },
-    { id: 'year_month', label: 'Year-Month (YYYY-MM)' },
-    { id: 'numeric', label: 'Numeric Full (MM/YYYY)' },
-    { id: 'numeric_short', label: 'Numeric Short (MM/YY)' },
-    { id: 'short', label: 'Short Month + YYYY' },
-    { id: 'short_yy', label: 'Short Month + YY' },
-    { id: 'long', label: 'Long Month + YYYY' },
-    { id: 'month_only', label: 'Month Only' },
-    { id: 'day_month_year', label: 'Day Month Year' },
-    { id: 'end_of_month', label: 'End of Month' },
+    { id: "standard", label: "Standard (Period : 2026-02)" },
+    { id: "year_month", label: "Year-Month (2026-02)" },
+    { id: "numeric", label: "Numeric Full (02/2026)" },
+    { id: "numeric_short", label: "Numeric Short (02/26)" },
+    { id: "short", label: "Short Month + YYYY (Feb 2026)" },
+    { id: "short_yy", label: "Short Month + YY (Feb '26)" },
+    { id: "long", label: "Long Month + YYYY (February 2026)" },
+    { id: "month_only", label: "Month Only (February)" },
+    { id: "day_month_year", label: "Day Month Year (28 Feb 2026)" },
+    { id: "end_of_month", label: "End of Month (February 28, 2026)" },
   ],
   accountCategories: [
-    { id: 'ALL', label: 'All Categories' },
-    { id: 'I', label: 'Income / Expense' },
-    { id: 'B', label: 'Balance Sheet' },
+    { id: "ALL", label: "All Categories" },
+    { id: "I", label: "Income / Expense" },
+    { id: "B", label: "Balance Sheet" },
   ],
   columnTypes: [
-    { id: 'AC', label: 'Actual Current' },
-    { id: 'ACC', label: 'Actual YTD' },
-    { id: 'BUD', label: 'Budget Current' },
-    { id: 'BUDACC', label: 'Budget YTD' },
-    { id: 'DAC', label: 'Daily Actual Current' },
-    { id: 'PTD', label: 'Period To Date' },
-    { id: 'DACBG', label: 'Daily Budget Current' },
-    { id: 'PTDBG', label: 'Period To Date Budget' },
+    { id: "DAC", label: "DAC (Actual Daily)" },
+    { id: "PTD", label: "PTD" },
+    { id: "YTD", label: "YTD (Actual Year to Date by Day)" },
+    { id: "AC", label: "AC (Actual Month)" },
+    { id: "ACC", label: "ACC (Actual YTD)" },
+    { id: "DACBG", label: "DACBG" },
+    { id: "PTDBG", label: "PTDBG" },
+    { id: "YTDBG", label: "YTDBG (Budget Year to Date by Day)" },
+    { id: "BC", label: "BC (Budget Month)" },
+    { id: "BCC", label: "BCC (Budget YTD)" },
+  ],
+  columnLogicTypes: [
+    { id: "DATA", label: "Data" },
+    { id: "FORMULA", label: "Formula" },
+    { id: "MIX", label: "Mix %" },
   ],
   yearModes: [
-    { id: 'current', label: 'Current Year' },
-    { id: '-1', label: 'Previous Year' },
-    { id: '+1', label: 'Next Year' },
+    { id: "current", label: "Current Year" },
+    { id: "-1", label: "Previous Year" },
+    { id: "+1", label: "Next Year" },
+    { id: "specific", label: "Specific Year" },
   ],
   periodModes: [
-    { id: 'current', label: 'Current Period' },
-    { id: '-1', label: 'Previous Period' },
-    { id: 'FY', label: 'Fiscal Year' },
-    { id: 'Q1', label: 'Q1' },
-    { id: 'Q2', label: 'Q2' },
-    { id: 'Q3', label: 'Q3' },
-    { id: 'Q4', label: 'Q4' },
+    { id: "current", label: "Period (Parameter)" },
+    { id: "-1", label: "Period -1" },
+    { id: "Q1", label: "Q1" },
+    { id: "Q2", label: "Q2" },
+    { id: "Q3", label: "Q3" },
+    { id: "Q4", label: "Q4" },
+    ...Array.from({ length: 12 }, (_, index) => {
+      const period = String(index + 1).padStart(2, "0");
+      return { id: `P${period}`, label: `P${period} (Period ${index + 1})` };
+    }),
   ],
   rowTypes: [
-    { id: 'header', label: 'Header' },
-    { id: 'detail', label: 'Detail' },
-    { id: 'total', label: 'Total' },
+    { id: "header", label: "Header" },
+    { id: "detail", label: "Detail" },
+    { id: "total", label: "Total" },
   ],
-  indentLevels: Array.from({ length: 8 }, (_, index) => ({ id: String(index), label: `Level ${index}` })),
+  indentLevels: Array.from({ length: 8 }, (_, index) => ({
+    id: String(index),
+    label: `Level ${index}`,
+  })),
 };
 
-const DAILY_COLUMN_TYPES = new Set(['DAC', 'PTD', 'DACBG', 'PTDBG']);
-const MONTHLY_COLUMN_TYPES = new Set(['AC', 'ACC', 'BUD', 'BUDACC']);
+const DAILY_COLUMN_TYPES = new Set([
+  "DAC",
+  "PTD",
+  "YTD",
+  "DACBG",
+  "PTDBG",
+  "YTDBG",
+]);
+const SUPPORTED_COLUMN_TYPES = new Set([
+  ...DAILY_COLUMN_TYPES,
+  "AC",
+  "ACC",
+  "BUD",
+  "BC",
+  "BUDACC",
+  "BCC",
+]);
+const BUDGET_COLUMN_TYPES = new Set([
+  "BUD",
+  "BC",
+  "BUDACC",
+  "BCC",
+  "DACBG",
+  "PTDBG",
+  "YTDBG",
+]);
+const createCurrentYearValue = () => new Date().getFullYear().toString();
+const parseSelectedItems = (value) =>
+  String(value || "")
+    .split(",")
+    .flatMap((item) => {
+      const trimmed = item.trim();
+      return trimmed ? [trimmed] : [];
+    });
 const isSessionExpiredError = (error) =>
-  String(error?.message || '').toLowerCase().includes('session expired');
+  String(error?.message || "")
+    .toLowerCase()
+    .includes("session expired");
+const isBlockingSetupWarning = (warning) =>
+  String(warning || "").includes("cannot be mapped together");
+
+export const getSetupWarnings = (report, masterData) => {
+  if (!report) return [];
+  const warnings = [];
+  const describeItem = (scope, id) => {
+    const items = scope === "row" ? report.rows || [] : report.columns || [];
+    const index = items.findIndex((item) => item?.id === id);
+    const item = items[index];
+    const code = `${scope === "row" ? "R" : "C"}${index + 1}`;
+    const name = scope === "row" ? item?.desc : item?.label;
+    return `${scope === "row" ? "Row" : "Column"} ${code}${name ? ` (${name})` : ""}`;
+  };
+
+  findBrokenReferences(report).forEach((issue) => {
+    warnings.push(
+      `${describeItem(issue.scope, issue.id)}: ${issue.field} contains invalid reference ${issue.value}.`,
+    );
+  });
+  findRowMappingConflicts(report, masterData).forEach((issue) => {
+    warnings.push(`${describeItem("row", issue.id)}: ${issue.value}`);
+  });
+
+  (report.columns || []).forEach((column) => {
+    if (column?.isFormula || column?.isPercent) return;
+    const type = String(column?.type || "")
+      .trim()
+      .toUpperCase();
+    if (type && !SUPPORTED_COLUMN_TYPES.has(type)) {
+      warnings.push(
+        `${describeItem("column", column.id)}: unsupported type ${type}.`,
+      );
+    }
+  });
+
+  return [...new Set(warnings)];
+};
 
 const mergeOptionArrays = (fallbackItems, nextItems) => {
   const merged = new Map();
   fallbackItems.forEach((item) => merged.set(String(item.id), item));
   (Array.isArray(nextItems) ? nextItems : []).forEach((item) => {
     if (!item) return;
-    const id = String(item.id || item.Id || '').trim();
+    const id = String(item.id || item.Id || "").trim();
     if (!id) return;
     merged.set(id, { ...item, id });
   });
@@ -151,19 +326,35 @@ const mergeReportOptions = (defaults, loaded) => ({
   ...defaults,
   ...loaded,
   themes: mergeOptionArrays(defaults.themes, loaded?.themes),
-  periodFormats: mergeOptionArrays(defaults.periodFormats, loaded?.periodFormats),
-  accountCategories: mergeOptionArrays(defaults.accountCategories, loaded?.accountCategories),
+  periodFormats: mergeOptionArrays(
+    defaults.periodFormats,
+    loaded?.periodFormats,
+  ),
+  accountCategories: mergeOptionArrays(
+    defaults.accountCategories,
+    loaded?.accountCategories,
+  ),
   columnTypes: mergeOptionArrays(defaults.columnTypes, loaded?.columnTypes),
+  columnLogicTypes: mergeOptionArrays(
+    defaults.columnLogicTypes,
+    loaded?.columnLogicTypes,
+  ),
   yearModes: mergeOptionArrays(defaults.yearModes, loaded?.yearModes),
   periodModes: mergeOptionArrays(defaults.periodModes, loaded?.periodModes),
   rowTypes: mergeOptionArrays(defaults.rowTypes, loaded?.rowTypes),
   indentLevels: mergeOptionArrays(defaults.indentLevels, loaded?.indentLevels),
 });
 
-const REPORT_STORAGE_KEY = 'carmen_bi_reports_config_v5_16';
+const REPORT_STORAGE_KEY = "carmen_bi_reports_config_v5_23";
+const GETTING_STARTED_STORAGE_PREFIX = "carmen_bi_getting_started_v1:";
+const NO_REPORT_SELECTED = "__no_report_selected__";
+const NEUTRAL_BUTTON_CLASS =
+  "border-border bg-background text-foreground hover:bg-muted transition-colors duration-150";
+const NEUTRAL_FILTER_TRIGGER_CLASS =
+  "border-border bg-background text-foreground hover:bg-muted transition-colors duration-150";
 
 const readStoredReports = () => {
-  if (typeof window === 'undefined' || !window.localStorage) return null;
+  if (typeof window === "undefined" || !window.localStorage) return null;
   try {
     const raw = window.localStorage.getItem(REPORT_STORAGE_KEY);
     if (!raw) return null;
@@ -175,7 +366,7 @@ const readStoredReports = () => {
 };
 
 const writeStoredReports = (reports) => {
-  if (typeof window === 'undefined' || !window.localStorage) return;
+  if (typeof window === "undefined" || !window.localStorage) return;
   try {
     window.localStorage.setItem(REPORT_STORAGE_KEY, JSON.stringify(reports));
   } catch {
@@ -186,14 +377,49 @@ const writeStoredReports = (reports) => {
 // ============================================================================
 // 1. MAIN APPLICATION
 // ============================================================================
+const FONT_SIZE_OPTIONS = [
+  ["small", "Small", 14, "size-3"],
+  ["normal", "Normal", 16, "size-3.5"],
+  ["big", "Big", 18, "size-4"],
+  ["bigger", "Bigger", 20, "size-4.5"],
+  ["biggest", "Biggest", 22, "size-5"],
+];
+
 export default function App({ onLogout = null }) {
-  const [activeTab, setActiveTab] = useState('report');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  
+  const t = useTranslation();
+  const apiConfigured = isCarmenApiConfigured();
+  const storedCarmenSession = apiConfigured ? getStoredCarmenSession() : null;
+  const businessUnitsEnabled = apiConfigured && Boolean(storedCarmenSession?.businessUnit?.tenant);
+  const [activeTab, setActiveTab] = useState("report");
+  const [tabMotionDirection, setTabMotionDirection] = useState(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [themeMode, setThemeMode] = useState(() => getStoredTheme());
+  const [fontSize, setFontSize] = usePersistentState(
+    "carmen_font_size_v1",
+    "normal",
+  );
+  const activeFontSize =
+    FONT_SIZE_OPTIONS.find(([value]) => value === fontSize)?.[2] || 16;
+  const [isPageTransitioning, setIsPageTransitioning] = useState(false);
+  const [isSetupSaving, setIsSetupSaving] = useState(false);
+  const [isGettingStartedOpen, setIsGettingStartedOpen] = useState(false);
+  const [gettingStartedStep, setGettingStartedStep] = useState(0);
+  const setupGuideRef = useRef(null);
+  const importGuideRef = useRef(null);
+
   const [alertMsg, setAlertMsg] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
-  
-  const [masterData, setMasterData] = usePersistentState('carmen_bi_master_v5_16', INITIAL_MASTER_DATA);
+  const confirmActionRef = useRef(null);
+  const [setupSaveWarnings, setSetupSaveWarnings] = useState([]);
+
+  const [localMasterData, setLocalMasterData] = usePersistentState(
+    "carmen_bi_master_api_v1",
+    INITIAL_MASTER_DATA,
+  );
+  const [apiMasterData, setApiMasterData] = useState(INITIAL_MASTER_DATA);
+  const masterData = apiConfigured ? apiMasterData : localMasterData;
+  const setMasterData = apiConfigured ? setApiMasterData : setLocalMasterData;
   const [periodOptions, setPeriodOptions] = useState([]);
   const [budgetRevisionOptions, setBudgetRevisionOptions] = useState([]);
   const [reportOptions, setReportOptions] = useState(DEFAULT_REPORT_OPTIONS);
@@ -201,8 +427,6 @@ export default function App({ onLogout = null }) {
   const [isMasterDataLoading, setIsMasterDataLoading] = useState(false);
   const [isReportCatalogLoading, setIsReportCatalogLoading] = useState(false);
   const [reportCatalogError, setReportCatalogError] = useState(null);
-  const apiConfigured = isCarmenApiConfigured();
-  const storedCarmenSession = apiConfigured ? getStoredCarmenSession() : null;
 
   const [currentUser, setCurrentUser] = useState(() => {
     if (apiConfigured) {
@@ -215,21 +439,60 @@ export default function App({ onLogout = null }) {
   const [isLoading, setIsLoading] = useState(false);
 
   const [globalDepts, setGlobalDepts] = useState([]);
-  const [globalYear, setGlobalYear] = useState(new Date().getFullYear().toString()); 
-  const [globalPeriod, setGlobalPeriod] = useState('2'); 
-  const [globalRevision, setGlobalRevision] = useState('0');
+  const [globalYear, setGlobalYear] = useState(createCurrentYearValue);
+  const [globalPeriod, setGlobalPeriod] = useState("2");
+  const [globalRevision, setGlobalRevision] = useState("0");
+  const [dayFilterState, setDayFilterState] = useState(null);
 
   const [appliedDepts, setAppliedDepts] = useState([]);
-  const [appliedYear, setAppliedYear] = useState(new Date().getFullYear().toString());
-  const [appliedPeriod, setAppliedPeriod] = useState('2');
-  const [appliedRevision, setAppliedRevision] = useState('0');
+  const [appliedYear, setAppliedYear] = useState(createCurrentYearValue);
+  const [appliedPeriod, setAppliedPeriod] = useState("2");
+  const [appliedRevision, setAppliedRevision] = useState("0");
 
-  const [engineData, setEngineData] = useState([]); 
-  const [budgetData, setBudgetData] = useState([]); 
-  const glUploadRef = useRef(null);
-  const budUploadRef = useRef(null);
-  const reportSaveTimerRef = useRef(null);
+  const [engineData, setEngineData] = useState([]);
+  const [budgetData, setBudgetData] = useState([]);
+  const [apiDimensions, setApiDimensions] = useState({});
+  const dimensionDefinitions = useMemo(
+    () =>
+      Array.from({ length: 10 }, (_, index) => `dim${index + 1}`).map(
+        (field, index) => {
+          const apiDefinition = apiDimensions.definitions?.find(
+            (definition) => definition.key === field,
+          );
+          const fallbackValues = [
+            ...new Set(
+              [...engineData, ...budgetData]
+                .map((row) =>
+                  String(
+                    row?.[field] ?? row?.[field.toUpperCase()] ?? "",
+                  ).trim(),
+                )
+                .filter(Boolean),
+            ),
+          ].sort((a, b) =>
+            a.localeCompare(b, undefined, {
+              numeric: true,
+              sensitivity: "base",
+            }),
+          );
+          return {
+            key: field,
+            caption: apiDefinition?.caption || `DIM ${index + 1}`,
+            values:
+              apiDefinition?.values?.length > 0
+                ? apiDefinition.values
+                : fallbackValues,
+          };
+        },
+      ),
+    [apiDimensions, budgetData, engineData],
+  );
+  const pageTransitionTimerRef = useRef(null);
   const reportDataFetchSkipRef = useRef(false);
+  const latestReportDataRequestRef = useRef(0);
+  const loadedReportDataRef = useRef(null);
+  const masterDataLoadKeysRef = useRef(new Set());
+  const reportCatalogLoadRef = useRef(false);
 
   // --- Report Configuration Data ---
   const [reports, setReports] = useState(() => {
@@ -237,126 +500,246 @@ export default function App({ onLogout = null }) {
     return readStoredReports() || getDefaultReports();
   });
   const [reportsLoaded, setReportsLoaded] = useState(!apiConfigured);
-  const [currentReportId, setCurrentReportId] = useState('rep-carmen-pnl');
+  const [currentReportId, setCurrentReportId] = useState(null);
+  const businessUnits = useBusinessUnitReports({ enabled: businessUnitsEnabled, session: storedCarmenSession, setReports });
+  const [createTargetOpen, setCreateTargetOpen] = useState(false);
+  const creatingReportRef = useRef(false);
+  const [loadedTenant, setLoadedTenant] = useState(null);
+  const [setupDraft, setSetupDraft] = useState(null);
+  const [isSetupDirty, setIsSetupDirty] = useState(false);
+  const [setupUndoHistory, setSetupUndoHistory] = useState([]);
+  const lastSetupUndoGroupRef = useRef(null);
   const [editingRow, setEditingRow] = useState(null);
-  const [detailSelecting, setDetailSelecting] = useState(null); 
-  const [isAccessModalOpen, setIsAccessModalOpen] = useState(false); 
-  const [modalAccCategory, setModalAccCategory] = useState('ALL'); 
+  const [detailSelecting, setDetailSelecting] = useState(null);
+  const [modalAccCategory, setModalAccCategory] = useState("ALL");
+  const isMobile = useIsMobile(1024);
+  const gettingStartedStorageKey = `${GETTING_STARTED_STORAGE_PREFIX}${currentUser?.id || "anonymous"}`;
+  const accessibleReports = useMemo(
+    () => businessUnitsEnabled ? reports.filter((report) => businessUnits.selected.includes(report.tenant)) : getAccessibleReports(reports, currentUser),
+    [reports, currentUser, businessUnitsEnabled, businessUnits.selected],
+  );
+  const latestAccessibleReport = useMemo(
+    () => getLatestCreatedReport(accessibleReports),
+    [accessibleReports],
+  );
+  const resolvedCurrentReportId = useMemo(() => {
+    if (currentReportId === NO_REPORT_SELECTED) return null;
+    if (accessibleReports.some((report) => reportKey(report) === currentReportId)) {
+      return currentReportId;
+    }
 
-  const canSetupReports = canSetupFinancialReports(currentUser);
-  const accessibleReports = useMemo(() => getAccessibleReports(reports, currentUser), [reports, currentUser]);
-  const reportUsers = useMemo(() => {
-    const users = Array.isArray(masterData.users) ? masterData.users : [];
-    if (!currentUser?.id) return users;
-    if (users.some((user) => String(user.id) === String(currentUser.id))) return users;
-    return [currentUser, ...users];
-  }, [masterData.users, currentUser]);
+    return reportKey(latestAccessibleReport) || null;
+  }, [accessibleReports, currentReportId, latestAccessibleReport]);
+  const activeReport = resolvedCurrentReportId
+    ? accessibleReports.find(
+        (report) => reportKey(report) === resolvedCurrentReportId,
+      ) || null
+    : null;
+  const activeTenant = activeReport?.tenant || businessUnits.selected[0];
+  const context = activeTenant ? { tenant: activeTenant } : {};
+  const unitPermission = businessUnits.units.find((unit) => unit.id === activeTenant)?.permission;
+  const tenantContextReady = !businessUnitsEnabled || loadedTenant === activeTenant;
+  const canSetupReports = businessUnitsEnabled ? Boolean(unitPermission?.setup) && tenantContextReady : canSetupFinancialReports(currentUser);
+  const creationUnits = businessUnits.units.filter((unit) => businessUnits.selected.includes(unit.id) && unit.permission?.setup);
+  const canCreateReports = businessUnitsEnabled ? creationUnits.length > 0 : canSetupReports;
+  const setupReport =
+    reportKey(setupDraft) === reportKey(activeReport) ? setupDraft : activeReport;
 
-  const activeReport = accessibleReports.find(r => r.id === currentReportId) || accessibleReports[0] || null;
+  useEffect(() => {
+    if (!businessUnitsEnabled) return;
+    latestReportDataRequestRef.current += 1;
+    loadedReportDataRef.current = null;
+    setLoadedTenant(null); setEngineData([]); setBudgetData([]); setApiDimensions({});
+    setMasterData(INITIAL_MASTER_DATA); setPeriodOptions([]); setBudgetRevisionOptions([]);
+    setGlobalDepts([]); setAppliedDepts([]); setMasterDataError(null);
+  }, [businessUnitsEnabled, activeTenant, setMasterData]);
+
+  useEffect(() => {
+    setSetupDraft(activeReport);
+    setIsSetupDirty(false);
+    setSetupUndoHistory([]);
+    lastSetupUndoGroupRef.current = null;
+  }, [resolvedCurrentReportId]);
+  useEffect(() => {
+    if (!currentUser?.id || !reportsLoaded) return;
+    setGettingStartedStep(0);
+    setIsGettingStartedOpen(
+      window.localStorage.getItem(gettingStartedStorageKey) !== "done",
+    );
+  }, [currentUser?.id, gettingStartedStorageKey, reportsLoaded]);
+  useEffect(() => {
+    if (!isGettingStartedOpen) return;
+    if (!isMobile) {
+      setIsSidebarCollapsed(false);
+      return;
+    }
+    setIsSidebarOpen(false);
+  }, [isGettingStartedOpen, isMobile]);
   const activeReportUsesDayFilter = useMemo(() => {
     if (!activeReport) return false;
-    if (activeReport.reportType === 'Daily') return true;
-    return Array.isArray(activeReport.columns) && activeReport.columns.some((col) => {
-      const type = String(col?.type || '').trim().toUpperCase();
-      return DAILY_COLUMN_TYPES.has(type);
-    });
+    return (
+      Array.isArray(activeReport.columns) &&
+      activeReport.columns.some((col) => {
+        const type = String(col?.type || "")
+          .trim()
+          .toUpperCase();
+        return DAILY_COLUMN_TYPES.has(type);
+      })
+    );
   }, [activeReport]);
-  const activeReportDay = activeReportUsesDayFilter ? activeReport?.day || '' : '';
-  const activeReportUsesBudget = useMemo(() => Boolean(activeReport?.columns?.some((col) => {
-    const type = String(col?.type || '').trim().toUpperCase();
-    return ['BUD', 'BUDACC', 'DACBG', 'PTDBG'].includes(type);
-  })), [activeReport]);
-  const activeReportHasIncompatibleColumns = useMemo(() => {
-    if (!activeReport) return false;
-    const allowedTypes = activeReport.reportType === 'Daily' ? DAILY_COLUMN_TYPES : MONTHLY_COLUMN_TYPES;
-    return Array.isArray(activeReport.columns) && activeReport.columns.some((col) => {
-      const type = String(col?.type || '').trim().toUpperCase();
-      return Boolean(type) && !allowedTypes.has(type);
-    });
-  }, [activeReport]);
-  const appliedBudgetRevision = activeReportUsesBudget ? appliedRevision : '0';
+  const defaultReportDay = activeReportUsesDayFilter ? "1" : "";
+  const currentDayFilter =
+    dayFilterState?.reportId === reportKey(activeReport) &&
+    dayFilterState?.reportDay === defaultReportDay
+      ? dayFilterState
+      : null;
+  const globalDay = currentDayFilter?.globalDay ?? defaultReportDay;
+  const activeReportDay = activeReportUsesDayFilter
+    ? (currentDayFilter?.appliedDay ?? defaultReportDay)
+    : "";
+  const activeReportUsesBudget = useMemo(
+    () =>
+      Boolean(
+        activeReport?.columns?.some((col) => {
+          const type = String(col?.type || "")
+            .trim()
+            .toUpperCase();
+          return BUDGET_COLUMN_TYPES.has(type);
+        }),
+      ),
+    [activeReport],
+  );
+  const appliedBudgetRevision = activeReportUsesBudget ? appliedRevision : "0";
 
-  const loadReportDataFromApi = async ({ reportId, year, period, revision, deptIds, day = '', source = 'report' } = {}) => {
-    if (!apiConfigured || !activeReport?.id) return null;
+  const loadReportDataFromApi = useCallback(
+    async ({
+      reportId,
+      year,
+      period,
+      revision,
+      deptIds,
+      day = "",
+      source = "report",
+    } = {}) => {
+      if (!apiConfigured || !activeReport?.id || !tenantContextReady) return null;
 
-    if (activeReportUsesDayFilter && String(day || '').trim()) {
-      const dayNumber = Number.parseInt(day, 10);
-      const selectedPeriod = periodOptions.find((option) => String(option.id) === String(period));
-      const referenceDate = selectedPeriod?.date ? new Date(selectedPeriod.date) : new Date(Number(year), Math.max(0, Number(period) - 1), 1);
-      const maxDay = Number.isNaN(referenceDate.getTime())
-        ? 31
-        : new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0).getDate();
-      if (!Number.isInteger(dayNumber) || dayNumber < 1 || dayNumber > maxDay) {
-        throw new Error(`Day must be between 1 and ${maxDay} for the selected fiscal period.`);
+      if (activeReportUsesDayFilter && String(day || "").trim()) {
+        const dayNumber = Number.parseInt(day, 10);
+        const selectedPeriod = periodOptions.find(
+          (option) => String(option.id) === String(period),
+        );
+        const referenceDate = selectedPeriod?.date
+          ? new Date(selectedPeriod.date)
+          : new Date(Number(year), Math.max(0, Number(period) - 1), 1);
+        const maxDay = Number.isNaN(referenceDate.getTime())
+          ? 31
+          : new Date(
+              referenceDate.getFullYear(),
+              referenceDate.getMonth() + 1,
+              0,
+            ).getDate();
+        if (
+          !Number.isInteger(dayNumber) ||
+          dayNumber < 1 ||
+          dayNumber > maxDay
+        ) {
+          throw new Error(
+            `Day must be between 1 and ${maxDay} for the selected fiscal period.`,
+          );
+        }
       }
-    }
 
-    setIsLoading(true);
-    try {
-      const apiData = await fetchCarmenReportData({
-        reportId: reportId || activeReport.id,
-        year,
-        period,
-        revision,
-        deptIds,
-        day,
-      });
+      const dataScope = JSON.stringify([activeReport, reportId || activeReport.id, year, period, revision, [...(deptIds || [])].sort()]);
+      const loaded = loadedReportDataRef.current;
+      // The API returns the full source period/year, so only a day change
+      // within the same report/filter scope can reuse the loaded dataset.
+      // Applying the same day explicitly still refreshes from the server.
+      if (loaded?.scope === dataScope && loaded.day !== String(day)) {
+        loadedReportDataRef.current = { ...loaded, day: String(day) };
+        setAlertMsg(null);
+        return loaded.data;
+      }
+      const requestId = ++latestReportDataRequestRef.current;
+      loadedReportDataRef.current = null;
+      setIsLoading(true);
+      try {
+        const apiData = await fetchCarmenReportData({
+          ...context,
+          reportId: reportId || activeReport.id,
+          year,
+          period,
+          revision,
+          deptIds,
+          day,
+        });
 
-      setEngineData(apiData.actualRows || []);
-      setBudgetData(apiData.budgetRows || []);
-      setAlertMsg(null);
-      return apiData;
-    } catch (error) {
-      const message = error.message || `Unable to load Carmen ${source} data.`;
-      setAlertMsg(message);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  };
+        if (requestId === latestReportDataRequestRef.current) {
+          loadedReportDataRef.current = { scope: dataScope, day: String(day), data: apiData };
+          setEngineData(apiData.actualRows || []);
+          setBudgetData(apiData.budgetRows || []);
+          setAlertMsg(null);
+        }
+        return apiData;
+      } catch (error) {
+        if (requestId === latestReportDataRequestRef.current && isSessionExpiredError(error) && typeof onLogout === "function") {
+          onLogout();
+          return null;
+        }
+        const message =
+          error.message || `Unable to load Carmen ${source} data.`;
+        if (requestId === latestReportDataRequestRef.current)
+          setAlertMsg(message);
+        throw error;
+      } finally {
+        if (requestId === latestReportDataRequestRef.current)
+          setIsLoading(false);
+      }
+    },
+    [apiConfigured, activeReport, activeTenant, tenantContextReady, activeReportUsesDayFilter, periodOptions, onLogout],
+  );
 
   useEffect(() => {
     if (!apiConfigured || !/^\d{4}$/.test(String(globalYear))) return;
+    if (businessUnitsEnabled && !activeTenant) return;
+
+    const masterDataLoadKey = String(globalYear);
+    if (!businessUnitsEnabled && masterDataLoadKeysRef.current.has(masterDataLoadKey)) return;
 
     let isCancelled = false;
     const loadCarmenMasterData = async () => {
       setIsMasterDataLoading(true);
       try {
-        const apiData = await fetchCarmenMasterData({ year: globalYear });
+        const [apiData, dimensions] = await Promise.all([
+          fetchCarmenMasterData({ year: globalYear, ...context }),
+          businessUnitsEnabled ? fetchCarmenDimensions(context) : fetchCarmenDimensions().catch(() => ({})),
+        ]);
         if (isCancelled) return;
 
-        setMasterData(prev => ({
-          ...prev,
-          companyProfile: apiData.companyProfile || prev.companyProfile,
-          users: Array.isArray(apiData.users) && apiData.users.length > 0
-            ? apiData.users
-            : apiData.currentUser
-              ? [apiData.currentUser]
-              : prev.users,
-          depts: apiData.depts.length > 0 ? apiData.depts : prev.depts,
-          accCodes: apiData.accCodes.length > 0 ? apiData.accCodes : prev.accCodes,
-          groups: {
-            L1: apiData.groups?.L1?.length > 0 ? apiData.groups.L1 : prev.groups.L1,
-            L2: apiData.groups?.L2?.length > 0 ? apiData.groups.L2 : prev.groups.L2,
-            L3: apiData.groups?.L3?.length > 0 ? apiData.groups.L3 : prev.groups.L3,
-            L4: apiData.groups?.L4?.length > 0 ? apiData.groups.L4 : prev.groups.L4,
-          },
-        }));
+        masterDataLoadKeysRef.current.add(masterDataLoadKey);
+        setApiDimensions(dimensions);
+        setMasterData((prev) => mergeCarmenMasterData(prev, apiData));
         if (apiData.currentUser) setCurrentUser(apiData.currentUser);
-        else if (Array.isArray(apiData.users) && apiData.users.length > 0) setCurrentUser(apiData.users[0]);
+        else if (Array.isArray(apiData.users) && apiData.users.length > 0)
+          setCurrentUser(apiData.users[0]);
         setPeriodOptions(apiData.periods || []);
         setBudgetRevisionOptions(apiData.budgetRevisions || []);
+        setLoadedTenant(activeTenant);
         setMasterDataError(null);
       } catch (error) {
         if (!isCancelled) {
-          if (isSessionExpiredError(error) && typeof onLogout === 'function') {
+          if (isSessionExpiredError(error) && typeof onLogout === "function") {
             onLogout();
             return;
           }
-          setMasterDataError(error.message || 'Unable to load Carmen master data.');
+          setMasterDataError(
+            error.message || "Unable to load Carmen master data.",
+          );
         }
       } finally {
-        if (!isCancelled) setIsMasterDataLoading(false);
+        if (!isCancelled) {
+          // react-doctor-disable-next-line no-loading-flag-reset-outside-finally -- This reset is already in finally; the guard prevents updates after effect cleanup.
+          setIsMasterDataLoading(false);
+        }
       }
     };
 
@@ -364,10 +747,11 @@ export default function App({ onLogout = null }) {
     return () => {
       isCancelled = true;
     };
-  }, [globalYear, apiConfigured, setMasterData]);
+  }, [globalYear, apiConfigured, businessUnitsEnabled, activeTenant, onLogout, setMasterData]);
 
   useEffect(() => {
     if (!apiConfigured) return;
+    if (reportCatalogLoadRef.current) return;
 
     let isCancelled = false;
     const loadCarmenCatalog = async () => {
@@ -375,43 +759,55 @@ export default function App({ onLogout = null }) {
       try {
         const [optionsResult, reportsResult] = await Promise.allSettled([
           fetchCarmenReportOptions(),
-          fetchCarmenReports(),
+          businessUnitsEnabled ? Promise.resolve([]) : fetchCarmenReports(),
         ]);
         if (isCancelled) return;
 
-        if (optionsResult.status === 'fulfilled') {
-          setReportOptions(mergeReportOptions(DEFAULT_REPORT_OPTIONS, optionsResult.value));
+        reportCatalogLoadRef.current = true;
+
+        if (optionsResult.status === "fulfilled") {
+          setReportOptions(
+            mergeReportOptions(DEFAULT_REPORT_OPTIONS, optionsResult.value),
+          );
         }
-        if (reportsResult.status === 'fulfilled' && Array.isArray(reportsResult.value) && reportsResult.value.length > 0) {
+        if (
+          reportsResult.status === "fulfilled" &&
+          Array.isArray(reportsResult.value) &&
+          reportsResult.value.length > 0
+        ) {
           setReports(reportsResult.value);
           setReportsLoaded(true);
-        } else if (reportsResult.status === 'fulfilled') {
+        } else if (reportsResult.status === "fulfilled") {
           setReportsLoaded(true);
         }
-        if (optionsResult.status === 'rejected' || reportsResult.status === 'rejected') {
-          const reason = optionsResult.status === 'rejected'
-            ? optionsResult.reason
-            : reportsResult.reason;
-          throw reason || new Error('Unable to load Carmen report catalog.');
+        if (
+          optionsResult.status === "rejected" ||
+          reportsResult.status === "rejected"
+        ) {
+          const reason =
+            optionsResult.status === "rejected"
+              ? optionsResult.reason
+              : reportsResult.reason;
+          setReportsLoaded(true);
+          throw reason || new Error("Unable to load Carmen report catalog.");
         }
         setReportCatalogError(null);
       } catch (error) {
         if (!isCancelled) {
-          if (isSessionExpiredError(error) && typeof onLogout === 'function') {
+          if (isSessionExpiredError(error) && typeof onLogout === "function") {
             onLogout();
             return;
           }
-          if (apiConfigured) {
-            setReports([]);
-          } else {
-            const fallbackReports = readStoredReports() || getDefaultReports();
-            setReports(fallbackReports);
-          }
           setReportsLoaded(true);
-          setReportCatalogError(error.message || 'Unable to load Carmen report catalog.');
+          setReportCatalogError(
+            error.message || "Unable to load Carmen report catalog.",
+          );
         }
       } finally {
-        if (!isCancelled) setIsReportCatalogLoading(false);
+        if (!isCancelled) {
+          // react-doctor-disable-next-line no-loading-flag-reset-outside-finally -- This reset is already in finally; the guard prevents updates after effect cleanup.
+          setIsReportCatalogLoading(false);
+        }
       }
     };
 
@@ -419,16 +815,28 @@ export default function App({ onLogout = null }) {
     return () => {
       isCancelled = true;
     };
-  }, [apiConfigured]);
+  }, [apiConfigured, businessUnitsEnabled, onLogout]);
 
   useEffect(() => {
-    if (!reportsLoaded) return;
+    if (!reportsLoaded || apiConfigured) return;
     writeStoredReports(reports);
-  }, [reports, reportsLoaded]);
+  }, [reports, reportsLoaded, apiConfigured]);
 
+  // react-doctor-disable-next-line no-set-state-after-await-in-effect -- Cleanup flips isCancelled before any late request can update effect-owned notice state.
   useEffect(() => {
-    if (!apiConfigured || !/^\d{4}$/.test(String(appliedYear)) || !activeReport?.id) return;
-    if (activeReportUsesDayFilter && String(activeReportDay).trim() && periodOptions.length === 0) return;
+    if (
+      !apiConfigured ||
+      !/^\d{4}$/.test(String(appliedYear)) ||
+      !activeReport?.id
+    )
+      return;
+    if (!tenantContextReady) return;
+    if (
+      activeReportUsesDayFilter &&
+      String(activeReportDay).trim() &&
+      periodOptions.length === 0
+    )
+      return;
 
     let isCancelled = false;
     const loadCarmenReportData = async () => {
@@ -448,7 +856,7 @@ export default function App({ onLogout = null }) {
         });
       } catch (error) {
         if (!isCancelled) {
-          setAlertMsg(error.message || 'Unable to load Carmen report data.');
+          setAlertMsg(error.message || "Unable to load Carmen report data.");
         }
       }
     };
@@ -457,357 +865,533 @@ export default function App({ onLogout = null }) {
     return () => {
       isCancelled = true;
     };
-  }, [appliedYear, appliedPeriod, appliedBudgetRevision, appliedDepts, activeReport?.id, activeReportDay, activeReportUsesDayFilter, periodOptions, apiConfigured]);
-
-  useEffect(() => {
-    if (!apiConfigured || !activeReport?.id) return undefined;
-
-    const brokenReferences = findBrokenReferences(activeReport);
-    if (brokenReferences.length > 0) {
-      setReportCatalogError(`Report contains ${brokenReferences.length} unresolved reference(s). Resolve invalid row or column references before saving.`);
-      return undefined;
-    }
-
-    const mappingConflicts = findRowMappingConflicts(activeReport, masterData);
-    if (mappingConflicts.length > 0) {
-      setReportCatalogError(`Report contains ${mappingConflicts.length} conflicting row mapping(s). Resolve mapping conflicts before saving.`);
-      return undefined;
-    }
-
-    if (activeReportHasIncompatibleColumns) {
-      setReportCatalogError(
-        `${activeReport.reportType || 'Monthly'} reports should only use compatible column types. Update any mismatched columns before saving.`
-      );
-      return undefined;
-    }
-
-    if (reportSaveTimerRef.current) {
-      clearTimeout(reportSaveTimerRef.current);
-    }
-
-    setReportCatalogError(null);
-    reportSaveTimerRef.current = setTimeout(() => {
-      saveCarmenReport(activeReport).catch((error) => {
-        setReportCatalogError(error.message || 'Unable to save report definition.');
-      });
-    }, 350);
-
-    return () => {
-      if (reportSaveTimerRef.current) {
-        clearTimeout(reportSaveTimerRef.current);
-      }
-    };
-  }, [activeReport, apiConfigured, activeReportHasIncompatibleColumns, masterData]);
-
-  // ============================================================================
-  // 🚀 CSV PARSER
-  // ============================================================================
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (apiConfigured) {
-      e.target.value = null;
-      return;
-    }
-    setIsLoading(true);
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const parsed = parseGlCsvText(event.target.result);
-      if (parsed.error) {
-        setAlertMsg("ไฟล์ CSV ไม่ถูกต้อง หรือไม่มีข้อมูล");
-        setIsLoading(false); return;
-      }
-      const { parsedData, newDeptsMap, newAccCodesMap, newGroups, detectedYear } = parsed;
-      
-      setMasterData(prev => ({
-        ...prev,
-        depts: mergeAndSort(prev.depts, newDeptsMap),
-        accCodes: mergeAndSort(prev.accCodes, newAccCodesMap),
-        groups: {
-          L1: mergeAndSort(prev.groups.L1, newGroups.L1),
-          L2: mergeAndSort(prev.groups.L2, newGroups.L2),
-          L3: mergeAndSort(prev.groups.L3, newGroups.L3),
-          L4: mergeAndSort(prev.groups.L4, newGroups.L4)
-        }
-      }));
-
-      if (detectedYear) {
-         setGlobalYear(detectedYear);
-         setAppliedYear(detectedYear);
-      }
-
-      setEngineData(parsedData); 
-      setIsLoading(false);
-      setAlertMsg(`โหลดข้อมูล Transaction (GL) สำเร็จ ${parsedData.length} รายการ!\n(อัปเดตตัวกรองปีเป็น ${detectedYear || 'ปัจจุบัน'} ให้อัตโนมัติแล้ว)`);
-    };
-    reader.onerror = () => { setAlertMsg("เกิดข้อผิดพลาดในการอ่านไฟล์"); setIsLoading(false); };
-    reader.readAsText(file);
-    e.target.value = null; 
-  };
-
-  const handleBudgetUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (apiConfigured) {
-      e.target.value = null;
-      return;
-    }
-    setIsLoading(true);
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const parsed = parseBudgetCsvText(event.target.result);
-      if (parsed.error) { setAlertMsg("ไฟล์ Budget CSV ไม่ถูกต้อง"); setIsLoading(false); return; }
-      const { parsedData, newDeptsMap, newAccCodesMap } = parsed;
-
-      setMasterData(prev => ({
-        ...prev,
-        depts: mergeAndSort(prev.depts, newDeptsMap),
-        accCodes: mergeAndSort(prev.accCodes, newAccCodesMap),
-      }));
-
-      setBudgetData(parsedData); 
-      setIsLoading(false);
-      setAlertMsg(`โหลดข้อมูล Budget สำเร็จ!`);
-    };
-    reader.readAsText(file);
-    e.target.value = null; 
-  };
+  }, [
+    appliedYear,
+    appliedPeriod,
+    appliedBudgetRevision,
+    appliedDepts,
+    activeReport?.id,
+    activeTenant,
+    tenantContextReady,
+    activeReportDay,
+    activeReportUsesDayFilter,
+    periodOptions,
+    apiConfigured,
+    loadReportDataFromApi,
+  ]);
 
   const updateActiveReport = (updates) => {
     if (!activeReport) return;
-    setReports(prevReports => prevReports.map(r => r.id === activeReport.id ? { ...r, ...updates } : r));
-  };
-
-  useEffect(() => {
-    if (!canSetupReports && activeTab === 'setup') setActiveTab('report');
-  }, [activeTab, canSetupReports]);
-
-  useEffect(() => {
-    if (accessibleReports.length > 0 && !accessibleReports.some(report => report.id === currentReportId)) {
-      setCurrentReportId(accessibleReports[0].id);
+    const now = Date.now();
+    const groupKey = Object.keys(updates).sort().join(",");
+    const lastGroup = lastSetupUndoGroupRef.current;
+    if (lastGroup?.key !== groupKey || now - lastGroup.time > 700) {
+      setSetupUndoHistory((history) => [...history.slice(-49), {
+        report: structuredClone(setupReport),
+        isDirty: isSetupDirty,
+      }]);
     }
-  }, [accessibleReports, currentReportId]);
-
-  const handleApplyFilters = () => {
-    setAppliedDepts([...globalDepts]);
-    setAppliedYear(globalYear);
-    setAppliedPeriod(globalPeriod);
-    const nextRevision = activeReportUsesBudget ? globalRevision : '0';
-    setGlobalRevision(nextRevision);
-    setAppliedRevision(nextRevision);
+    lastSetupUndoGroupRef.current = { key: groupKey, time: now };
+    setSetupDraft((currentDraft) => ({
+      ...(reportKey(currentDraft) === reportKey(activeReport) ? currentDraft : activeReport),
+      ...updates,
+    }));
+    setIsSetupDirty(true);
+    setReportCatalogError(null);
   };
 
-  const handleSyncReportData = async (source) => {
-    if (!apiConfigured) {
-      if (source === 'gl') {
-        glUploadRef.current?.click();
-      } else {
-        budUploadRef.current?.click();
-      }
+  const persistSetup = async () => {
+    setIsSetupSaving(true);
+    try {
+      const saveResult = apiConfigured
+        ? await saveCarmenReport(setupReport, ...(activeTenant ? [context] : []))
+        : null;
+      const savedVersion = saveResult?.lastModified || saveResult?.LastModified;
+      const savedReport = savedVersion
+        ? { ...setupReport, lastModified: savedVersion }
+        : setupReport;
+      setReports((currentReports) =>
+        currentReports.map((report) =>
+          reportKey(report) === reportKey(savedReport) ? savedReport : report,
+        ),
+      );
+      setSetupDraft(savedReport);
+      setIsSetupDirty(false);
+      setSetupUndoHistory([]);
+      lastSetupUndoGroupRef.current = null;
+      setReportCatalogError(null);
+      applyTabChange("report");
+    } catch (error) {
+      setReportCatalogError(
+        error.message || "Unable to save report definition.",
+      );
+    } finally {
+      setIsSetupSaving(false);
+    }
+  };
+
+  const handleMoveReportToGroup = async (report, reportGroup) => {
+    if (!canSetupReports || isSetupDirty || isSetupSaving) {
+      throw new Error(t("Save or cancel your edits to move reports."));
+    }
+    const updated = { ...report, reportGroup };
+    setIsSetupSaving(true);
+    try {
+      const saved = apiConfigured
+        ? await saveCarmenReport(updated, ...(report.tenant ? [{ tenant: report.tenant }] : []))
+        : null;
+      const lastModified = saved?.lastModified || saved?.LastModified;
+      const next = lastModified ? { ...updated, lastModified } : updated;
+      setReports((current) => current.map((item) => reportKey(item) === reportKey(report) ? next : item));
+      if (reportKey(setupDraft) === reportKey(report)) setSetupDraft(next);
+    } finally {
+      setIsSetupSaving(false);
+    }
+  };
+
+  const handleSaveSetup = async () => {
+    if (!setupReport || !isSetupDirty || isSetupSaving) return;
+    const warnings = getSetupWarnings(setupReport, masterData);
+    if (warnings.length > 0) {
+      setSetupSaveWarnings(warnings);
       return;
     }
+    await persistSetup();
+  };
 
-    const nextAppliedDepts = [...globalDepts];
-    const nextAppliedYear = globalYear;
-    const nextAppliedPeriod = globalPeriod;
-    const nextAppliedRevision = activeReportUsesBudget ? globalRevision : '0';
+  const discardSetupChanges = () => {
+    setSetupDraft(activeReport);
+    setIsSetupDirty(false);
+    setSetupUndoHistory([]);
+    lastSetupUndoGroupRef.current = null;
+    setReportCatalogError(null);
+  };
 
-    reportDataFetchSkipRef.current = true;
-    setAppliedDepts(nextAppliedDepts);
-    setAppliedYear(nextAppliedYear);
-    setAppliedPeriod(nextAppliedPeriod);
-    setGlobalRevision(nextAppliedRevision);
-    setAppliedRevision(nextAppliedRevision);
+  const handleUndoSetup = () => {
+    const previous = setupUndoHistory[setupUndoHistory.length - 1];
+    if (!previous || isSetupSaving) return;
+    setSetupDraft(previous.report);
+    setIsSetupDirty(previous.isDirty);
+    setSetupUndoHistory((history) => history.slice(0, -1));
+    lastSetupUndoGroupRef.current = null;
+    setReportCatalogError(null);
+  };
 
+  const requestConfirmation = ({ title, msg, details, actionLabel, onConfirm }) => {
+    confirmActionRef.current = onConfirm;
+    setConfirmAction({ title, msg, details, actionLabel });
+  };
+
+  const closeConfirmation = () => {
+    confirmActionRef.current = null;
+    setConfirmAction(null);
+  };
+
+  const confirmPendingAction = () => {
+    const onConfirm = confirmActionRef.current;
+    closeConfirmation();
+    onConfirm?.();
+  };
+
+  const confirmDiscardSetup = () => {
+    if (!isSetupDirty) {
+      return;
+    }
+    confirmActionRef.current = discardSetupChanges;
+    setConfirmAction({
+      title: "Discard unsaved changes?",
+      msg: "Changes since the last save will be lost.",
+      actionLabel: "Discard changes",
+    });
+  };
+
+  const handleCancelSetup = () => confirmDiscardSetup();
+
+  const handleApplyFilters = async () => {
+    const nextDepts = [...globalDepts];
+    const nextRevision = activeReportUsesBudget ? globalRevision : "0";
+    const nextDay = activeReportUsesDayFilter ? String(globalDay).trim() : "";
+    // Apply owns the request; the new department array also triggers the
+    // effect when filter values are unchanged, so skip that duplicate load.
+    if (apiConfigured) reportDataFetchSkipRef.current = true;
+    setAppliedDepts(nextDepts);
+    setAppliedYear(globalYear);
+    setAppliedPeriod(globalPeriod);
+    setDayFilterState({
+      reportId: reportKey(activeReport),
+      reportDay: defaultReportDay,
+      globalDay: nextDay,
+      appliedDay: nextDay,
+    });
+    if (!activeReportUsesBudget && String(globalRevision) !== "0") {
+      setAlertMsg(
+        "Revision selector is ignored for reports without budget columns.",
+      );
+    }
+    setGlobalRevision(nextRevision);
+    setAppliedRevision(nextRevision);
+    if (!apiConfigured) return;
     try {
       await loadReportDataFromApi({
         reportId: activeReport?.id,
-        year: nextAppliedYear,
-        period: nextAppliedPeriod,
-        revision: nextAppliedRevision,
-        deptIds: nextAppliedDepts,
-        day: activeReportDay,
-        source,
+        year: globalYear,
+        period: globalPeriod,
+        revision: nextRevision,
+        deptIds: nextDepts,
+        day: nextDay,
       });
-      setAlertMsg(`${source.toUpperCase()} data synced from Carmen API.`);
-    } catch {
-      // Error already surfaced by loadReportDataFromApi.
+    } catch (error) {
+      setAlertMsg(error.message || "Unable to load Carmen report data.");
     }
   };
 
   const handleCloneReport = async () => {
-    if (!activeReport) return;
+    const sourceReport = setupReport || activeReport;
+    if (!sourceReport) return;
     if (apiConfigured) {
       try {
-        const apiClone = await cloneCarmenReport(activeReport.id);
+        const apiClone = await cloneCarmenReport(sourceReport.id, ...(activeTenant ? [context] : []));
         if (apiClone) {
-          setReports(prev => [...prev, apiClone]);
-          setCurrentReportId(apiClone.id);
+          const scopedClone = activeTenant ? { ...apiClone, tenant: activeTenant } : apiClone;
+          setReports((prev) => [...prev, scopedClone]);
+          setCurrentReportId(reportKey(scopedClone));
           return;
         }
+        setReportCatalogError("Unable to clone report in Carmen API.");
       } catch (error) {
-        setReportCatalogError(error.message || 'Unable to clone report in Carmen API.');
+        setReportCatalogError(
+          error.message || "Unable to clone report in Carmen API.",
+        );
       }
+      return;
     }
 
-    const newId = 'rep-' + Date.now();
-    const clonedReport = cloneReport(activeReport, newId);
-    setReports(prev => [...prev, clonedReport]);
+    const newId = "rep-" + Date.now();
+    const clonedReport = cloneReport(
+      sourceReport,
+      newId,
+      currentUser?.id || "",
+    );
+    setReports((prev) => [...prev, clonedReport]);
     setCurrentReportId(newId);
   };
 
-  const handleCreateBlankReport = async () => {
-    const newId = 'rep-' + Date.now();
-    const newReport = createBlankReport(masterData.companyProfile.name, reportUsers.map(u => u.id), newId, currentUser?.id || '');
-    setReports(prev => [...prev, newReport]);
-    setCurrentReportId(newId);
+  const handleCreateBlankReport = async (targetTenant = activeTenant) => {
+    const newId = "rep-" + Date.now();
+    const newReport = createBlankReport(
+      masterData.companyProfile.name,
+      [],
+      newId,
+      currentUser?.id || "",
+    );
     if (apiConfigured) {
       try {
-        await saveCarmenReport(newReport);
+        const targetContext = targetTenant ? { tenant: targetTenant } : {};
+        if (targetTenant && targetTenant !== activeTenant) {
+          const targetMaster = await fetchCarmenMasterData({ year: globalYear, ...targetContext });
+          newReport.companyName = targetMaster.companyProfile.name;
+        }
+        const created = await createCarmenReport(newReport, ...(targetTenant ? [targetContext] : []));
+        const createdReport = targetTenant ? { ...created, tenant: targetTenant } : created;
+        setReports((prev) => [...prev, createdReport]);
+        setCurrentReportId(reportKey(createdReport));
+        return createdReport;
       } catch (error) {
-        setReportCatalogError(error.message || 'Unable to save new report to Carmen API.');
+        setReportCatalogError(
+          error.message || "Unable to save new report to Carmen API.",
+        );
+        return null;
       }
     }
+
+    setReports((prev) => [...prev, newReport]);
+    setCurrentReportId(newId);
+    return newReport;
+  };
+
+  const handleImportExcelTemplates = async (importedReports) => {
+    if (!Array.isArray(importedReports) || importedReports.length === 0) return;
+    if (apiConfigured) {
+      await saveCarmenReports(importedReports, ...(activeTenant ? [context] : []));
+    }
+    const scoped = activeTenant ? importedReports.map((report) => ({ ...report, tenant: activeTenant })) : importedReports;
+    setReports((currentReports) => [...currentReports, ...scoped]);
+    setCurrentReportId(reportKey(scoped[0]));
   };
 
   const handleDeleteReport = () => {
-    setConfirmAction({
-      msg: 'Are you sure you want to completely delete this report?',
-      onConfirm: async () => {
-        const deletedReport = activeReport;
-        const newReports = reports.filter(r => r.id !== currentReportId);
-        setReports(newReports);
-        setCurrentReportId(newReports.length > 0 ? newReports[0].id : null);
-        if (apiConfigured && deletedReport?.id) {
-          try {
-            await deleteCarmenReport(deletedReport.id);
-          } catch (error) {
-            setReportCatalogError(error.message || 'Unable to delete report from Carmen API.');
-          }
+    confirmActionRef.current = async () => {
+      const deletedReport = activeReport;
+      if (apiConfigured && deletedReport?.id) {
+        try {
+          await deleteCarmenReport(deletedReport.id, deletedReport.tenant ? { tenant: deletedReport.tenant } : {});
+        } catch (error) {
+          setReportCatalogError(
+            error.message || "Unable to delete report from Carmen API.",
+          );
+          return;
         }
       }
+      const newReports = reports.filter((r) => reportKey(r) !== reportKey(deletedReport));
+      setReports(newReports);
+      setCurrentReportId(NO_REPORT_SELECTED);
+    };
+    setConfirmAction({
+      title: t("Delete “{name}”?", { name: activeReport?.name || t("Reports") }),
+      msg: "This permanently removes the report and cannot be undone.",
+      actionLabel: "Delete report",
     });
   };
 
-  const handleOCRUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setIsLoading(true);
-    setTimeout(() => {
-        const newId = 'rep-ocr-' + Date.now();
-        const newReport = createOcrReport(file.name, masterData.companyProfile.name, reportUsers.map(u => u.id), newId, currentUser?.id || '');
-        setReports(prev => [...prev, newReport]);
-        setCurrentReportId(newId);
-        setIsLoading(false);
-        setAlertMsg('ดำเนินการอ่านภาพ OCR และสร้างรายงานเรียบร้อยแล้ว!');
-    }, 2000);
-    e.target.value = null;
-  };
-
   // --- ENGINE ---
-  const reportData = useMemo(() => buildReportData({
-    activeReport,
-    engineData,
-    budgetData,
-    appliedDepts,
-    appliedYear,
-    appliedPeriod,
-    appliedDay: activeReportDay,
-    appliedRevision: appliedBudgetRevision,
-    periodOptions,
-    masterData,
-  }), [activeReport, engineData, budgetData, appliedDepts, appliedYear, appliedPeriod, activeReportDay, appliedBudgetRevision, periodOptions, masterData]);
+  const reportData = useMemo(
+    () =>
+      tenantContextReady ? buildReportData({
+        activeReport,
+        engineData,
+        budgetData,
+        appliedDepts,
+        appliedYear,
+        appliedPeriod,
+        appliedDay: activeReportDay,
+        appliedRevision: appliedBudgetRevision,
+        periodOptions,
+        masterData,
+      }) : [],
+    [
+      activeReport,
+      engineData,
+      budgetData,
+      appliedDepts,
+      appliedYear,
+      appliedPeriod,
+      activeReportDay,
+      appliedBudgetRevision,
+      periodOptions,
+      masterData,
+      tenantContextReady,
+    ],
+  );
 
   // --- Handlers ---
-  const handleUpdateRow = (id, field, val) => updateActiveReport({ rows: activeReport.rows.map(r => r.id === id ? { ...r, [field]: val } : r) });
-  const handleUpdateRowMulti = (id, updates) => updateActiveReport({ rows: activeReport.rows.map(r => r.id === id ? { ...r, ...updates } : r) });
-  const handleUpdateCol = (id, field, val) => updateActiveReport({ columns: activeReport.columns.map(c => c.id === id ? { ...c, [field]: val } : c) });
+  const handleUpdateRow = (id, field, val) =>
+    updateActiveReport({
+      rows: setupReport.rows.map((r) =>
+        r.id === id ? { ...r, [field]: val } : r,
+      ),
+    });
+  const handleUpdateRowMulti = (id, updates) =>
+    updateActiveReport({
+      rows: setupReport.rows.map((r) =>
+        r.id === id ? { ...r, ...updates } : r,
+      ),
+    });
+  const handleUpdateCol = (id, field, val) =>
+    updateActiveReport({
+      columns: setupReport.columns.map((c) =>
+        c.id === id ? { ...c, [field]: val } : c,
+      ),
+    });
 
   const handleAddCol = (type) => {
-    const newColId = 'C' + (activeReport.columns.length + 1) + '-' + Date.now();
-    const defaultDataType = activeReport?.reportType === 'Daily' ? 'DAC' : 'AC';
+    const newColId = "C" + (setupReport.columns.length + 1) + "-" + Date.now();
+    const defaultDataType = setupReport?.columns?.some((column) =>
+      ["DAC", "PTD"].includes(String(column.type || "").toUpperCase()),
+    )
+      ? "DAC"
+      : "AC";
     const newCol = {
       id: newColId,
-      label: type === 'data' ? 'New Column' : type === 'percent' ? '% Mix' : 'Variance',
-      isActive: true, isFormula: type === 'formula', isPercent: type === 'percent', formatAsPercent: false, 
-      formula: type === 'formula' ? 'C1-C2' : '', targetCol: type === 'percent' ? 'C1' : undefined,
-      yearMode: type === 'data' ? 'current' : undefined, periodMode: type === 'data' ? 'current' : undefined, type: type === 'data' ? defaultDataType : undefined,
-      width: ''
+      label:
+        type === "data"
+          ? "New Column"
+          : type === "percent"
+            ? "% Mix"
+            : "Variance",
+      isActive: true,
+      isFormula: type === "formula",
+      isPercent: type === "percent",
+      formatAsPercent: false,
+      formula: type === "formula" ? "C1-C2" : "",
+      targetCol: type === "percent" ? "C1" : undefined,
+      yearMode: type === "data" ? "current" : undefined,
+      periodMode: type === "data" ? "current" : undefined,
+      type: type === "data" ? defaultDataType : undefined,
+      width: "",
     };
-    updateActiveReport({ columns: [...activeReport.columns, newCol] });
+    const descriptionPosition = Number(setupReport.descriptionPosition);
+    updateActiveReport({
+      columns: [...setupReport.columns, newCol],
+      ...(Number.isInteger(descriptionPosition) &&
+      descriptionPosition === setupReport.columns.length
+        ? { descriptionPosition: descriptionPosition + 1 }
+        : {}),
+    });
+  };
+
+  const handleDuplicateCol = (columnId) => {
+    const source = setupReport.columns.find((column) => column.id === columnId);
+    if (!source) return;
+    const descriptionPosition = Number(setupReport.descriptionPosition);
+    updateActiveReport({
+      columns: [
+        ...setupReport.columns,
+        {
+          ...source,
+          id: `${source.id}-copy-${Date.now()}`,
+          label: `Copy of ${source.label || source.id}`,
+          isActive: true,
+        },
+      ],
+      ...(Number.isInteger(descriptionPosition) &&
+      descriptionPosition === setupReport.columns.length
+        ? { descriptionPosition: descriptionPosition + 1 }
+        : {}),
+    });
   };
 
   const handleAddRow = (type) => {
-    const lastRow = activeReport.rows.length > 0 ? activeReport.rows[activeReport.rows.length - 1] : null;
-    const newRow = { 
-        id: 'r-'+Date.now(), desc: type === 'header' ? 'HEADER' : (type === 'formula' ? 'Total' : 'New Line'), 
-        isActive: true, isTotal: type === 'formula', isHeader: type === 'header', dept: '', accCodes: '', 
-        groupLevel: 'L4', groups: '', percentBase: lastRow ? lastRow.percentBase : '', formula: type === 'formula' ? 'R1+R2' : '', indent: lastRow ? lastRow.indent : 0 
+    const isFormula = type === "formula" || type === "formula-percent";
+    const lastRow =
+      setupReport.rows.length > 0
+        ? setupReport.rows[setupReport.rows.length - 1]
+        : null;
+    const newRow = {
+      id: "r-" + Date.now(),
+      desc:
+        type === "header"
+          ? "HEADER"
+          : isFormula
+            ? "Total"
+            : "New Line",
+      isActive: true,
+      isTotal: isFormula,
+      numberFormat: type === "formula-percent" ? "percent" : "column",
+      isHeader: type === "header",
+      dept: "",
+      deptGroup: "",
+      accCodes: "",
+      groupLevel: "L4",
+      groups: "",
+      percentBase: lastRow ? lastRow.percentBase : "",
+      formula: isFormula ? "R1+R2" : "",
+      indent: lastRow ? lastRow.indent : 0,
     };
-    updateActiveReport({ rows: [...activeReport.rows, newRow] });
+    updateActiveReport({ rows: [...setupReport.rows, newRow] });
+  };
+
+  const handleDuplicateRow = (rowId) => {
+    const source = setupReport.rows.find((row) => row.id === rowId);
+    if (!source) return;
+    updateActiveReport({
+      rows: [
+        ...setupReport.rows,
+        {
+          ...source,
+          id: `r-${Date.now()}`,
+          desc: `Copy of ${source.desc || source.id}`,
+          isActive: true,
+        },
+      ],
+    });
   };
 
   const handleDeleteRow = (rowId) => {
-    updateActiveReport(deleteRowAndRewriteReferences(activeReport, rowId));
+    updateActiveReport(deleteRowAndRewriteReferences(setupReport, rowId));
   };
 
   const handleDeleteCol = (colId) => {
-    updateActiveReport(deleteColAndRewriteReferences(activeReport, colId));
-  };
-
-  const persistActiveReport = async (nextReport) => {
-    if (!apiConfigured || !nextReport) return;
-
-    try {
-      await saveCarmenReport(nextReport);
-      setReportCatalogError(null);
-    } catch (error) {
-      setReportCatalogError(error.message || 'Unable to save report definition.');
-    }
+    const deletedIndex = setupReport.columns.findIndex(
+      (column) => column.id === colId,
+    );
+    const nextReport = deleteColAndRewriteReferences(setupReport, colId);
+    const descriptionPosition = Number(setupReport.descriptionPosition);
+    updateActiveReport({
+      ...nextReport,
+      ...(Number.isInteger(descriptionPosition) &&
+      deletedIndex >= 0 &&
+      deletedIndex < descriptionPosition
+        ? { descriptionPosition: descriptionPosition - 1 }
+        : {}),
+    });
   };
 
   const moveCol = (idx, dir) => {
-    updateActiveReport(moveColumnsAndRewriteReferences(activeReport, idx, dir));
+    updateActiveReport(moveColumnsAndRewriteReferences(setupReport, idx, dir));
   };
 
   const moveRow = (idx, dir) => {
-    updateActiveReport(moveRowsAndRewriteReferences(activeReport, idx, dir));
+    updateActiveReport(moveRowsAndRewriteReferences(setupReport, idx, dir));
   };
 
   // --- Display Labels (Configurable Period Formats) ---
   const defaultPeriodOptions = useMemo(
-    () => [...Array(12).keys()].map(i => ({ id: String(i + 1), label: `P${i + 1}` })),
-    []
+    () =>
+      [...Array(12).keys()].map((i) => ({
+        id: String(i + 1),
+        label: `P${i + 1}`,
+      })),
+    [],
   );
-  const periodSelectOptions = periodOptions.length > 0 ? periodOptions : defaultPeriodOptions;
+  const periodSelectOptions =
+    periodOptions.length > 0 ? periodOptions : defaultPeriodOptions;
   const revisionSelectOptions = useMemo(() => {
-    const options = new Map([['0', { id: '0', label: 'Rev 0' }]]);
-    budgetRevisionOptions.forEach(option => options.set(String(option.id), option));
+    const options = new Map([["0", { id: "0", label: "Rev 0" }]]);
+    budgetRevisionOptions.forEach((option) =>
+      options.set(String(option.id), option),
+    );
     return Array.from(options.values()).sort((a, b) =>
-      String(a.id).localeCompare(String(b.id), undefined, { numeric: true, sensitivity: 'base' })
+      String(a.id).localeCompare(String(b.id), undefined, {
+        numeric: true,
+        sensitivity: "base",
+      }),
     );
   }, [budgetRevisionOptions]);
-  const selectedAppliedPeriod = periodSelectOptions.find(option => String(option.id) === String(appliedPeriod));
-  const selectedPeriodCode = `P${String(appliedPeriod).padStart(2, '0')}`;
-  const displayCompanyLabel = activeReport?.companyName || masterData.companyProfile.name;
-  const autoDateLabel = selectedAppliedPeriod?.dateLabel
+  const selectedAppliedPeriod = periodSelectOptions.find(
+    (option) => String(option.id) === String(appliedPeriod),
+  );
+  const selectedPeriodCode = `P${String(appliedPeriod).padStart(2, "0")}`;
+  const displayCompanyLabel =
+    activeReport?.companyName || masterData.companyProfile.name;
+  const dailyReportDate = activeReportUsesDayFilter && activeReportDay
+    ? new Date(Number(appliedYear), Number(appliedPeriod) - 1, Number(activeReportDay))
+    : null;
+  if (dailyReportDate && selectedAppliedPeriod?.date) {
+    const periodStart = new Date(selectedAppliedPeriod.date);
+    if (!Number.isNaN(periodStart.getTime())) {
+      dailyReportDate.setFullYear(periodStart.getFullYear(), periodStart.getMonth(), Number(activeReportDay));
+    }
+  }
+  const autoDateLabel = dailyReportDate && !Number.isNaN(dailyReportDate.getTime())
+    ? `${t("As of")} ${dailyReportDate.toLocaleDateString(getLocale(), { year: 'numeric', month: 'long', day: 'numeric' })}`
+    : selectedAppliedPeriod?.dateLabel
     ? `As of ${selectedAppliedPeriod.dateLabel}`
-    : `As of ${formatAutoPeriod(appliedYear, appliedPeriod, 'end_of_month')}`;
-  const displayDateLabel = activeReport?.overrideDateDisplay || activeReport?.customDateLabel || autoDateLabel;
-  const autoPeriodLabel = selectedAppliedPeriod?.dateLabel
-    ? `Period : ${appliedYear}-${selectedPeriodCode}${selectedAppliedPeriod.status ? ` (${selectedAppliedPeriod.status})` : ''}`
-    : (activeReport?.periodFormat !== 'standard' ? formatAutoPeriod(appliedYear, appliedPeriod, activeReport?.periodFormat) : formatAutoPeriod(appliedYear, appliedPeriod, 'standard'));
-  const displayPeriodLabel = activeReport?.overridePeriodDisplay || activeReport?.customPeriodLabel || autoPeriodLabel;
-  const activeCategories = Array.isArray(activeReport?.category) ? activeReport.category : ['ALL'];
-  const activeCols = activeReport?.columns.filter(c => c.isActive) || [];
-  const userSelectorLabel = hasFinancialReportPermission(currentUser) ? 'Signed In As:' : 'View As Role:';
-
+    : `As of ${formatAutoPeriod(appliedYear, appliedPeriod, "end_of_month")}`;
+  const displayDateLabel =
+    activeReport?.overrideDateDisplay ||
+    activeReport?.customDateLabel ||
+    autoDateLabel;
+  const autoPeriodLabel =
+    activeReport?.periodFormat && activeReport.periodFormat !== "standard"
+      ? formatAutoPeriod(appliedYear, appliedPeriod, activeReport.periodFormat)
+      : selectedAppliedPeriod?.dateLabel
+        ? `Period : ${appliedYear}-${selectedPeriodCode}${selectedAppliedPeriod.status ? ` (${selectedAppliedPeriod.status})` : ""}`
+        : formatAutoPeriod(appliedYear, appliedPeriod, "standard");
+  const displayPeriodLabel =
+    activeReport?.overridePeriodDisplay ||
+    activeReport?.customPeriodLabel ||
+    autoPeriodLabel;
+  const activeCategories = Array.isArray(setupReport?.category)
+    ? setupReport.category
+    : ["ALL"];
+  const activeCols = useMemo(
+    () => activeReport?.columns?.filter((c) => c.isActive) || [],
+    [activeReport],
+  );
   // --- Export Excel (HTML-to-XLSX) ---
   const exportToExcel = () => {
     if (!activeReport) return;
-    const themeColors = THEMES[activeReport.theme || 'blue'];
+    const themeColors = THEMES[activeReport.theme || "blue"];
     const tableHtml = buildExcelHtml({
       activeReport,
       activeCols,
@@ -817,313 +1401,1270 @@ export default function App({ onLogout = null }) {
       reportData,
       themeColors,
     });
-    const blob = new Blob([tableHtml], { type: 'application/vnd.ms-excel' });
+    const blob = new Blob([tableHtml], { type: "application/vnd.ms-excel" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `${activeReport.name.replace(/[^a-zA-Z0-9]/g, '_')}_Export.xls`);
+    link.setAttribute(
+      "download",
+      `${activeReport.name.replace(/[^a-zA-Z0-9]/g, "_")}_Export.xls`,
+    );
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   };
 
-  const currentTheme = THEMES[activeReport?.theme || 'blue'];
+  const currentTheme = THEMES[activeReport?.theme || "blue"];
+  const showPageSkeleton = isPageTransitioning;
+  const visibleActiveTab = canSetupReports ? activeTab : "report";
+  const contextualGuideLabel =
+    visibleActiveTab === "setup"
+      ? "Open setup guide"
+      : visibleActiveTab === "import"
+        ? "Open import guide"
+        : "Open getting started guide";
+  const activeTabMotionClass =
+    tabMotionDirection === null
+      ? ""
+      : visibleActiveTab === "report"
+        ? "app-pane-enter-from-left"
+        : "app-pane-enter-from-right";
+  const mainContentPaddingClass =
+    visibleActiveTab === "setup" || visibleActiveTab === "import"
+      ? "p-0"
+      : "p-4";
+  const mainContentWidthClass =
+    visibleActiveTab === "setup" || visibleActiveTab === "import"
+      ? "flex h-full w-full min-h-0 flex-col"
+      : "flex h-full w-full min-h-0 flex-col gap-3";
+
+  const applyTabChange = (nextTab) => {
+    if (nextTab === "setup" || nextTab === "import") {
+      setIsGettingStartedOpen(false);
+    }
+    setTabMotionDirection(nextTab === "report" ? "backward" : "forward");
+    setActiveTab(nextTab);
+  };
+
+  const handleTabChange = (nextTab) => {
+    if (nextTab === visibleActiveTab) return;
+    if ((nextTab === "setup" || nextTab === "import") && !canSetupReports)
+      return;
+    if (visibleActiveTab === "setup" && isSetupDirty) {
+      confirmActionRef.current = () => {
+        discardSetupChanges();
+        applyTabChange(nextTab);
+      };
+      setConfirmAction({
+        title: "Discard unsaved changes?",
+        msg: "Changes since the last save will be lost.",
+        actionLabel: "Discard changes",
+      });
+      return;
+    }
+    applyTabChange(nextTab);
+  };
+
+  const handleReportChange = (reportId) => {
+    if (isSetupSaving || creatingReportRef.current) return;
+    const openReport = () => {
+      if (reportId !== resolvedCurrentReportId) {
+        latestReportDataRequestRef.current += 1;
+        loadedReportDataRef.current = null;
+        setEngineData([]); setBudgetData([]);
+        setCurrentReportId(reportId);
+      }
+      applyTabChange("report");
+      setIsSidebarOpen(false);
+    };
+    if (visibleActiveTab === "setup" && isSetupDirty) {
+      confirmActionRef.current = () => {
+        discardSetupChanges();
+        openReport();
+      };
+      setConfirmAction({
+        title: "Discard unsaved changes?",
+        msg: "Changes since the last save will be lost.",
+        actionLabel: "Discard changes",
+      });
+      return;
+    }
+    openReport();
+  };
+
+  const handleCreateReportFromSidebar = (targetTenant) => {
+    if (isSetupSaving || creatingReportRef.current) return;
+    if (typeof targetTenant !== "string") {
+      if (businessUnitsEnabled && businessUnits.selected.length > 1) { setCreateTargetOpen(true); return; }
+      targetTenant = activeTenant;
+    }
+    if (businessUnitsEnabled && !creationUnits.some((unit) => unit.id === targetTenant)) return;
+    setCreateTargetOpen(false);
+    const createAndOpenReport = async () => {
+      if (creatingReportRef.current) return;
+      creatingReportRef.current = true;
+      try {
+        const createdReport = await handleCreateBlankReport(targetTenant);
+        if (!createdReport) return;
+        applyTabChange("setup");
+        setIsSidebarOpen(false);
+      } finally { creatingReportRef.current = false; }
+    };
+
+    if (visibleActiveTab === "setup" && isSetupDirty) {
+      confirmActionRef.current = () => {
+        discardSetupChanges();
+        void createAndOpenReport();
+      };
+      setConfirmAction({
+        title: "Discard unsaved changes?",
+        msg: "Changes since the last save will be lost.",
+        actionLabel: "Discard changes",
+      });
+      return;
+    }
+
+    void createAndOpenReport();
+  };
+
+  const handleBusinessUnitSelection = (selection) => {
+    if (isSetupSaving || creatingReportRef.current || businessUnits.loading) return;
+    const change = () => {
+      latestReportDataRequestRef.current += 1;
+      loadedReportDataRef.current = null;
+      setCurrentReportId(null); setEngineData([]); setBudgetData([]);
+      businessUnits.setSelected(selection);
+      applyTabChange("report");
+    };
+    if (isSetupDirty) {
+      requestConfirmation({ title: "Discard unsaved changes?", msg: "Changing business units will discard unsaved report changes.",
+        actionLabel: "Discard changes", onConfirm: () => { discardSetupChanges(); change(); } });
+    } else change();
+  };
+
+  const closeGettingStarted = () => {
+    window.localStorage.setItem(gettingStartedStorageKey, "done");
+    setIsGettingStartedOpen(false);
+  };
+
+  const openContextualGuide = () => {
+    if (visibleActiveTab === "report") {
+      setGettingStartedStep(0);
+      setIsGettingStartedOpen(true);
+      return;
+    }
+    const guideRef =
+      visibleActiveTab === "setup" ? setupGuideRef : importGuideRef;
+    guideRef.current?.openGuide();
+  };
+
+  useEffect(() => {
+    if (!isSetupDirty) return undefined;
+    const warnBeforeUnload = (event) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, [isSetupDirty]);
+
+  const triggerPageTransition = () => {
+    if (pageTransitionTimerRef.current) {
+      clearTimeout(pageTransitionTimerRef.current);
+    }
+    setIsPageTransitioning(true);
+    pageTransitionTimerRef.current = setTimeout(() => {
+      setIsPageTransitioning(false);
+      pageTransitionTimerRef.current = null;
+    }, 700);
+  };
+
+  useLayoutEffect(() => {
+    setStoredTheme(themeMode);
+  }, [themeMode]);
+
+  useLayoutEffect(() => {
+    applyShellTemplate(DEFAULT_SHELL_TEMPLATE, themeMode);
+  }, [themeMode]);
+
+  useLayoutEffect(() => {
+    document.documentElement.style.fontSize = `${activeFontSize}px`;
+    return () => {
+      document.documentElement.style.fontSize = "";
+    };
+  }, [activeFontSize]);
+
+  useEffect(() => {
+    if (themeMode !== "system") return undefined;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const syncSystemTheme = () => {
+      setStoredTheme("system");
+      applyShellTemplate(DEFAULT_SHELL_TEMPLATE, "system");
+    };
+    media.addEventListener("change", syncSystemTheme);
+    return () => media.removeEventListener("change", syncSystemTheme);
+  }, [themeMode]);
+
+  useEffect(() => {
+    return () => {
+      const timerId = pageTransitionTimerRef.current;
+      if (timerId) {
+        clearTimeout(timerId);
+      }
+    };
+  }, []);
 
   // ============================================================================
   // 4. RENDER UI
   // ============================================================================
-  return (
-    <div className="flex h-screen bg-[#FDFCFE] overflow-hidden font-sans text-slate-800">
-      
-      {/* CUSTOM ALERTS & CONFIRMS */}
-      {alertMsg && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 w-96 text-center border border-purple-100">
-            <p className="text-slate-800 font-bold mb-6 whitespace-pre-line text-sm">{alertMsg}</p>
-            <button onClick={() => setAlertMsg(null)} className="bg-purple-600 text-white px-8 py-2.5 rounded-xl font-bold hover:bg-purple-700 shadow-md">OK</button>
+  const sidebarPanel = (
+    <div className="flex h-full min-w-0 flex-col bg-muted/30">
+      <div className="flex shrink-0 items-center justify-start py-1 pl-5">
+        <span className="relative block w-56 max-w-full">
+          <img
+            src={`${import.meta.env.BASE_URL}logo.png`}
+            alt="Carmen Finance Intelligence for Hospitality"
+            className="h-auto w-full object-contain dark:brightness-0 dark:invert"
+          />
+          <img
+            src={`${import.meta.env.BASE_URL}logo.png`}
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 hidden h-auto w-full object-contain dark:block [clip-path:inset(0_77%_0_0)]"
+          />
+        </span>
+      </div>
+
+      <ScrollArea className="min-w-0 flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
+        <div className="p-3">
+          <div className="mb-2 flex items-center justify-between gap-2 px-1">
+            <div className="text-xs font-medium text-muted-foreground">{t("Reports")}</div>
           </div>
-        </div>
-      )}
-      {confirmAction && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 w-96 text-center border border-purple-100">
-            <p className="text-slate-800 font-bold mb-6 text-sm">{confirmAction.msg}</p>
-            <div className="flex justify-center gap-3">
-              <button onClick={() => setConfirmAction(null)} className="bg-slate-100 text-slate-600 px-6 py-2.5 rounded-xl font-bold hover:bg-slate-200">Cancel</button>
-              <button onClick={() => { confirmAction.onConfirm(); setConfirmAction(null); }} className="bg-red-500 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-red-600 shadow-md">Confirm</button>
-            </div>
+          <div
+            className="flex flex-col gap-1 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-xl data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary"
+            data-tour="reports"
+          >
+            {businessUnitsEnabled ? <BusinessUnitReportList key={currentUser?.id || "anonymous"} storageKey={`carmen_report_navigation:${currentUser?.id || "anonymous"}`} catalog={businessUnits} reports={accessibleReports}
+              currentKey={resolvedCurrentReportId} onSelect={handleReportChange}
+              onMoveReport={canSetupReports && !isSetupDirty && !isSetupSaving ? handleMoveReportToGroup : undefined}
+              moveDisabledReason={canSetupReports && isSetupDirty ? t("Save or cancel your edits to move reports.") : undefined} /> : <ReportGroupNavigation reports={accessibleReports} currentKey={resolvedCurrentReportId} onSelect={handleReportChange}
+              storageKey={`carmen_report_groups:${currentUser?.id || "anonymous"}`}
+              onMoveReport={canSetupReports && !isSetupDirty && !isSetupSaving ? handleMoveReportToGroup : undefined}
+              moveDisabledReason={canSetupReports && isSetupDirty ? t("Save or cancel your edits to move reports.") : undefined} />}
           </div>
-        </div>
-      )}
-
-      {/* --- SIDEBAR --- */}
-      <aside className={`bg-white border-r border-purple-100 transition-all duration-300 flex flex-col print:hidden flex-shrink-0 ${isSidebarOpen ? 'w-72' : 'w-20'}`}>
-        <div className="p-5 flex items-center justify-between border-b border-purple-100">
-          <div className={`flex items-center gap-3 ${!isSidebarOpen && 'hidden'}`}>
-            <div className="bg-purple-600 p-2 rounded-lg shadow-md text-white"><BarChart3 size={18}/></div>
-            <div className="flex flex-col">
-               <span className="font-black text-base tracking-tight uppercase text-purple-900 leading-none">BI HUB</span>
-               <span className="text-[9px] font-bold text-purple-400">Version 1.0</span>
-            </div>
-          </div>
-          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="hover:bg-purple-50 p-2 rounded-lg text-purple-600 transition-colors"><Menu size={18}/></button>
-        </div>
-        
-        {/* Simulate Role Selector */}
-        <div className={`p-4 mx-4 mt-4 bg-purple-50 rounded-xl border border-purple-100 ${!isSidebarOpen && 'hidden'}`}>
-          <span className="text-[10px] font-black text-purple-500 uppercase tracking-widest flex items-center gap-1 mb-1.5"><ShieldCheck size={12}/> {userSelectorLabel}</span>
-          <select value={currentUser?.id || ''} onChange={e => {
-              const selectedUser = reportUsers.find(u=>u.id===e.target.value);
-              if (!selectedUser) return;
-              const selectedReports = getAccessibleReports(reports, selectedUser);
-              setCurrentUser(selectedUser);
-              if (!selectedReports.some(report => report.id === currentReportId)) {
-                setCurrentReportId(selectedReports[0]?.id || null);
-              }
-              if (!canSetupFinancialReports(selectedUser)) {
-                setActiveTab('report');
-              }
-            }} className="w-full bg-white text-xs font-bold text-purple-900 border border-purple-200 rounded-md px-2 py-1 outline-none cursor-pointer">
-            {reportUsers.map(u => <option key={u.id} value={u.id}>{u.name} ({canSetupFinancialReports(u) ? 'Admin' : 'User'})</option>)}
-          </select>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-3 space-y-1.5 mt-2">
-          {accessibleReports.map(rep => (
-            <button key={rep.id} onClick={() => setCurrentReportId(rep.id)} className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all font-bold ${currentReportId === rep.id ? 'bg-purple-100 text-purple-800' : 'text-slate-500 hover:bg-purple-50 hover:text-purple-700'}`}>
-              <FileText size={16} className={currentReportId === rep.id ? 'text-purple-600' : 'text-slate-400'}/>
-              {isSidebarOpen && <span className="text-sm truncate">{rep.name}</span>}
-            </button>
-          ))}
-          {accessibleReports.length === 0 && <div className="text-xs text-slate-400 text-center mt-10">No Reports Available</div>}
-        </div>
-      </aside>
-
-      {/* --- MAIN WORKSPACE --- */}
-      <main className="flex-1 overflow-hidden flex flex-col relative print:bg-white bg-[#FDFCFE]">
-        
-        {/* Header แบ่ง 2 บรรทัด */}
-        <header className="flex-shrink-0 z-40 bg-white/90 backdrop-blur-md border-b border-purple-100 p-3 px-6 flex flex-col gap-3 print:hidden shadow-sm">
-          <div className="flex justify-between items-center">
-              <div className="flex items-center gap-6">
-                <div className="flex bg-purple-50 p-1 rounded-lg border border-purple-100">
-                  <button onClick={() => setActiveTab('report')} className={`px-5 py-1.5 rounded-md text-[11px] font-black transition-all ${activeTab === 'report' ? 'bg-white shadow-sm text-purple-700' : 'text-purple-400 hover:text-purple-600'}`}>VIEW</button>
-                  {canSetupReports && (
-                    <button onClick={() => setActiveTab('setup')} className={`px-5 py-1.5 rounded-md text-[11px] font-black transition-all ${activeTab === 'setup' ? 'bg-white shadow-sm text-purple-700' : 'text-purple-400 hover:text-purple-600'}`}>SETUP</button>
-                  )}
-                </div>
-                {activeTab === 'setup' && <h2 className="text-lg font-black text-slate-800 tracking-tight">Configuration Mode</h2>}
-                {isMasterDataLoading && <span className="text-[10px] font-black uppercase tracking-widest text-blue-500">Syncing Carmen</span>}
-                {isReportCatalogLoading && <span className="text-[10px] font-black uppercase tracking-widest text-blue-500">Loading report catalog</span>}
-                {masterDataError && <span className="text-[10px] font-black uppercase tracking-widest text-red-500" title={masterDataError}>Carmen API unavailable</span>}
-                {reportCatalogError && <span className="text-[10px] font-black uppercase tracking-widest text-red-500" title={reportCatalogError}>Report catalog error</span>}
-              </div>
-            {typeof onLogout === 'function' && (
-              <button
-                onClick={onLogout}
-                className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200"
-              >
-                Logout
-              </button>
-            )}
-
-            {activeTab === 'report' && (
-               <div className="flex items-center gap-2 bg-white p-1 px-3 rounded-lg border border-purple-100 shadow-sm hidden md:flex flex-shrink-0">
-                  <ZoomOut size={14} className="text-purple-400 cursor-pointer hover:text-purple-700" onClick={()=>setTableZoom(Math.max(50, tableZoom - 10))}/>
-                  <input type="range" min="50" max="150" value={tableZoom} onChange={e=>setTableZoom(Number(e.target.value))} className="w-16 accent-purple-600" />
-                  <ZoomIn size={14} className="text-purple-400 cursor-pointer hover:text-purple-700" onClick={()=>setTableZoom(Math.min(150, tableZoom + 10))}/>
-                  <span className="text-[10px] font-black text-purple-700 w-8 text-right">{tableZoom}%</span>
-               </div>
-            )}
-          </div>
-
-          {/* Row 2: Parameters & Export Panel (ใช้เลื่อนซ้ายขวาตามแบบ V5.12 ต้นฉบับ) */}
-          {activeTab === 'report' && (
-               <div className="flex flex-wrap items-center gap-2 bg-white p-2 rounded-lg border border-purple-100 shadow-sm w-full relative z-40">
-                  <MultiSelectDropdown testIdPrefix="dept" label="DEPT" options={masterData.depts} selected={globalDepts} onChange={setGlobalDepts} />
-                  <div className="h-4 w-px bg-purple-100 flex-shrink-0 mx-1"></div>
-                  
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                     <span className="text-[9px] font-black text-purple-400 uppercase tracking-widest">Year:</span>
-                     <input type="number" value={globalYear} onChange={e=>setGlobalYear(e.target.value)} className="w-12 text-[11px] font-bold bg-transparent outline-none text-purple-900" />
-                  </div>
-                  <div className="h-4 w-px bg-purple-100 flex-shrink-0 mx-1"></div>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                     <span className="text-[9px] font-black text-purple-400 uppercase tracking-widest">Period:</span>
-                     <select value={globalPeriod} onChange={e=>setGlobalPeriod(e.target.value)} className="text-[11px] font-bold bg-transparent outline-none text-purple-900 cursor-pointer">
-                        {periodSelectOptions.map(option => <option key={option.id} value={String(option.id)}>{option.label}</option>)}
-                     </select>
-                  </div>
-                  <div className="h-4 w-px bg-purple-100 flex-shrink-0 mx-1"></div>
-                  
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                     <span className="text-[9px] font-black text-purple-400 uppercase tracking-widest">Rev:</span>
-                     <select value={globalRevision} onChange={e=>setGlobalRevision(e.target.value)} className="text-[11px] font-bold bg-transparent outline-none text-purple-900 cursor-pointer">
-                        {revisionSelectOptions.map(option => <option key={option.id} value={String(option.id)}>{option.label}</option>)}
-                     </select>
-                  </div>
-                  
-                  <div className="h-4 w-px bg-purple-100 mx-2 flex-shrink-0"></div>
-                  <button onClick={handleApplyFilters} className="px-5 py-1.5 bg-purple-600 text-white text-[10px] font-black rounded-lg shadow-sm hover:bg-purple-700 transition-colors uppercase tracking-widest flex-shrink-0">OK</button>
-
-                  <div className="flex-1 min-w-[20px]"></div>
-
-                  <button
-                    type="button"
-                    onClick={() => handleSyncReportData('gl')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-black rounded-lg hover:bg-emerald-100 transition-colors uppercase tracking-widest flex-shrink-0"
-                    title={apiConfigured ? 'Refresh GL data from Carmen API' : 'Fallback to GL CSV import'}
-                  >
-                    <RefreshCw size={14}/> GL
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSyncReportData('bud')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-black rounded-lg hover:bg-blue-100 transition-colors uppercase tracking-widest flex-shrink-0"
-                    title={apiConfigured ? 'Refresh budget data from Carmen API' : 'Fallback to budget CSV import'}
-                  >
-                    <RefreshCw size={14}/> BUD
-                  </button>
-                  <input ref={glUploadRef} type="file" accept=".csv" onChange={(e) => handleFileUpload(e)} className="hidden" />
-                  <input ref={budUploadRef} type="file" accept=".csv" onChange={(e) => handleBudgetUpload(e)} className="hidden" />
-                  
-                  <div className="h-4 w-px bg-purple-100 mx-1 flex-shrink-0"></div>
-                  
-                  <button onClick={exportToExcel} className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-[10px] font-black rounded-lg shadow-sm hover:bg-green-700 transition-colors uppercase tracking-widest flex-shrink-0" title="Export to Excel">
-                     <Download size={14}/> Excel
-                  </button>
-                  <button onClick={() => window.print()} className="p-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-all flex-shrink-0 border border-slate-200"><Printer size={16}/></button>
-               </div>
+          {!businessUnitsEnabled && accessibleReports.length === 0 && (
+            <div className="px-2 py-8 text-sm text-muted-foreground">{t("No reports available.")}</div>
           )}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+
+  return (
+    <div className="flex min-h-dvh bg-background text-foreground">
+      <BusinessUnitTargetDialog open={createTargetOpen} units={creationUnits}
+        onSelect={handleCreateReportFromSidebar} onClose={() => setCreateTargetOpen(false)} />
+      {alertMsg && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 px-4 sm:right-4 sm:left-auto sm:w-full sm:max-w-136 sm:px-0">
+          <Card className="pointer-events-auto mx-auto w-full max-w-136 border border-border/80 bg-background/98 shadow-xl ring-1 ring-black/5 backdrop-blur-sm">
+            <CardHeader className="space-y-1.5 pb-3">
+              <CardTitle className="text-base tracking-tight">
+                {String(alertMsg).includes(t("Revision selector"))
+                  ? t("Budget revision not applied")
+                  : t("Unable to load report data")}
+              </CardTitle>
+              <CardDescription className="whitespace-pre-line text-sm leading-6">
+                {alertMsg}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex justify-end pt-0">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setAlertMsg(null)}
+              >{t("Dismiss")}</Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {showPageSkeleton && (
+        <div className="fixed inset-0 z-60 bg-background/80 backdrop-blur-sm">
+          <div className="flex h-full flex-col">
+            <div className="border-b border-border/60 bg-background/80 px-4 py-3 backdrop-blur lg:px-6">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-8 w-16 rounded-xl" />
+                  <Skeleton className="h-8 w-16 rounded-xl" />
+                  <Skeleton className="h-6 w-28 rounded-full" />
+                </div>
+                <Skeleton className="h-8 w-28 rounded-full" />
+              </div>
+            </div>
+
+            <div className="flex min-h-0 flex-1 overflow-hidden p-4 lg:p-6">
+              <div className="mx-auto flex h-full w-full max-w-450 min-h-0 flex-col gap-4">
+                {visibleActiveTab === "report" ? (
+                  <>
+                    <Skeleton className="h-34 w-full rounded-2xl border border-border/50 bg-card/80" />
+                    <div className="flex justify-end">
+                      <Skeleton className="h-20 w-full max-w-88 rounded-2xl border border-border/50 bg-card/80" />
+                    </div>
+                    <Skeleton className="min-h-0 flex-1 w-full rounded-2xl border border-border/50 bg-card/80" />
+                  </>
+                ) : (
+                  <div className="flex min-h-0 flex-1 flex-col gap-4">
+                    <Skeleton className="h-48 w-full rounded-2xl border border-border/50 bg-card/80" />
+                    <Skeleton className="h-80 w-full rounded-2xl border border-border/50 bg-card/80" />
+                    <Skeleton className="h-112 w-full rounded-2xl border border-border/50 bg-card/80" />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <Dialog open={isLoading}>
+        <DialogContent
+          showCloseButton={false}
+          onEscapeKeyDown={(event) => event.preventDefault()}
+          onPointerDownOutside={(event) => event.preventDefault()}
+          className="sm:max-w-sm"
+        >
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <LoaderCircle className="size-5 animate-spin motion-reduce:animate-none" />{t("Loading report data")}</DialogTitle>
+            <DialogDescription>{t("Please wait while Carmen prepares the report. Other actions are temporarily unavailable.")}</DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={setupSaveWarnings.length > 0}
+        onOpenChange={(open) => !open && setSetupSaveWarnings([])}
+      >
+        <AlertDialogContent className="min-w-0 overflow-hidden">
+          <AlertDialogHeader className="min-w-0">
+            <AlertDialogTitle>
+              {setupSaveWarnings.some(isBlockingSetupWarning)
+                ? t("Fix invalid row mappings")
+                : t("Save incomplete report template?")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {setupSaveWarnings.some(isBlockingSetupWarning)
+                ? t("Group mappings and individual-code mappings are mutually exclusive. Clear one mapping type before saving.")
+                : t("This template can be saved, but report data may be incomplete or incorrect until these items are fixed.")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <ScrollArea className="min-w-0 max-h-72 rounded-lg border border-border [&_[data-radix-scroll-area-viewport]>div]:!block">
+            <ul className="space-y-2 p-4 text-sm text-foreground">
+              {setupSaveWarnings.map((warning) => (
+                <li key={warning} className="flex min-w-0 gap-2">
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600" />
+                  <span className="min-w-0 wrap-anywhere text-pretty">{warning}</span>
+                </li>
+              ))}
+            </ul>
+          </ScrollArea>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setSetupSaveWarnings([])}>{t("Go back")}</AlertDialogCancel>
+            {!setupSaveWarnings.some(isBlockingSetupWarning) && (
+              <AlertDialogAction
+                onClick={() => {
+                  setSetupSaveWarnings([]);
+                  persistSetup();
+                }}
+              >{t("Save anyway")}</AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={Boolean(confirmAction)}
+        onOpenChange={(open) => !open && closeConfirmation()}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t(confirmAction?.title || "Confirm action")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t(confirmAction?.msg || "")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {confirmAction?.details}
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={closeConfirmation}>{t("Cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              className={confirmAction?.actionLabel === "Delete report" ? "bg-destructive text-white hover:bg-destructive/90 dark:bg-destructive dark:hover:bg-destructive/90" : undefined}
+              onClick={confirmPendingAction}
+            >
+              {t(confirmAction?.actionLabel || "Confirm")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {isMobile ? (
+        <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
+          <SheetContent side="left" className="w-72 p-0">
+            <SheetHeader className="sr-only">
+              <SheetTitle>{t("Reports")}</SheetTitle>
+              <SheetDescription>{t("Report navigation.")}</SheetDescription>
+            </SheetHeader>
+            {sidebarPanel}
+          </SheetContent>
+        </Sheet>
+      ) : !isSidebarCollapsed ? (
+        <aside className="hidden w-72 flex-col border-r bg-muted/30 lg:flex print:hidden">
+          {sidebarPanel}
+        </aside>
+      ) : null}
+
+      <main
+        className={`flex min-w-0 flex-1 flex-col ${visibleActiveTab === "setup" ? "overflow-visible" : "overflow-hidden"}`}
+      >
+        <header className="w-full border-b border-border bg-card/95 backdrop-blur print:hidden">
+          <div className="flex items-center justify-between gap-2 px-2 py-2.5 sm:gap-3 sm:px-4">
+            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+              {isMobile ? (
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  onClick={() => setIsSidebarOpen(true)}
+                  aria-label={t("Open navigation")}
+                  className="size-8 shrink-0 rounded-lg border-primary/30 text-primary hover:bg-primary/5"
+                >
+                  <PanelLeftOpen className="size-4" />
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-sm"
+                  className="size-8 shrink-0 rounded-lg border-primary/30 text-primary hover:bg-primary/5"
+                  onClick={() =>
+                    setIsSidebarCollapsed((collapsed) => !collapsed)
+                  }
+                  aria-label={
+                    isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
+                  }
+                  title={
+                    isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
+                  }
+                >
+                  {isSidebarCollapsed ? (
+                    <PanelLeftOpen className="size-4" />
+                  ) : (
+                    <PanelLeftClose className="size-4" />
+                  )}
+                </Button>
+              )}
+
+              {visibleActiveTab !== "report" && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="min-w-0 max-w-64 truncate font-semibold text-foreground"
+                  onClick={() => handleTabChange("report")}
+                >
+                  {activeReport?.name || t("Reports")}
+                </Button>
+              )}
+
+              <div className="hidden items-center gap-2 xl:flex">
+                {visibleActiveTab === "setup" && (
+                  <Badge variant="secondary">{t("Configuration")}</Badge>
+                )}
+                {visibleActiveTab === "import" && (
+                  <Badge variant="secondary">{t("Excel template wizard")}</Badge>
+                )}
+                {isMasterDataLoading && (
+                  <Badge variant="outline">{t("Syncing master data")}</Badge>
+                )}
+                {isReportCatalogLoading && (
+                  <Badge variant="outline">{t("Loading catalog")}</Badge>
+                )}
+                {masterDataError && (
+                  <Badge
+                    variant="destructive"
+                    title={masterDataError}
+                    className="rounded-full border-destructive/30 bg-destructive/15 px-2.5 py-1 text-xs text-destructive"
+                  >{t("Carmen API unavailable")}</Badge>
+                )}
+                {reportCatalogError && (
+                  <Badge
+                    variant="destructive"
+                    title={reportCatalogError}
+                    className="rounded-full border-destructive/30 bg-destructive/15 px-2.5 py-1 text-xs text-destructive"
+                  >{t("Report catalog error")}</Badge>
+                )}
+              </div>
+            </div>
+
+            <div className="flex min-w-0 items-center justify-end gap-1 sm:gap-2">
+              {visibleActiveTab === "report" && (
+                  <div className="flex shrink-0 items-center gap-1 rounded-lg border border-border bg-card/80 px-1 py-1 shadow-sm sm:px-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      className="shrink-0 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                      onClick={() =>
+                        setTableZoom((current) => Math.max(50, current - 10))
+                      }
+                      aria-label={t("Zoom out")}
+                      title={t("Zoom out")}
+                    >
+                      <ZoomOut className="size-3.5" />
+                    </Button>
+                    <Slider
+                      value={[tableZoom]}
+                      min={50}
+                      max={150}
+                      step={10}
+                      onValueChange={(value) => setTableZoom(value[0] || 100)}
+                      className="hidden w-20 min-w-20 md:flex"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      className="shrink-0 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                      onClick={() =>
+                        setTableZoom((current) => Math.min(150, current + 10))
+                      }
+                      aria-label={t("Zoom in")}
+                      title={t("Zoom in")}
+                    >
+                      <ZoomIn className="size-3.5" />
+                    </Button>
+                    <span className="hidden w-10 text-right text-xs font-medium tabular-nums text-foreground/70 sm:inline">
+                      {tableZoom}%
+                    </span>
+                  </div>
+                )}
+
+              {businessUnitsEnabled && <BusinessUnitSelector catalog={businessUnits} onChange={handleBusinessUnitSelection} />}
+<Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={openContextualGuide}
+                aria-label={contextualGuideLabel}
+                title={contextualGuideLabel.replace("Open ", "")}
+              >
+                <CircleHelp className="size-4" />
+              </Button>
+
+              {/* User profile dropdown button with Avatar as in image */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    aria-label={t("Account preferences")}
+                    className="h-10 gap-2.5 rounded-xl border-border bg-background px-3 hover:bg-muted"
+                  >
+                    <div className="hidden flex-col text-right lg:flex">
+                      <span className="text-xs font-semibold leading-tight text-foreground max-w-36 truncate">
+                        {currentUser?.name || currentUser?.id || t("User")}
+                      </span>
+                      <span className="text-[10px] leading-tight text-muted-foreground max-w-36 truncate">
+                        {currentUser?.role
+                          ? `${currentUser.role} Account`
+                          : "Rooms General Account"}
+                      </span>
+                    </div>
+                    <span className="relative flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                      {(currentUser?.avatarUrl ||
+                        currentUser?.avatar ||
+                        currentUser?.photoUrl) && (
+                        <img
+                          src={
+                            currentUser.avatarUrl ||
+                            currentUser.avatar ||
+                            currentUser.photoUrl
+                          }
+                          alt=""
+                          className="absolute inset-0 size-full object-cover"
+                          onError={(event) => {
+                            event.currentTarget.hidden = true;
+                          }}
+                        />
+                      )}
+                      {String(currentUser?.name || currentUser?.id || "TX")
+                        .split(/\s+/)
+                        .slice(0, 2)
+                        .map((part) => part[0])
+                        .join("")
+                        .toUpperCase()}
+                    </span>
+                    <ChevronDown className="size-3.5 text-muted-foreground" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="end"
+                  className="w-68 gap-1 p-2 shadow-lg"
+                >
+                  <div className="flex items-center gap-3 border-b px-3 py-2.5">
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
+                      {String(currentUser?.name || currentUser?.id || "TX")
+                        .split(/\s+/)
+                        .slice(0, 2)
+                        .map((part) => part[0])
+                        .join("")
+                        .toUpperCase()}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-foreground">
+                        {currentUser?.name || currentUser?.id || t("User")}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {currentUser?.userName || currentUser?.id || "user"}
+                        @carmen.financial
+                      </p>
+                      <p className="truncate text-[11px] text-muted-foreground">
+                        {currentUser?.role
+                          ? `${currentUser.role} Account`
+                          : "Rooms General Account"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="px-2 pt-2 pb-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{t("Preferences")}</div>
+
+                  <LanguagePreference />
+
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="w-full justify-start text-xs font-normal"
+                      >
+                        {themeMode === "dark" ? (
+                          <MoonStar className="size-4" />
+                        ) : themeMode === "system" ? (
+                          <Monitor className="size-4" />
+                        ) : (
+                          <SunMedium className="size-4" />
+                        )}{t("Theme")}<ChevronRight className="ml-auto size-4" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      side="left"
+                      align="start"
+                      className="w-44 gap-1 p-2"
+                    >
+                      {[
+                        ["light", t("Light"), SunMedium],
+                        ["dark", t("Dark"), MoonStar],
+                        ["system", t("System"), Monitor],
+                      ].map(([value, label, Icon]) => (
+                        <Button
+                          key={value}
+                          type="button"
+                          variant="ghost"
+                          className="w-full justify-start text-xs"
+                          onClick={() => setThemeMode(value)}
+                        >
+                          <Icon className="size-4" />
+                          {label}
+                          {themeMode === value && (
+                            <Check className="ml-auto size-4" />
+                          )}
+                        </Button>
+                      ))}
+                    </PopoverContent>
+                  </Popover>
+
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="w-full justify-start text-xs font-normal"
+                      >
+                        <Type className="size-4" />{t("Font size")}<ChevronRight className="ml-auto size-4" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      side="left"
+                      align="start"
+                      className="w-44 gap-1 p-2"
+                    >
+                      {FONT_SIZE_OPTIONS.map(([value, label, , iconSize]) => (
+                        <Button
+                          key={value}
+                          type="button"
+                          variant="ghost"
+                          className="w-full justify-start text-xs"
+                          aria-pressed={fontSize === value}
+                          onClick={() => setFontSize(value)}
+                        >
+                          <Type className={iconSize} />
+                          <span className="flex-1 text-left">{t(label)}</span>
+                          {fontSize === value && <Check className="size-4" />}
+                        </Button>
+                      ))}
+                    </PopoverContent>
+                  </Popover>
+
+                  {typeof onLogout === "function" && (
+                    <>
+                      <div className="my-1 border-t border-border" />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="w-full justify-start text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        onClick={onLogout}
+                      >
+                        <LogOut className="size-4" />{t("Log out")}</Button>
+                    </>
+                  )}
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
         </header>
 
-        <div className="p-4 md:p-6 max-w-full mx-auto w-full print:p-0 flex flex-col flex-1 min-h-0 overflow-hidden">
-          {activeTab === 'report' && activeReport && (
-              <ReportView
-                activeReport={activeReport}
-              displayCompanyLabel={displayCompanyLabel}
-              displayDateLabel={displayDateLabel}
-              displayPeriodLabel={displayPeriodLabel}
-              reportData={reportData}
-              activeCols={activeCols}
-              currentTheme={currentTheme}
-              tableZoom={tableZoom}
-              getIndentClass={getIndentClass}
-            />
-          )}
+        {/* Filter bar: separated below topbar, shown in VIEW mode */}
+        {visibleActiveTab === "report" && (
+          <div className="px-4 pt-4 print:hidden">
+            <section
+              className="mb-3 flex min-w-0 flex-wrap items-center justify-between gap-3"
+              aria-label={t("Report title and actions")}
+            >
+              <h1 className="min-w-0 flex-1 text-balance text-xl font-semibold text-foreground">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-auto max-w-full justify-start px-0 py-1 text-left text-xl font-semibold hover:bg-transparent"
+                  onClick={() => handleTabChange("report")}
+                  title={activeReport?.name || "Reports"}
+                >
+                  <span className="truncate">
+                    {activeReport?.name || t("Reports")}
+                  </span>
+                </Button>
+              </h1>
+              {(canSetupReports || canCreateReports) && (
+                <div data-tour="report-actions" className="flex flex-wrap items-center justify-end gap-2 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-lg data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary">
+                  <Button
+                    size="sm"
+                    onClick={handleCreateReportFromSidebar}
+                  >
+                    <FilePlus />{t("New Report")}</Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!canSetupReports}
+                    onClick={() => handleTabChange("import")}
+                  >
+                    <FileSpreadsheet />{t("Import Excel")}</Button>
+                  {activeReport && canSetupReports && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleTabChange("setup")}
+                      >
+                        <Pencil />{t("Edit")}</Button>
 
-          {activeTab === 'report' && !activeReport && (
-            <div className="h-full flex items-center justify-center text-sm font-bold text-slate-400">
-              No reports available for this user.
-            </div>
-          )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive focus-visible:border-destructive focus-visible:ring-destructive/20"
+                        onClick={handleDeleteReport}
+                      >
+                        <Trash2 />{t("Delete")}</Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleCloneReport}
+                      >
+                        <Copy />{t("Duplicate")}</Button>
+                      {apiConfigured && (
+                        <ReportHistory
+                          key={reportKey(activeReport)}
+                          report={activeReport}
+                          isDirty={false}
+                          onRestored={(restored) => {
+                            setReports((currentReports) =>
+                              currentReports.map((report) =>
+                                reportKey(report) === reportKey({ ...restored, tenant: activeReport.tenant }) ? { ...restored, tenant: activeReport.tenant } : report,
+                              ),
+                            );
+                            setSetupDraft({ ...restored, tenant: activeReport.tenant });
+                            setIsSetupDirty(false);
+                            setSetupUndoHistory([]);
+                            lastSetupUndoGroupRef.current = null;
+                            setReportCatalogError(null);
+                          }}
+                        />
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+            </section>
+            <ReportFiltersPanel isMobile={isMobile}
+              summary={`${appliedYear} · P${appliedPeriod}${activeReportUsesDayFilter ? ` · ${t("Day")} ${activeReportDay}` : ''} · ${appliedDepts.length ? `${t("Department")}: ${appliedDepts.join(', ')}` : t("All departments")}`}
+              pending={String(globalYear) !== String(appliedYear) || String(globalPeriod) !== String(appliedPeriod) || String(globalRevision) !== String(appliedRevision) || (activeReportUsesDayFilter && String(globalDay) !== String(activeReportDay)) || [...globalDepts].sort().join(',') !== [...appliedDepts].sort().join(',')}>
+                <div className="flex flex-col gap-2 2xl:flex-row 2xl:items-end 2xl:justify-between">
+                  <div
+                    className={`grid gap-2 sm:grid-cols-2 sm:items-end md:grid-cols-3 lg:grid-cols-4 2xl:flex-none ${activeReportUsesDayFilter ? "2xl:grid-cols-[180px_110px_180px_120px_88px_88px]" : "2xl:grid-cols-[180px_110px_180px_88px_88px]"}`}
+                  >
+                    <div className="min-w-0">
+                      <MultiSelectDropdown
+                        testIdPrefix="dept"
+                        label="DEPT"
+                        options={masterData.depts}
+                        selected={globalDepts}
+                        onChange={setGlobalDepts}
+                      />
+                    </div>
 
-          {activeTab === 'setup' && canSetupReports && activeReport && (
-              <ReportSetup
-              masterData={masterData}
-              reportOptions={reportOptions}
-              activeReport={activeReport}
-              activeCategories={activeCategories}
-              updateActiveReport={updateActiveReport}
-              handleCloneReport={handleCloneReport}
-              handleCreateBlankReport={handleCreateBlankReport}
-              handleDeleteReport={handleDeleteReport}
-              handleOCRUpload={handleOCRUpload}
-              setIsAccessModalOpen={setIsAccessModalOpen}
-              handleAddCol={handleAddCol}
-              handleUpdateCol={handleUpdateCol}
-              moveCol={moveCol}
-              handleDeleteCol={handleDeleteCol}
-              handleAddRow={handleAddRow}
-              handleUpdateRow={handleUpdateRow}
-              handleUpdateRowMulti={handleUpdateRowMulti}
-              moveRow={moveRow}
-              handleDeleteRow={handleDeleteRow}
-              setEditingRow={setEditingRow}
-              setConfirmAction={setConfirmAction}
-            />
-          )}
+                    <div className="space-y-1">
+                      <span className="block text-xs font-medium text-muted-foreground">{t("Year")}</span>
+                      <Input
+                        type="number"
+                        value={globalYear}
+                        onChange={(event) => setGlobalYear(event.target.value)}
+                        className="h-9 text-sm"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className="block text-xs font-medium text-muted-foreground">{t("Period")}</span>
+                      <Select
+                        value={globalPeriod}
+                        onValueChange={setGlobalPeriod}
+                      >
+                        <SelectTrigger
+                          className={`h-9 min-w-0 text-sm ${NEUTRAL_FILTER_TRIGGER_CLASS}`}
+                        >
+                          <SelectValue placeholder={t("Period")} />
+                        </SelectTrigger>
+                        <SelectContent position="popper">
+                          {periodSelectOptions.map((option) => (
+                            <SelectItem
+                              key={option.id}
+                              value={String(option.id)}
+                            >
+                              {t(option.label)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {activeReportUsesDayFilter && (
+                      <div className="space-y-1">
+                        <label
+                          htmlFor="view-day"
+                          className="block text-xs font-medium text-muted-foreground"
+                        >{t("Day")}</label>
+                        <Input
+                          id="view-day"
+                          type="number"
+                          min="1"
+                          max="31"
+                          value={globalDay}
+                          onChange={(event) =>
+                            setDayFilterState({
+                              reportId: reportKey(activeReport),
+                              reportDay: defaultReportDay,
+                              globalDay: event.target.value,
+                              appliedDay: activeReportDay,
+                            })
+                          }
+                          className="h-9 text-sm"
+                        />
+                      </div>
+                    )}
+
+                    <div className="space-y-1">
+                      <span className="block text-xs font-medium text-muted-foreground">{t("Budget revision")}</span>
+                      <Select
+                        value={globalRevision}
+                        onValueChange={(nextValue) => {
+                          if (!activeReportUsesBudget && nextValue !== "0") {
+                            setGlobalRevision("0");
+                            setAppliedRevision("0");
+                            setAlertMsg(
+                              "Revision selector is ignored for reports without budget columns.",
+                            );
+                            return;
+                          }
+                          setGlobalRevision(nextValue);
+                        }}
+                      >
+                        <SelectTrigger
+                          className={`h-9 w-full min-w-0 text-sm ${NEUTRAL_FILTER_TRIGGER_CLASS}`}
+                        >
+                          <SelectValue placeholder={t("Revision")} />
+                        </SelectTrigger>
+                        <SelectContent position="popper">
+                          {revisionSelectOptions.map((option) => (
+                            <SelectItem
+                              key={option.id}
+                              value={String(option.id)}
+                            >
+                              {t(option.label)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <Button
+                      size="sm"
+                      className="h-9 w-full self-end px-3 text-sm sm:w-auto sm:min-w-24 sm:justify-self-start"
+                      onClick={handleApplyFilters}
+                      disabled={isLoading}
+                    >
+                      {isLoading ? (
+                        <LoaderCircle className="animate-spin motion-reduce:animate-none" />
+                      ) : null}
+                      {isLoading ? t("Loading...") : t("Apply")}
+                    </Button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 2xl:ml-4 2xl:flex-nowrap 2xl:self-end 2xl:justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={`h-9 w-full px-3 text-sm sm:w-auto ${NEUTRAL_BUTTON_CLASS}`}
+                      onClick={exportToExcel}
+                      title={t("Export to Excel")}
+                    >
+                      <Download />
+                      Excel
+                    </Button>
+                    <Button
+                      className={`h-9 w-full px-3 text-sm sm:w-9 sm:px-0 pointer-coarse:sm:w-11 ${NEUTRAL_BUTTON_CLASS}`}
+                      size="sm"
+                      variant="outline"
+                      onClick={() => window.print()}
+                      title={t("Print")}
+                      aria-label={t("Print")}
+                    >
+                      <Printer />
+                    </Button>
+                  </div>
+                </div>
+            </ReportFiltersPanel>
+          </div>
+        )}
+
+        <div
+          className={`min-h-0 flex-1 ${visibleActiveTab === "setup" ? "overflow-visible" : "overflow-hidden"} ${mainContentPaddingClass}`}
+        >
+          <div className={`${mainContentWidthClass} ${activeTabMotionClass}`}>
+            {visibleActiveTab === "report" && (masterDataError || reportCatalogError) && reports.length === 0 ? (
+              <Card className="mx-auto w-full max-w-[500px] border border-destructive/20 bg-destructive/5 shadow-none ring-0">
+                <CardContent className="flex flex-col items-center justify-center p-6 text-center sm:p-10">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-destructive/10 text-destructive mb-4">
+                    <AlertTriangle className="size-6" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-foreground mb-2">
+                    {masterDataError
+                      ? t("Unable to load master data")
+                      : t("Unable to load report catalog")}
+                  </h3>
+                  <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
+                    {masterDataError || reportCatalogError}
+                  </p>
+                  <Button
+                    onClick={() => window.location.reload()}
+                    variant="outline"
+                    className="h-9 border border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:border-destructive/40 transition-colors gap-2"
+                  >
+                    <RefreshCw className="size-3.5" />{t("Retry")}</Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                {visibleActiveTab === "report" && activeReport && (
+                  <React.Suspense
+                    fallback={
+                      <Card className="flex h-full min-h-0 items-center justify-center border border-border shadow-none ring-0">
+                        <CardContent className="py-16 text-center text-sm text-muted-foreground">{t("Loading report view...")}</CardContent>
+                      </Card>
+                    }
+                  >
+                      <ReportView
+                        activeReport={activeReport}
+                        engineData={engineData}
+                        budgetData={budgetData}
+                        appliedDepts={appliedDepts}
+                        appliedYear={appliedYear}
+                        appliedPeriod={appliedPeriod}
+                        appliedRevision={appliedBudgetRevision}
+                        periodOptions={periodOptions}
+                        masterData={masterData}
+                        displayCompanyLabel={displayCompanyLabel}
+                        displayDateLabel={displayDateLabel}
+                        displayPeriodLabel={displayPeriodLabel}
+                        remark={activeReport.remark}
+                        reportData={reportData}
+                        activeCols={activeCols}
+                        currentTheme={currentTheme}
+                        tableZoom={tableZoom}
+                        getIndentClass={getIndentClass}
+                      />
+                  </React.Suspense>
+                )}
+
+                {visibleActiveTab === "report" && !activeReport && (
+                  <Card className="flex h-full items-center justify-center border border-border shadow-none ring-0">
+                    <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
+                      <h3 className="text-lg font-semibold text-foreground">{t("No reports yet")}</h3>
+                      <p className="max-w-md text-sm text-muted-foreground">
+                        {canSetupReports
+                          ? t("Create a blank report or import an Excel workbook to get started.")
+                          : t("No financial reports are available.")}
+                      </p>
+                      {canCreateReports && (
+                        <Button
+                          size="sm"
+                          onClick={handleCreateReportFromSidebar}
+                        >{t("New report")}</Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {visibleActiveTab === "setup" &&
+                  canSetupReports &&
+                  activeReport && (
+                    <React.Suspense
+                      fallback={
+                        <Card className="flex h-full min-h-0 items-center justify-center border border-border shadow-none ring-0">
+                          <CardContent className="py-16 text-center text-sm text-muted-foreground">{t("Loading setup tools...")}</CardContent>
+                        </Card>
+                      }
+                    >
+                      <ReportSetup
+                        ref={setupGuideRef}
+                        guideStoragePrefix={gettingStartedStorageKey}
+                        themeMode={themeMode}
+                        masterData={masterData}
+                        reportOptions={reportOptions}
+                        activeReport={setupReport}
+                        savedReport={activeReport}
+                        activeCategories={activeCategories}
+                        updateActiveReport={updateActiveReport}
+                        isDirty={isSetupDirty}
+                        isSaving={isSetupSaving}
+                        apiConfigured={apiConfigured}
+                        onHistoryRestored={(restored) => {
+                          const scopedRestored = activeReport.tenant ? { ...restored, tenant: activeReport.tenant } : restored;
+                          setReports((currentReports) =>
+                            currentReports.map((report) =>
+                              reportKey(report) === reportKey(scopedRestored) ? scopedRestored : report,
+                            ),
+                          );
+                          setSetupDraft(scopedRestored);
+                          setIsSetupDirty(false);
+                          setSetupUndoHistory([]);
+                          lastSetupUndoGroupRef.current = null;
+                          setReportCatalogError(null);
+                        }}
+                        onSave={handleSaveSetup}
+                        onBack={() => handleTabChange("report")}
+                        onCancel={handleCancelSetup}
+                        onUndo={handleUndoSetup}
+                        canUndo={setupUndoHistory.length > 0}
+                        onBusyTransition={triggerPageTransition}
+                        onOpenImport={() => handleTabChange("import")}
+                        handleCloneReport={handleCloneReport}
+                        handleCreateBlankReport={handleCreateBlankReport}
+                        handleDeleteReport={handleDeleteReport}
+                        handleAddCol={handleAddCol}
+                        handleUpdateCol={handleUpdateCol}
+                        moveCol={moveCol}
+                        handleDeleteCol={handleDeleteCol}
+                        handleAddRow={handleAddRow}
+                        handleDuplicateRow={handleDuplicateRow}
+                        handleDuplicateCol={handleDuplicateCol}
+                        handleUpdateRow={handleUpdateRow}
+                        handleUpdateRowMulti={handleUpdateRowMulti}
+                        moveRow={moveRow}
+                        handleDeleteRow={handleDeleteRow}
+                        setEditingRow={setEditingRow}
+                        setConfirmAction={requestConfirmation}
+                      />
+                    </React.Suspense>
+                  )}
+
+                {visibleActiveTab === "import" && canSetupReports && (
+                  <React.Suspense
+                    fallback={
+                      <Card className="flex h-full min-h-0 items-center justify-center border border-border shadow-none ring-0">
+                        <CardContent className="py-16 text-center text-sm text-muted-foreground">{t("Loading Excel template wizard...")}</CardContent>
+                      </Card>
+                    }
+                  >
+                    <ExcelTemplateImportWizard
+                      ref={importGuideRef}
+                      guideStoragePrefix={gettingStartedStorageKey}
+                      companyName={
+                        masterData.companyProfile.name ||
+                        activeReport?.companyName ||
+                        "Carmen Hotel & Resorts"
+                      }
+                      owner={currentUser?.id || ""}
+                      departments={masterData.depts}
+                      accountCodes={masterData.accCodes}
+                      dimensions={dimensionDefinitions}
+                      onImportTemplates={handleImportExcelTemplates}
+                      onOpenImportedReport={(reportId) => {
+                        if (reportId) setCurrentReportId(reportId);
+                        handleTabChange("setup");
+                      }}
+                    />
+                  </React.Suspense>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </main>
 
-      {/* --- MODALS --- */}
-      <AccessModal
-        isOpen={isAccessModalOpen}
-        masterData={masterData}
-        activeReport={activeReport}
-        onClose={() => setIsAccessModalOpen(false)}
-        onUpdateUsers={(newUsers) => updateActiveReport({ assignedUsers: newUsers })}
-      />
+      <Button
+        type="button"
+        size="icon"
+        className="fixed right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-40 rounded-full shadow-md print:hidden"
+        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        aria-label={t("Scroll to top")}
+        title={t("Scroll to top")}
+      >
+        <ArrowUp />
+      </Button>
 
-      <EditMappingModal
-        isOpen={!!editingRow}
-        editingRow={editingRow}
-        setEditingRow={setEditingRow}
-        masterData={masterData}
-        reportOptions={reportOptions}
-        modalAccCategory={modalAccCategory}
-        setModalAccCategory={setModalAccCategory}
-        onOpenDetailSelector={({ field, title, subTitle, items }) => setDetailSelecting({ field, title, subTitle, items })}
-        onApply={async () => {
-          const nextRows = activeReport.rows.map((row) => (row.id === editingRow.id ? {
-            ...row,
-            desc: editingRow.desc,
-            dept: editingRow.dept,
-            accCodes: editingRow.accCodes,
-            groupLevel: editingRow.groupLevel,
-            groups: editingRow.groups,
-            dim1: editingRow.dim1,
-            dim2: editingRow.dim2,
-          } : row));
-          const nextReport = { ...activeReport, rows: nextRows };
-          handleUpdateRowMulti(editingRow.id, {
-            desc: editingRow.desc,
-            dept: editingRow.dept,
-            accCodes: editingRow.accCodes,
-            groupLevel: editingRow.groupLevel,
-            groups: editingRow.groups,
-            dim1: editingRow.dim1,
-            dim2: editingRow.dim2,
-          });
-          setEditingRow(null);
-          await persistActiveReport(nextReport);
-        }}
-        onClose={() => setEditingRow(null)}
-      />
+      <React.Suspense fallback={null}>
+        <GettingStartedTour
+          canSetup={canSetupReports}
+          open={isGettingStartedOpen && !isLoading && !isReportCatalogLoading}
+          stepIndex={gettingStartedStep}
+          onStepChange={setGettingStartedStep}
+          onClose={closeGettingStarted}
+        />
+      </React.Suspense>
+
+      <React.Suspense fallback={null}>
+        <EditMappingModal
+          isOpen={!!editingRow}
+          editingRow={editingRow}
+          setEditingRow={setEditingRow}
+          masterData={masterData}
+          reportOptions={reportOptions}
+          dimensionDefinitions={dimensionDefinitions}
+          modalAccCategory={modalAccCategory}
+          setModalAccCategory={setModalAccCategory}
+          onOpenDetailSelector={({ field, title, subTitle, items }) =>
+            setDetailSelecting({ field, title, subTitle, items })
+          }
+          onApply={() => {
+            const nextAccCodes = String(editingRow.accCodes || "")
+              .split(/[;,\n]/)
+              .map((code) => code.trim())
+              .filter(Boolean);
+            const selectedCodes = new Set(nextAccCodes.map(normalizeAccLookupCode));
+            const nextDimensions = dimensionDefinitions
+              .map(({ key }) => ({ key, value: String(editingRow[key] || "").trim() }))
+              .filter(({ value }) => value);
+            const conflictingRows = setupReport.rows.filter((row) =>
+              row.id !== editingRow.id &&
+              rowDepartmentsOverlap(editingRow, row, masterData) &&
+              rowDimensionsOverlap({ ...editingRow, dimensions: nextDimensions }, row) &&
+              String(row.accCodes || "")
+                .split(/[;,\n]/)
+                .some((code) => selectedCodes.has(normalizeAccLookupCode(code.trim()))),
+            );
+            const conflictingCodes = [...new Set(conflictingRows.flatMap((row) =>
+              String(row.accCodes || "")
+                .split(/[;,\n]/)
+                .map((code) => code.trim())
+                .filter((code) => selectedCodes.has(normalizeAccLookupCode(code))),
+            ))];
+            const updates = {
+              desc: editingRow.desc,
+              dept: editingRow.dept,
+              deptGroup: editingRow.deptGroup,
+              accCodes: nextAccCodes.join(", "),
+              groupLevel: editingRow.groupLevel,
+              groups: editingRow.groups,
+              dimensions: nextDimensions,
+              ...Object.fromEntries(
+                dimensionDefinitions.map(({ key }) => [key, editingRow[key]]),
+              ),
+            };
+            const applyMapping = () => {
+              updateActiveReport({
+                rows: setupReport.rows.map((row) => row.id === editingRow.id
+                  ? { ...row, ...updates }
+                  : conflictingRows.some((conflict) => conflict.id === row.id)
+                    ? {
+                        ...row,
+                        accCodes: String(row.accCodes || "")
+                          .split(/[;,\n]/)
+                          .map((code) => code.trim())
+                          .filter((code) => !conflictingCodes.some((conflict) =>
+                            normalizeAccLookupCode(conflict) === normalizeAccLookupCode(code),
+                          ))
+                          .join(", "),
+                      }
+                    : row),
+              });
+              setEditingRow(null);
+            };
+            if (conflictingCodes.length) {
+              requestConfirmation({
+                title: "Review mapping changes",
+                msg: "These accounts overlap another row's department and dimensions. Moving them will remove them from the rows below.",
+                actionLabel: "Move accounts",
+                details: <MappingConflictPreview targetName={editingRow.desc} rows={conflictingRows.map(row => ({
+                  row,
+                  reference: `R${setupReport.rows.findIndex(item => item.id === row.id) + 1}`,
+                  codes: String(row.accCodes || '').split(/[;,\n]/).map(code => code.trim()).filter(code => selectedCodes.has(normalizeAccLookupCode(code))),
+                }))} />,
+                onConfirm: applyMapping,
+              });
+            } else applyMapping();
+          }}
+          onClose={() => setEditingRow(null)}
+        />
+      </React.Suspense>
 
       {detailSelecting && (
-        <DetailSelectorModal
-          masterData={masterData}
-          title={detailSelecting.title}
-          subTitle={detailSelecting.subTitle || 'Select Items'}
-          availableItems={detailSelecting.items}
-          selectedItems={editingRow[detailSelecting.field]?.split(',').map(s => s.trim()).filter(Boolean) || []}
-          onCancel={() => setDetailSelecting(null)}
-          onSave={(newSelection) => {
-            setEditingRow({ ...editingRow, [detailSelecting.field]: newSelection.join(', ') });
-            setDetailSelecting(null);
-          }}
-        />
+        <React.Suspense fallback={null}>
+          <DetailSelectorModal
+            masterData={masterData}
+            title={detailSelecting.title}
+            subTitle={detailSelecting.subTitle || "Select Items"}
+            availableItems={detailSelecting.items}
+            selectedItems={parseSelectedItems(
+              editingRow[detailSelecting.field],
+            )}
+            onCancel={() => setDetailSelecting(null)}
+            onSave={(newSelection) => {
+              setEditingRow({
+                ...editingRow,
+                [detailSelecting.field]: newSelection.join(", "),
+              });
+              setDetailSelecting(null);
+            }}
+          />
+        </React.Suspense>
       )}
-
-      
-
-      
-
-      {/* Custom CSS */}
-      <style dangerouslySetInnerHTML={{ __html: `
-        .custom-scrollbar::-webkit-scrollbar { width: 10px; height: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: #f3e8ff; border-radius: 8px; border: 1px solid #e9d5ff; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #d8b4fe; border-radius: 8px; border: 2px solid #f3e8ff; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #c084fc; }
-        @media print {
-          @page { size: A4 portrait; margin: 1cm; }
-          body { background: white; }
-          .print\\:hidden { display: none !important; }
-          table { width: 100% !important; border: 1px solid #e2e8f0 !important; zoom: 1 !important; }
-          th, td { padding: 4pt !important; border: 1px solid #e2e8f0 !important; font-size: 7pt !important; }
-        }
-      `}} />
     </div>
   );
 }
