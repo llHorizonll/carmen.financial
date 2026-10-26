@@ -145,6 +145,30 @@ describe('App shell', () => {
     delete document.documentElement.dataset.shellTemplate;
   });
 
+  it('saves a sidebar group move to the report tenant without changing its mappings', async () => {
+    const user = { id: 'admin', role: 'Admin', permissions: { financialReport: { view: true, setup: true, update: true } } };
+    reportApiMocks.isCarmenApiConfigured.mockReturnValue(true);
+    reportApiMocks.getStoredCarmenSession.mockReturnValue({ accessToken: 'test-token', businessUnit: { tenant: 'unit-a' }, user });
+    reportApiMocks.fetchCarmenMasterData.mockResolvedValue({
+      currentUser: user, companyProfile: {}, depts: [], accCodes: [], periods: [], budgetRevisions: [], groups: {},
+    });
+    const source = { ...getDefaultReports()[0], reportGroup: 'Operations', lastModified: '2026-10-26T10:00:00' };
+    const other = { ...getDefaultReports()[1], reportGroup: 'Daily Group Report' };
+    reportApiMocks.fetchCarmenReports.mockResolvedValue([source, other]);
+    render(<App />);
+    const nav = await screen.findByRole('navigation', { name: 'Report groups' });
+    const reportButton = await within(nav).findByRole('button', { name: source.name, exact: true });
+    const targetGroup = within(nav).getByRole('button', { name: 'Daily Report', exact: true });
+    const dataTransfer = { setData: vi.fn(), effectAllowed: '', dropEffect: '' };
+    fireEvent.dragStart(reportButton, { dataTransfer });
+    fireEvent.dragOver(targetGroup, { dataTransfer });
+    fireEvent.drop(targetGroup, { dataTransfer });
+    await waitFor(() => expect(reportApiMocks.saveCarmenReport).toHaveBeenCalledWith(
+      { ...source, tenant: 'unit-a', reportGroup: 'Daily Report' }, { tenant: 'unit-a' },
+    ));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Operations', exact: true })).not.toBeInTheDocument());
+  });
+
   it('keeps the default shell template applied without showing template compare controls', async () => {
     render(<App />);
 

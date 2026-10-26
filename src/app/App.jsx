@@ -930,6 +930,25 @@ export default function App({ onLogout = null }) {
     }
   };
 
+  const handleMoveReportToGroup = async (report, reportGroup) => {
+    if (!canSetupReports || isSetupDirty || isSetupSaving) {
+      throw new Error(t("Save or cancel your edits to move reports."));
+    }
+    const updated = { ...report, reportGroup };
+    setIsSetupSaving(true);
+    try {
+      const saved = apiConfigured
+        ? await saveCarmenReport(updated, ...(report.tenant ? [{ tenant: report.tenant }] : []))
+        : null;
+      const lastModified = saved?.lastModified || saved?.LastModified;
+      const next = lastModified ? { ...updated, lastModified } : updated;
+      setReports((current) => current.map((item) => reportKey(item) === reportKey(report) ? next : item));
+      if (reportKey(setupDraft) === reportKey(report)) setSetupDraft(next);
+    } finally {
+      setIsSetupSaving(false);
+    }
+  };
+
   const handleSaveSetup = async () => {
     if (!setupReport || !isSetupDirty || isSetupSaving) return;
     const warnings = getSetupWarnings(setupReport, masterData);
@@ -1627,7 +1646,12 @@ export default function App({ onLogout = null }) {
             data-tour="reports"
           >
             {businessUnitsEnabled ? <BusinessUnitReportList key={currentUser?.id || "anonymous"} storageKey={`carmen_report_navigation:${currentUser?.id || "anonymous"}`} catalog={businessUnits} reports={accessibleReports}
-              currentKey={resolvedCurrentReportId} onSelect={handleReportChange} /> : <ReportGroupNavigation reports={accessibleReports} currentKey={resolvedCurrentReportId} onSelect={handleReportChange} />}
+              currentKey={resolvedCurrentReportId} onSelect={handleReportChange}
+              onMoveReport={canSetupReports && !isSetupDirty && !isSetupSaving ? handleMoveReportToGroup : undefined}
+              moveDisabledReason={canSetupReports && isSetupDirty ? t("Save or cancel your edits to move reports.") : undefined} /> : <ReportGroupNavigation reports={accessibleReports} currentKey={resolvedCurrentReportId} onSelect={handleReportChange}
+              storageKey={`carmen_report_groups:${currentUser?.id || "anonymous"}`}
+              onMoveReport={canSetupReports && !isSetupDirty && !isSetupSaving ? handleMoveReportToGroup : undefined}
+              moveDisabledReason={canSetupReports && isSetupDirty ? t("Save or cancel your edits to move reports.") : undefined} />}
           </div>
           {!businessUnitsEnabled && accessibleReports.length === 0 && (
             <div className="px-2 py-8 text-sm text-muted-foreground">{t("No reports available.")}</div>

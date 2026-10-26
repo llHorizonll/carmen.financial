@@ -1,6 +1,6 @@
 import { useTranslation } from "@/lib/i18n.js";
 import React from 'react';
-import { getReportGroup } from './ReportGroupNavigation.jsx';
+import { DEFAULT_REPORT_GROUPS, getReportGroup } from './ReportGroupNavigation.jsx';
 import { Settings2 } from 'lucide-react';
 import { CardDescription } from '@/components/ui/card.jsx';
 import { Input } from '@/components/ui/input.jsx';
@@ -74,8 +74,9 @@ export default function ReportDetailsPanel({
               placeholder={getReportGroup(activeReport)} list="report-group-options"
               onChange={(e) => updateActiveReport({ reportGroup: e.target.value })} />
             <datalist id="report-group-options">
-              {['P&L Group Report', 'BL Group Report', 'Daily Group Report'].map(name => <option key={name} value={name} />)}
+              {DEFAULT_REPORT_GROUPS.map(name => <option key={name} value={name} />)}
             </datalist>
+            <CardDescription>{t("Enter a new name to create a group. This changes the group for this report only; save to apply.")}</CardDescription>
           </section>
           <div className="space-y-2">
             <Label className="text-foreground">{t("Company Name")}</Label>
