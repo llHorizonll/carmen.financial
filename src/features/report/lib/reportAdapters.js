@@ -414,6 +414,7 @@ export const adaptCarmenReportDefinition = (report) => {
   return {
     id: String(report.id || report.Id || '').trim(),
     name: report.name || report.Name || '',
+    reportGroup: String(report.reportGroup ?? report.ReportGroup ?? '').trim(),
     companyName: report.companyName || report.CompanyName || '',
     category: toCategoryArray(report.category || report.Category || report.CategoryJson),
     assignedUsers: assignedUsers.length > 0

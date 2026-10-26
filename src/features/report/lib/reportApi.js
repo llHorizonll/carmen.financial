@@ -531,6 +531,7 @@ export const fetchCarmenReport = async (id, context = {}) => {
 export const buildReportDefinitionPayload = (report) => ({
   id: String(report?.id || '').trim(),
   name: String(report?.name || '').trim(),
+  reportGroup: String(report?.reportGroup || '').trim(),
   companyName: String(report?.companyName || '').trim(),
   category: Array.isArray(report?.category) && report.category.length > 0
     ? toTrimmedStringArray(report.category)

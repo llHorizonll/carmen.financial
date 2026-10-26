@@ -1,5 +1,6 @@
 import { useTranslation } from "@/lib/i18n.js";
 import React from 'react';
+import { getReportGroup } from './ReportGroupNavigation.jsx';
 import { Settings2 } from 'lucide-react';
 import { CardDescription } from '@/components/ui/card.jsx';
 import { Input } from '@/components/ui/input.jsx';
@@ -67,6 +68,15 @@ export default function ReportDetailsPanel({
             <Label className="text-foreground">{t("Report Name")}</Label>
             <Input value={activeReport.name} onChange={(e) => updateActiveReport({ name: e.target.value })} />
           </div>
+          <section className="space-y-2">
+            <Label htmlFor="report-group">{t("Report Group")}</Label>
+            <Input id="report-group" value={activeReport.reportGroup || ''} maxLength={100}
+              placeholder={getReportGroup(activeReport)} list="report-group-options"
+              onChange={(e) => updateActiveReport({ reportGroup: e.target.value })} />
+            <datalist id="report-group-options">
+              {['P&L Group Report', 'BL Group Report', 'Daily Group Report'].map(name => <option key={name} value={name} />)}
+            </datalist>
+          </section>
           <div className="space-y-2">
             <Label className="text-foreground">{t("Company Name")}</Label>
             <Input

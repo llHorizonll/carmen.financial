@@ -8,7 +8,6 @@ import React, {
   useState,
 } from "react";
 import {
-  FileText,
   FilePlus,
   FileSpreadsheet,
   PanelLeftClose,
@@ -45,6 +44,7 @@ import {
   CardTitle,
 } from "@/components/ui/card.jsx";
 import { Badge } from "@/components/ui/badge.jsx";
+import ReportGroupNavigation from "@/features/report/components/ReportGroupNavigation.jsx";
 import ReportHistory from "@/features/report/components/ReportHistory.jsx";
 import { Input } from "@/components/ui/input.jsx";
 import { Slider } from "@/components/ui/slider";
@@ -1627,27 +1627,7 @@ export default function App({ onLogout = null }) {
             data-tour="reports"
           >
             {businessUnitsEnabled ? <BusinessUnitReportList key={currentUser?.id || "anonymous"} storageKey={`carmen_report_navigation:${currentUser?.id || "anonymous"}`} catalog={businessUnits} reports={accessibleReports}
-              currentKey={resolvedCurrentReportId} onSelect={handleReportChange} /> : accessibleReports.map((report) => (
-              <Button
-                key={report.id}
-                variant={
-                  resolvedCurrentReportId === report.id ? "secondary" : "ghost"
-                }
-                className={`min-w-0 w-full justify-start gap-2 overflow-hidden ${resolvedCurrentReportId === report.id ? "border-l-2 border-primary bg-primary/10 text-primary hover:bg-primary/15" : ""}`}
-                onClick={() => handleReportChange(report.id)}
-                aria-current={
-                  resolvedCurrentReportId === report.id ? "page" : undefined
-                }
-              >
-                <FileText className="size-4 shrink-0" />
-                <span
-                  className="min-w-0 flex-1 truncate text-left"
-                  title={report.name}
-                >
-                  {report.name}
-                </span>
-              </Button>
-            ))}
+              currentKey={resolvedCurrentReportId} onSelect={handleReportChange} /> : <ReportGroupNavigation reports={accessibleReports} currentKey={resolvedCurrentReportId} onSelect={handleReportChange} />}
           </div>
           {!businessUnitsEnabled && accessibleReports.length === 0 && (
             <div className="px-2 py-8 text-sm text-muted-foreground">{t("No reports available.")}</div>
@@ -1741,8 +1721,8 @@ export default function App({ onLogout = null }) {
         open={setupSaveWarnings.length > 0}
         onOpenChange={(open) => !open && setSetupSaveWarnings([])}
       >
-        <AlertDialogContent>
-          <AlertDialogHeader>
+        <AlertDialogContent className="min-w-0 overflow-hidden">
+          <AlertDialogHeader className="min-w-0">
             <AlertDialogTitle>
               {setupSaveWarnings.some(isBlockingSetupWarning)
                 ? t("Fix invalid row mappings")
@@ -1754,12 +1734,12 @@ export default function App({ onLogout = null }) {
                 : t("This template can be saved, but report data may be incomplete or incorrect until these items are fixed.")}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <ScrollArea className="max-h-72 rounded-lg border border-border">
+          <ScrollArea className="min-w-0 max-h-72 rounded-lg border border-border [&_[data-radix-scroll-area-viewport]>div]:!block">
             <ul className="space-y-2 p-4 text-sm text-foreground">
               {setupSaveWarnings.map((warning) => (
-                <li key={warning} className="flex gap-2">
+                <li key={warning} className="flex min-w-0 gap-2">
                   <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600" />
-                  <span className="text-pretty">{warning}</span>
+                  <span className="min-w-0 wrap-anywhere text-pretty">{warning}</span>
                 </li>
               ))}
             </ul>

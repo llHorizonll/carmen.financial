@@ -1,10 +1,9 @@
 import { useTranslation } from "@/lib/i18n.js";
 import React from 'react';
-import { FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select.jsx';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog.jsx';
-import { reportKey } from '../hooks/useBusinessUnitReports.js';
+import ReportGroupNavigation from './ReportGroupNavigation.jsx';
 
 export function BusinessUnitSelector({ catalog, onChange }) {
   const t = useTranslation();
@@ -28,9 +27,7 @@ export function BusinessUnitReportList({ catalog, reports, currentKey, onSelect 
       {status?.loading && <p role="status" className="px-2 text-xs text-muted-foreground">{t("Loading reports…")}</p>}
       {status?.error && <p role="alert" className="px-2 text-xs text-destructive">{status.error}</p>}
       {!catalog.loading && !catalog.error && !status?.loading && !status?.error && !items.length && <p className="px-2 text-xs text-muted-foreground">{t("No reports available.")}</p>}
-      {items.map((report) => <Button key={reportKey(report)} variant="ghost"
-        className="w-full justify-start overflow-hidden aria-[current=page]:bg-primary aria-[current=page]:text-primary-foreground aria-[current=page]:hover:bg-primary aria-[current=page]:hover:text-primary-foreground" aria-current={currentKey === reportKey(report) ? 'page' : undefined}
-        onClick={() => onSelect(reportKey(report))}><FileText className="size-4 shrink-0" />{report.name}</Button>)}
+      <ReportGroupNavigation reports={items} currentKey={currentKey} onSelect={onSelect} />
     </section>}
   </>;
 }

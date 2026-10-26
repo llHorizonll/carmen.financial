@@ -243,6 +243,7 @@ describe('reportApi helpers', () => {
     expect(buildReportDefinitionPayload({
       id: 'rep-1',
       name: 'Profit and Loss',
+      reportGroup: 'Operations',
       companyName: 'Carmen Hotel',
       category: ['ALL', 'I'],
       assignedUsers: ['admin', 'admin2'],
@@ -276,6 +277,7 @@ describe('reportApi helpers', () => {
     })).toEqual({
       id: 'rep-1',
       name: 'Profit and Loss',
+      reportGroup: 'Operations',
       companyName: 'Carmen Hotel',
       category: ['ALL', 'I'],
       assignedUsers: ['admin', 'admin2'],

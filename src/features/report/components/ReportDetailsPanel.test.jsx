@@ -31,4 +31,11 @@ describe('ReportDetailsPanel', () => {
     expect(screen.queryByLabelText('Day')).not.toBeInTheDocument();
   });
 
+  it('allows a new custom group name', () => {
+    const update = vi.fn();
+    render(<ReportDetailsPanel activeReport={{ name: 'Spa', reportGroup: 'P&L' }} updateActiveReport={update} />);
+    fireEvent.change(screen.getByLabelText('Report Group'), { target: { value: 'Operations' } });
+    expect(update).toHaveBeenCalledWith({ reportGroup: 'Operations' });
+  });
+
 });

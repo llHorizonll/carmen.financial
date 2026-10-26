@@ -655,11 +655,11 @@ describe('App shell', () => {
 
     await waitFor(() => expect(screen.getByText(/Broken row references found/i)).toBeInTheDocument());
     const formulaInput = await screen.findByDisplayValue('R99');
-    fireEvent.change(formulaInput, { target: { value: 'R98' } });
+    fireEvent.change(formulaInput, { target: { value: Array(60).fill('R98').join('+') + '+!REF!' } });
     expect(reportApiMocks.saveCarmenReport).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     expect(await screen.findByRole('alertdialog', { name: 'Save incomplete report template?' })).toBeInTheDocument();
-    expect(screen.getByText(/Row R1 \(Revenue\).*invalid reference R98/i)).toBeInTheDocument();
+    expect(screen.getByText(/Row R1 \(Revenue\).*invalid reference R98/i)).toHaveClass('min-w-0', 'wrap-anywhere');
     fireEvent.click(screen.getByRole('button', { name: 'Save anyway' }));
 
     await waitFor(() => expect(screen.queryByRole('alertdialog', { name: 'Save incomplete report template?' })).not.toBeInTheDocument());
