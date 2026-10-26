@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeAll, beforeEach } from 'vitest';
 import App, { getSetupWarnings } from './App.jsx';
 import { getAccessibleReports } from './reportAccess.js';
 import { getDefaultReports } from '../features/report/data/defaultReports.js';
@@ -95,8 +95,20 @@ vi.mock('../features/report/lib/excelTemplateImport.js', async (importOriginal) 
   return { ...actual, ...excelImportMocks };
 });
 
-describe('App shell', () => {
+// Opening setup renders the 66-row default report: ~1.5s alone, up to ~7s when the full suite saturates the CPU.
+describe('App shell', { timeout: 20_000 }, () => {
   let localStorageStore = {};
+  beforeAll(async () => {
+    // Load App's React.lazy screens once so the first test that opens each one doesn't pay for the import.
+    await Promise.all([
+      import('../features/report/components/ReportView.jsx'),
+      import('../features/report/components/ReportSetup.jsx'),
+      import('../features/report/components/ExcelTemplateImportWizard.jsx'),
+      import('../features/report/components/EditMappingModal.jsx'),
+      import('../features/report/components/DetailSelectorModal.jsx'),
+      import('../features/report/components/GettingStartedTour.jsx'),
+    ]);
+  });
   beforeEach(() => {
     localStorageStore = {};
     const mockLocalStorage = {
@@ -287,14 +299,16 @@ describe('App shell', () => {
 
     const reportName = await screen.findByDisplayValue('Profit and Loss');
     fireEvent.change(reportName, { target: { value: 'Draft report name' } });
+    // Scoped so each role query names a few buttons instead of the ~600 on the default report's setup page.
+    const setupActions = () => within(screen.getByRole('navigation', { name: 'Save or cancel report settings' }));
 
     expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel changes' }));
+    fireEvent.click(setupActions().getByRole('button', { name: 'Cancel changes' }));
     expect(screen.getByText('Discard unsaved changes?')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+    fireEvent.click(within(screen.getByRole('alertdialog', { name: 'Discard unsaved changes?' })).getByRole('button', { name: 'Discard changes' }));
 
     await waitFor(() => expect(screen.getByDisplayValue('Profit and Loss')).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+    expect(setupActions().getByRole('button', { name: 'Save changes' })).toBeDisabled();
   });
 
   it('opens the Excel template wizard as a separate admin page', async () => {
@@ -727,7 +741,7 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Broken Report').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     await screen.findByText('Rows Configurator');
 
     await waitFor(() => expect(screen.getByText(/Broken row references found/i)).toBeInTheDocument());
@@ -979,7 +993,7 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Daily Invalid').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
 
     await waitFor(() => expect(screen.getByText('Columns Configurator')).toBeInTheDocument());
     expect(screen.queryByText(/unsupported column types/i)).not.toBeInTheDocument();
@@ -1133,7 +1147,7 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Invalid Master Data Mapping').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     await screen.findByText('Rows Configurator');
 
     await waitFor(() => expect(screen.getByText(/Unknown department code\(s\): 999/i)).toBeInTheDocument());
@@ -1472,7 +1486,7 @@ describe('App shell', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Setup Edits').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument());
 
     fireEvent.change(screen.getByDisplayValue('Setup Edits'), { target: { value: 'Setup Edits Updated' } });
@@ -1758,7 +1772,7 @@ describe('App shell', () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getAllByText('Options Report').length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     await waitFor(() => expect(screen.getByText('Report Details')).toBeInTheDocument());
 
     expect(screen.queryByText('Report Theme')).not.toBeInTheDocument();

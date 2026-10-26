@@ -41,6 +41,19 @@ if (typeof globalThis.HTMLElement !== 'undefined' && typeof globalThis.HTMLEleme
   globalThis.HTMLElement.prototype.scrollIntoView = () => {};
 }
 
+// jsdom 29 keeps the sheet of a <style> that is removed together with an ancestor (for example the Radix ScrollArea
+// style when a test unmounts), so sheets pile up, slow every getComputedStyle call and keep old DOM trees alive.
+// Rewriting the text makes jsdom re-check the now-disconnected element and drop its sheet. Remove once jsdom is fixed.
+const dropDetachedStyleSheets = () => {
+  if (typeof document === 'undefined') return;
+  for (const sheet of Array.from(document.styleSheets)) {
+    const owner = sheet.ownerNode;
+    if (owner?.localName === 'style' && !owner.isConnected) {
+      owner.textContent = owner.textContent;
+    }
+  }
+};
+
 beforeEach(() => {
   if (
     typeof globalThis.localStorage?.getItem !== 'function' ||
@@ -64,4 +77,7 @@ beforeEach(() => {
     globalThis.ResizeObserver = ResizeObserverMock;
   }
 });
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  dropDetachedStyleSheets();
+});
