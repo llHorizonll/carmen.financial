@@ -159,16 +159,17 @@ export default function ReportView({
             <SheetTitle>{selectedCell?.row.desc} · {selectedCell?.col.label}</SheetTitle>
             <SheetDescription>{t("Account and department contributions from the")} {drilldown?.source || 'report'} {t("summary data.")}</SheetDescription>
           </SheetHeader>
-          {drilldown && <section className="grid gap-3 p-4 text-sm">
-            <p>{t("Cell:")} {selectedCell.value.toLocaleString(undefined, { minimumFractionDigits: 2 })} {t("· Breakdown:")} {drilldown.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
-            <p role="status" className={Math.abs(selectedCell.value - drilldown.total) < 0.005 ? 'text-emerald-700' : 'text-destructive'}>{t("Difference:")}{" "}{(selectedCell.value - drilldown.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-            </p>
+          {drilldown && <section className="grid gap-3 px-4 pb-4 text-sm">
             <table className="w-full text-left tabular-nums">
               <thead><tr className="border-b"><th className="py-2">{t("Account")}</th><th>{t("Department")}</th><th className="text-right">{t("Amount")}</th></tr></thead>
               <tbody>{drilldown.lines.map((line) => <tr key={`${line.accountCode}:${line.departmentCode}`} className="border-b">
                 <td className="py-2">{line.accountCode || '—'}</td><td>{line.departmentCode || '—'}</td>
                 <td className="text-right">{line.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
               </tr>)}</tbody>
+              <tfoot><tr className="border-t font-semibold">
+                <th colSpan={2} scope="row" className="py-2">{t("Total")}</th>
+                <td className="py-2 text-right">{drilldown.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+              </tr></tfoot>
             </table>
             {drilldown.lines.length === 0 && <p className="text-muted-foreground">{t("No matching source rows.")}</p>}
           </section>}
