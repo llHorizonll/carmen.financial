@@ -331,7 +331,7 @@ export const fetchCarmenBusinessUnits = async () => {
   }));
 };
 
-const requestCarmenJson = async (path, options = {}) => {
+export const requestCarmenJson = async (path, options = {}) => {
   const session = getStoredCarmenSession();
   if (!session?.accessToken) throw new Error('Carmen session is missing.');
   const method = options.method || 'GET';
@@ -429,6 +429,7 @@ export const fetchCarmenDimensions = async (context = {}) => {
     .sort((left, right) => String(left?.Id || '').localeCompare(String(right?.Id || ''), undefined, { numeric: true }))
     .slice(0, 10)
     .map((item, index) => ({
+      id: String(item?.Id ?? '').trim(),
       key: `dim${index + 1}`,
       caption: String(item?.Caption || '').trim() || `DIM ${index + 1}`,
       values: [...new Set(parseValues(item?.ListOfValues))],

@@ -180,6 +180,8 @@ describe('App shell', { timeout: 20_000 }, () => {
     const source = { ...getDefaultReports()[0], reportGroup: 'Operations', lastModified: '2026-10-26T10:00:00' };
     const other = { ...getDefaultReports()[1], reportGroup: 'Daily Group Report' };
     reportApiMocks.fetchCarmenReports.mockResolvedValue([source, other]);
+    const latest = { ...source, remark: 'Latest saved remark', lastModified: '2026-11-05T10:00:00' };
+    reportApiMocks.fetchCarmenReport.mockResolvedValue(latest);
     render(<App />);
     const nav = await screen.findByRole('navigation', { name: 'Report groups' });
     const reportButton = await within(nav).findByRole('button', { name: source.name, exact: true });
@@ -189,7 +191,7 @@ describe('App shell', { timeout: 20_000 }, () => {
     fireEvent.dragOver(targetGroup, { dataTransfer });
     fireEvent.drop(targetGroup, { dataTransfer });
     await waitFor(() => expect(reportApiMocks.saveCarmenReport).toHaveBeenCalledWith(
-      { ...source, tenant: 'unit-a', reportGroup: 'Daily Report' }, { tenant: 'unit-a' },
+      { ...latest, tenant: 'unit-a', reportGroup: 'Daily Report' }, { tenant: 'unit-a' },
     ));
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Operations', exact: true })).not.toBeInTheDocument());
   });

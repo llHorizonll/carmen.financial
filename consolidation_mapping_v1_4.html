@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Carmen Cloud ERP - Consolidation Mapping v1.4</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome 6 Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Tailwind Configuration with OKLCH variables -->
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+          colors: {
+            background: 'var(--background)',
+            foreground: 'var(--foreground)',
+            card: 'var(--card)',
+            'card-foreground': 'var(--card-foreground)',
+            popover: 'var(--popover)',
+            'popover-foreground': 'var(--popover-foreground)',
+            primary: 'var(--primary)',
+            'primary-foreground': 'var(--primary-foreground)',
+            secondary: 'var(--secondary)',
+            'secondary-foreground': 'var(--secondary-foreground)',
+            muted: 'var(--muted)',
+            'muted-foreground': 'var(--muted-foreground)',
+            accent: 'var(--accent)',
+            'accent-foreground': 'var(--accent-foreground)',
+            destructive: 'var(--destructive)',
+            'destructive-foreground': 'var(--destructive-foreground)',
+            border: 'var(--border)',
+            input: 'var(--input)',
+            ring: 'var(--ring)',
+            sidebar: 'var(--sidebar)',
+            'sidebar-foreground': 'var(--sidebar-foreground)',
+            'sidebar-primary': 'var(--sidebar-primary)',
+            'sidebar-primary-foreground': 'var(--sidebar-primary-foreground)',
+            'sidebar-accent': 'var(--sidebar-accent)',
+            'sidebar-accent-foreground': 'var(--sidebar-accent-foreground)',
+            'sidebar-border': 'var(--sidebar-border)',
+            success: 'var(--success)',
+            warning: 'var(--warning)',
+          },
+          borderRadius: { DEFAULT: 'var(--radius)' }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Carmen Cloud ERP - OKLCH Color Palette System */
+    :root {
+      --radius: 0.625rem;
+      --background: oklch(0.98 0.004 258.7);
+      --foreground: oklch(0.16 0.02 258.7);
+      --card: oklch(1 0 0);
+      --card-foreground: oklch(0.16 0.02 258.7);
+      --popover: oklch(1 0 0);
+      --popover-foreground: oklch(0.16 0.02 258.7);
+      --primary: oklch(0.4714 0.1794 258.7);
+      --primary-foreground: oklch(0.99 0 0);
+      --secondary: oklch(0.94 0.014 258.7);
+      --secondary-foreground: oklch(0.22 0.02 258.7);
+      --muted: oklch(0.95 0.008 258.7);
+      --muted-foreground: oklch(0.46 0.016 258.7);
+      --accent: oklch(0.93 0.024 258.7);
+      --accent-foreground: oklch(0.22 0.02 258.7);
+      --destructive: oklch(0.666 0.2013 24.11);
+      --destructive-foreground: oklch(1 0 0);
+      --border: oklch(0.91 0.008 258.7);
+      --input: oklch(0.91 0.008 258.7);
+      --ring: oklch(0.4714 0.1794 258.7);
+      --sidebar: oklch(0.97 0.006 258.7);
+      --sidebar-foreground: oklch(0.16 0.02 258.7);
+      --sidebar-primary: oklch(0.4714 0.1794 258.7);
+      --sidebar-primary-foreground: oklch(0.99 0 0);
+      --sidebar-accent: oklch(0.93 0.024 258.7);
+      --sidebar-accent-foreground: oklch(0.22 0.02 258.7);
+      --sidebar-border: oklch(0.90 0.010 258.7);
+      --success: oklch(0.7515 0.1117 188.43);
+      --warning: oklch(0.78 0.15 75);
+    }
+
+    .dark {
+      --background: oklch(0.18 0.02 258.7);
+      --foreground: oklch(0.94 0.006 258.7);
+      --card: oklch(0.22 0.024 258.7);
+      --card-foreground: oklch(0.94 0.006 258.7);
+      --popover: oklch(0.23 0.026 258.7);
+      --popover-foreground: oklch(0.94 0.006 258.7);
+      --primary: oklch(0.5852 0.1706 253.27);
+      --primary-foreground: oklch(0.99 0 0);
+      --secondary: oklch(0.28 0.026 258.7);
+      --secondary-foreground: oklch(0.92 0.006 258.7);
+      --muted: oklch(0.26 0.022 258.7);
+      --muted-foreground: oklch(0.65 0.016 258.7);
+      --accent: oklch(0.30 0.034 258.7);
+      --accent-foreground: oklch(0.94 0.006 258.7);
+      --destructive: oklch(0.666 0.2013 24.11);
+      --destructive-foreground: oklch(0.98 0 0);
+      --border: oklch(0.32 0.026 258.7);
+      --input: oklch(0.30 0.026 258.7);
+      --ring: oklch(0.5852 0.1706 253.27);
+      --sidebar: oklch(0.16 0.018 258.7);
+      --sidebar-foreground: oklch(0.92 0.006 258.7);
+      --sidebar-primary: oklch(0.5852 0.1706 253.27);
+      --sidebar-accent: oklch(0.28 0.030 258.7);
+      --sidebar-accent-foreground: oklch(0.94 0.006 258.7);
+      --sidebar-border: oklch(0.30 0.022 258.7);
+    }
+
+    body {
+      background-color: var(--background);
+      color: var(--foreground);
+      font-family: 'Inter', sans-serif;
+      transition: background-color 0.2s ease, color 0.2s ease;
+    }
+
+    .checkbox-primary { accent-color: var(--primary); }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--muted-foreground); border-radius: 4px; opacity: 0.5;}
+    ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+    .collapsed-sidebar { width: 4.5rem !important; }
+    .collapsed-sidebar .nav-text, .collapsed-sidebar .nav-chevron { display: none !important; }
+    .fade-in { animation: fadeIn 0.2s ease-out forwards; }
+    @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-primary selection:text-primary-foreground overflow-hidden">
+
+  <!-- ================= TOPBAR ================= -->
+  <header class="sticky top-0 z-40 h-16 border-b border-border bg-card flex items-center justify-between px-4 lg:px-6 shadow-sm shrink-0">
+    <div class="flex items-center gap-3">
+      <!-- Sidebar Toggle -->
+      <button id="sidebarToggleBtn" class="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Toggle Sidebar">
+        <i class="fa-solid fa-bars-staggered text-lg"></i>
+      </button>
+
+      <!-- Brand Logo -->
+      <div class="flex items-center gap-2 mr-3">
+        <div class="w-8 h-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-bold text-lg shadow-md">
+          C
+        </div>
+        <div class="flex flex-col">
+          <span class="font-bold tracking-tight text-sm leading-none flex items-center gap-1.5 text-foreground">
+            CARMEN <span class="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground font-semibold">CLOUD</span>
+          </span>
+          <span class="text-[10px] text-muted-foreground tracking-wide">ERP Hospitality v2.6</span>
+        </div>
+      </div>
+
+      <!-- Breadcrumbs -->
+      <nav class="hidden md:flex items-center gap-2 text-xs text-muted-foreground border-l border-border pl-3">
+        <span>General Ledger</span>
+        <i class="fa-solid fa-chevron-right text-[9px] opacity-50"></i>
+        <span>Financial Report</span>
+        <i class="fa-solid fa-chevron-right text-[9px] opacity-50"></i>
+        <span class="font-semibold text-foreground">Consolidation Mapping</span>
+      </nav>
+    </div>
+
+    <!-- Right Controls -->
+    <div class="flex items-center gap-2 sm:gap-3">
+      <!-- Profile Setup Settings Modal Trigger -->
+      <button onclick="openSettingsModal()" class="p-2 rounded-lg border border-border bg-muted/50 text-foreground hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all shadow-sm flex items-center gap-2" title="Consolidation Profile Setup">
+        <i class="fa-solid fa-gear text-sm"></i>
+        <span class="hidden lg:inline text-xs font-bold">Setup Profile</span>
+      </button>
+
+      <!-- Language Toggle -->
+      <button id="langToggleBtn" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-xs font-semibold hover:bg-muted text-foreground transition-colors">
+        <i class="fa-solid fa-globe text-muted-foreground text-xs"></i>
+        <span id="currentLangText">EN</span>
+      </button>
+
+      <!-- Theme Mode Toggle -->
+      <button id="themeToggleBtn" class="p-2 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title="Toggle Dark/Light Mode">
+        <i id="themeIcon" class="fa-solid fa-moon text-sm"></i>
+      </button>
+
+      <!-- User Profile Dropdown -->
+      <div class="relative">
+        <button id="userProfileBtn" class="flex items-center gap-2.5 pl-2 py-1 pr-1.5 rounded-lg hover:bg-muted transition-colors border border-transparent hover:border-border">
+          <div class="w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold text-xs shadow-sm">
+            SA
+          </div>
+          <div class="hidden lg:flex flex-col text-left">
+            <span class="text-xs font-semibold leading-tight text-foreground">Senior SA</span>
+            <span class="text-[10px] text-muted-foreground leading-none">Cluster Admin</span>
+          </div>
+          <i class="fa-solid fa-chevron-down text-[10px] text-muted-foreground ml-0.5"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ================= MAIN LAYOUT ================= -->
+  <div class="flex-1 flex overflow-hidden bg-background">
+
+    <!-- COLLAPSIBLE SIDEBAR -->
+    <aside id="mainSidebar" class="w-64 border-r border-sidebar-border bg-sidebar flex flex-col shrink-0 transition-all duration-300 ease-in-out z-30 select-none">
+      <nav class="flex-1 overflow-y-auto p-2 space-y-1 text-xs mt-2">
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent transition-colors">
+          <i class="fa-solid fa-chart-line text-sm w-5 text-center text-sidebar-foreground/70"></i>
+          <span class="nav-text">Dashboard</span>
+        </a>
+        <!-- General Ledger Parent -->
+        <div class="space-y-1">
+          <button class="w-full flex items-center justify-between px-3 py-2.5 rounded-lg bg-sidebar-primary text-sidebar-primary-foreground font-semibold transition-colors">
+            <div class="flex items-center gap-3">
+              <i class="fa-solid fa-book-journal-whills text-sm w-5 text-center"></i>
+              <span class="nav-text">General Ledger</span>
+            </div>
+            <i class="fa-solid fa-chevron-down text-[10px] nav-chevron"></i>
+          </button>
+          <div class="pl-8 pr-2 space-y-1 nav-text">
+            <a href="#" class="block px-2.5 py-1.5 rounded-md text-sidebar-foreground hover:bg-sidebar-accent">Chart of Accounts</a>
+            <a href="#" class="block px-2.5 py-1.5 rounded-md font-semibold bg-accent text-accent-foreground shadow-sm">Consolidation Mapping</a>
+          </div>
+        </div>
+      </nav>
+    </aside>
+
+    <!-- CONTENT BODY -->
+    <main class="flex-1 flex flex-col h-full overflow-hidden">
+      <div class="p-4 lg:p-6 flex-1 flex flex-col gap-4 overflow-hidden h-full">
+        
+        <!-- HEADER -->
+        <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 shrink-0">
+          <div>
+            <div class="flex items-center gap-2.5">
+              <h1 class="text-xl font-bold tracking-tight text-foreground">
+                Financial Report Consolidation Mapping
+              </h1>
+              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-secondary text-secondary-foreground border border-border">v1.4</span>
+            </div>
+            <p class="text-xs text-muted-foreground mt-1">
+              Configure master data crosswalk rules between cluster properties. Rules are strictly enforced by Account Type matching.
+            </p>
+          </div>
+
+          <!-- Context Badges -->
+          <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-card shadow-sm">
+              <span class="text-[10px] font-bold text-muted-foreground uppercase">Anchor BU:</span>
+              <div class="w-2 h-2 rounded-full bg-primary/70 animate-pulse"></div>
+              <span class="text-xs font-bold text-foreground" id="displayStandardBu">BU-01</span>
+            </div>
+            <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 border-primary/40 bg-primary/5 shadow-sm cursor-pointer hover:border-primary transition-colors">
+              <span class="text-[10px] font-bold text-primary uppercase">Focus Member:</span>
+              <i class="fa-solid fa-crosshairs text-primary opacity-70"></i>
+              <select id="targetBuFocus" onchange="changeTargetBuFocus()" class="text-xs font-bold bg-transparent border-none text-foreground focus:outline-none focus:ring-0 cursor-pointer w-24 p-0">
+                <!-- Populated via JS -->
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= MAPPING WORKSPACE ================= -->
+        <div class="bg-card border border-border rounded-xl shadow-sm flex flex-col flex-1 overflow-hidden">
+          
+          <!-- Tabs -->
+          <div class="flex items-center gap-2 border-b border-border px-4 pt-2 bg-muted/10 shrink-0">
+            <button onclick="switchTab('account')" id="tab-account" class="tab-btn flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 border-primary text-primary transition-all">
+              <i class="fa-solid fa-book-bookmark text-sm"></i> Account Code
+            </button>
+            <button onclick="switchTab('dept')" id="tab-dept" class="tab-btn flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 border-transparent text-muted-foreground hover:text-foreground transition-all">
+              <i class="fa-solid fa-sitemap text-sm"></i> Department Code
+            </button>
+            <button onclick="switchTab('dimension')" id="tab-dimension" class="tab-btn flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 border-transparent text-muted-foreground hover:text-foreground transition-all">
+              <i class="fa-solid fa-tags text-sm"></i> Dimension
+            </button>
+          </div>
+
+          <!-- TAB 1 & 2 CONTENT (Account & Dept) -->
+          <div id="standardTabContent" class="flex-1 flex flex-col p-4 overflow-hidden">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 shrink-0">
+              <div class="relative w-full sm:w-72">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-muted-foreground text-xs"></i>
+                <input type="text" id="searchInput" oninput="renderMainTable()" placeholder="Search standard master data..." class="w-full pl-8 pr-3 py-1.5 rounded-lg border border-input bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary">
+              </div>
+              <label class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-background text-xs cursor-pointer hover:bg-muted transition-colors">
+                <input type="checkbox" id="showUnmappedOnly" onchange="renderMainTable()" class="rounded checkbox-primary">
+                <span class="font-medium text-foreground">Show Unmapped Standard Only</span>
+              </label>
+            </div>
+
+            <div class="border border-border rounded-xl overflow-hidden shadow-sm flex-1 flex flex-col">
+              <div class="overflow-y-auto flex-1 bg-background">
+                <table class="w-full text-left text-xs border-collapse">
+                  <thead id="tableHeader" class="bg-muted text-muted-foreground font-semibold border-b border-border text-[11px] uppercase tracking-wider sticky top-0 z-10">
+                    <!-- Dynamic Headers based on Tab -->
+                  </thead>
+                  <tbody id="mainTableBody" class="divide-y divide-border">
+                    <!-- Populated by JS -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 3 CONTENT (Dimension 2-Step) -->
+          <div id="dimensionTabContent" class="hidden flex-1 flex flex-col p-4 overflow-y-auto bg-muted/10 gap-6">
+            
+            <!-- STEP 1: DIM ID MAPPING -->
+            <div class="border border-border rounded-xl bg-card shadow-sm overflow-hidden flex flex-col">
+              <div class="px-4 py-3 border-b border-border bg-primary/5 flex items-center justify-between">
+                <div>
+                  <h3 class="text-sm font-bold text-primary flex items-center gap-2">
+                    <span class="w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold">1</span>
+                    Step 1: Dimension Category ID Mapping
+                  </h3>
+                  <p class="text-[11px] text-muted-foreground mt-0.5 ml-7">Link Standard Dimension categories to the Member BU's specific Dimension IDs.</p>
+                </div>
+              </div>
+              <div class="p-4 bg-background">
+                <table class="w-full text-left text-xs border-collapse border border-border rounded-lg overflow-hidden">
+                  <thead class="bg-muted text-muted-foreground font-semibold border-b border-border text-[11px] uppercase tracking-wider">
+                    <tr>
+                      <th class="py-2.5 px-4 w-32 border-r border-border">Std Dim ID</th>
+                      <th class="py-2.5 px-4 border-r border-border">Standard Dimension Caption</th>
+                      <th class="py-2.5 px-4 w-72 bg-primary/5 border-r border-border" id="step1TargetHeader">Mapped Member Dim ID</th>
+                      <th class="py-2.5 px-4 w-28 text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dimCategoryTableBody" class="divide-y divide-border">
+                    <!-- Populated by JS -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- STEP 2: SUB-CODE MAPPING -->
+            <div class="border border-border rounded-xl bg-card shadow-sm overflow-hidden flex flex-col">
+              <div class="px-4 py-3 border-b border-border bg-primary/5 flex items-center justify-between">
+                <div>
+                  <h3 class="text-sm font-bold text-primary flex items-center gap-2">
+                    <span class="w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold">2</span>
+                    Step 2: Sub-Code Mapping
+                  </h3>
+                  <p class="text-[11px] text-muted-foreground mt-0.5 ml-7">Select a Standard Dimension below to map its respective sub-codes.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-bold text-muted-foreground">Select Standard Dimension:</span>
+                  <select id="step2DimSelect" onchange="renderDimSubcodeTable()" class="text-xs font-bold bg-background border border-primary/40 rounded-lg px-3 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary shadow-sm min-w-[200px]">
+                    <option value="" selected disabled>-- Select Dimension --</option>
+                    <!-- Populated by JS -->
+                  </select>
+                </div>
+              </div>
+              <div class="p-4 bg-background min-h-[200px]" id="dimSubcodeTableContainer">
+                <!-- Subcode table populated by JS based on selection -->
+                <div class="flex flex-col items-center justify-center h-40 text-muted-foreground opacity-60">
+                  <i class="fa-solid fa-list-check text-3xl mb-2"></i>
+                  <span class="text-xs font-semibold">Select a Standard Dimension above to manage sub-codes.</span>
+                </div>
+              </div>
+            </div>
+
+          </div> <!-- End Dimension Tab -->
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ================= MODALS ================= -->
+
+  <!-- 1. SETTINGS MODAL (Consolidation Profile Setup) -->
+  <div id="settingsModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+    <div class="w-full max-w-xl bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden fade-in">
+      <div class="p-4 border-b border-border flex items-center justify-between bg-muted/40 shrink-0">
+        <h2 class="text-sm font-bold text-foreground flex items-center gap-2">
+          <i class="fa-solid fa-sliders text-primary"></i> Consolidation Profile Setup
+        </h2>
+        <button onclick="closeSettingsModal()" class="w-8 h-8 flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground rounded-lg transition-colors">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      
+      <div class="p-6 space-y-5">
+        <!-- Standard BU -->
+        <div class="space-y-1.5">
+          <label class="text-xs font-bold text-foreground">Standard Benchmark BU (Anchor)</label>
+          <select id="setupStandardBU" class="w-full text-sm font-bold bg-background border border-input rounded-lg px-3 py-2.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary">
+            <option value="BU-01">BU-01: The Grand Bangkok</option>
+            <option value="BU-05">BU-05: Corporate Head Office</option>
+          </select>
+          <p class="text-[10px] text-muted-foreground">The master chart of accounts to which others will map.</p>
+        </div>
+
+        <!-- Member BUs -->
+        <div class="space-y-2">
+          <label class="text-xs font-bold text-foreground">Participating Member BUs</label>
+          <div class="grid grid-cols-2 gap-2" id="setupMemberBUs">
+            <label class="flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-background text-xs cursor-pointer hover:border-primary/50 transition-colors">
+              <input type="checkbox" value="BU-02" checked class="rounded checkbox-primary w-4 h-4">
+              <span class="font-bold text-foreground">BU-02 (Phuket)</span>
+            </label>
+            <label class="flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-background text-xs cursor-pointer hover:border-primary/50 transition-colors">
+              <input type="checkbox" value="BU-03" checked class="rounded checkbox-primary w-4 h-4">
+              <span class="font-bold text-foreground">BU-03 (Chiang Mai)</span>
+            </label>
+            <label class="flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-background text-xs cursor-pointer hover:border-primary/50 transition-colors">
+              <input type="checkbox" value="BU-04" class="rounded checkbox-primary w-4 h-4">
+              <span class="font-bold text-foreground">BU-04 (Pattaya)</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-4 border-t border-border bg-muted/40 flex items-center justify-end gap-3 shrink-0">
+        <button onclick="closeSettingsModal()" class="px-5 py-2 rounded-lg border border-border text-xs font-semibold hover:bg-muted text-foreground transition-colors">Cancel</button>
+        <button onclick="applySetup()" class="px-5 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs shadow-md transition-colors">Save Profile Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. DUAL-PANE MAPPING MODAL -->
+  <div id="mappingModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+    <div class="w-full max-w-6xl bg-card border border-border rounded-2xl shadow-2xl flex flex-col h-[85vh] overflow-hidden fade-in">
+      
+      <div class="p-4 border-b border-border flex items-center justify-between bg-muted/40 shrink-0">
+        <div>
+          <span class="text-[10px] font-bold text-primary uppercase tracking-wider" id="modalContextLabel">Crosswalk Mapping Focus</span>
+          <h2 class="text-base font-bold text-foreground flex items-center gap-2 mt-0.5" id="modalStdTitle">
+            Mapping [Type] for [Code] - [Desc]
+          </h2>
+        </div>
+        <button onclick="closeMappingModal()" class="w-8 h-8 flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground rounded-lg transition-colors">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body: Dual Pane -->
+      <div class="flex-1 p-4 grid grid-cols-1 md:grid-cols-2 gap-4 overflow-hidden min-h-0 bg-background/50">
+        
+        <!-- LEFT PANE: Available Codes -->
+        <div class="flex flex-col border border-border rounded-xl bg-card overflow-hidden shadow-sm h-full">
+          <div class="bg-muted px-4 py-2.5 border-b border-border flex items-center justify-between shrink-0">
+            <h3 class="text-xs font-bold text-foreground flex items-center gap-2">
+              <i class="fa-solid fa-list-ul text-muted-foreground"></i>
+              Available in <span id="modalTargetBuLabelLeft" class="text-primary font-extrabold"></span>
+            </h3>
+            <span id="countAvailable" class="text-[10px] font-bold bg-background border border-border px-2 py-0.5 rounded-full text-muted-foreground">0</span>
+          </div>
+          <div class="p-2 border-b border-border shrink-0 bg-background">
+            <div class="relative">
+              <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2 text-muted-foreground text-xs"></i>
+              <input type="text" id="searchAvailable" oninput="renderTransferLists()" placeholder="Search available codes..." class="w-full pl-7 pr-3 py-1.5 rounded-lg border border-input bg-card text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary">
+            </div>
+          </div>
+          <div id="listAvailable" class="flex-1 overflow-y-auto p-2 space-y-1.5">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+        <!-- RIGHT PANE: Mapped Codes -->
+        <div class="flex flex-col border border-primary/30 rounded-xl bg-card overflow-hidden shadow-sm h-full ring-1 ring-primary/10">
+          <div class="bg-primary/5 px-4 py-2.5 border-b border-primary/20 flex items-center justify-between shrink-0">
+            <h3 class="text-xs font-bold text-primary flex items-center gap-2">
+              <i class="fa-solid fa-link"></i> Mapped to Standard
+            </h3>
+            <span id="countMapped" class="text-[10px] font-bold bg-primary text-primary-foreground px-2 py-0.5 rounded-full">0</span>
+          </div>
+          <div class="p-2 border-b border-primary/10 shrink-0 bg-background">
+            <div class="relative">
+              <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2 text-muted-foreground text-xs"></i>
+              <input type="text" id="searchMapped" oninput="renderTransferLists()" placeholder="Search mapped codes..." class="w-full pl-7 pr-3 py-1.5 rounded-lg border border-input bg-card text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary">
+            </div>
+          </div>
+          <div id="listMapped" class="flex-1 overflow-y-auto p-2 space-y-2 bg-primary/5">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+      </div>
+
+      <div class="p-4 border-t border-border bg-muted/40 flex items-center justify-end gap-3 shrink-0">
+        <button onclick="closeMappingModal()" class="px-5 py-2 rounded-lg border border-border text-xs font-semibold hover:bg-muted text-foreground transition-colors">Cancel</button>
+        <button onclick="saveModalMapping()" class="px-5 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs shadow-md transition-colors flex items-center gap-2">
+          <i class="fa-solid fa-floppy-disk"></i> Save Mapping
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST CONTAINER -->
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm pointer-events-none"></div>
+
+  <!-- ================= JAVASCRIPT APP LOGIC ================= -->
+  <script>
+    const TAB_TYPES = { ACCOUNT: 'account', DEPT: 'dept', DIMENSION: 'dimension' };
+    const ACCOUNT_TYPES = { HEADER: 'Header', BS: 'Balance Sheet', IS: 'Income Statement', STAT: 'Statistics' };
+
+    // --- State ---
+    let activeTab = TAB_TYPES.ACCOUNT;
+    let standardBU = 'BU-01';
+    let selectedMemberBUs = ["BU-02", "BU-03"]; // Default active from setup
+    let activeFocusBu = "BU-02";
+    let currentModalStdCode = null;
+
+    let transferState = { available: [], mapped: [] };
+
+    // --- Data: Standard Anchor ---
+    const standardData = {
+      account: [
+        { code: "1110", name: "Cash & Bank Balances", type: ACCOUNT_TYPES.BS, nature: "Debit" },
+        { code: "2110", name: "Accounts Payable", type: ACCOUNT_TYPES.BS, nature: "Credit" },
+        { code: "4110", name: "Rooms Revenue", type: ACCOUNT_TYPES.IS, nature: "Credit" },
+        { code: "5120", name: "Guest Supplies", type: ACCOUNT_TYPES.IS, nature: "Debit" }
+      ],
+      dept: [
+        { code: "100", name: "Rooms Division" },
+        { code: "200", name: "Food & Beverage" },
+        { code: "500", name: "Administrative & General" }
+      ],
+      dimension: [
+        { code: "D01", name: "Market Segment" },
+        { code: "D02", name: "Meal Period" }
+      ],
+      dimSubcode: {
+        "D01": [{ code: "OTA", name: "Online Travel Agents" }, { code: "CORP", name: "Corporate" }, { code: "DIR", name: "Direct" }],
+        "D02": [{ code: "BF", name: "Breakfast" }, { code: "LN", name: "Lunch" }, { code: "DN", name: "Dinner" }]
+      }
+    };
+
+    // --- Data: Member BUs ---
+    const memberPools = {
+      "BU-02": {
+        account: [
+          { code: "1001", name: "Front Float", type: ACCOUNT_TYPES.BS, nature: "Debit" },
+          { code: "4010", name: "Transient Room Sales", type: ACCOUNT_TYPES.IS, nature: "Credit" },
+          { code: "4011", name: "OTA Room Sales", type: ACCOUNT_TYPES.IS, nature: "Credit" },
+          { code: "5120", name: "Villa Amenities", type: ACCOUNT_TYPES.IS, nature: "Debit" }
+        ],
+        dept: [
+          { code: "FO", name: "Front Office" },
+          { code: "HK", name: "Housekeeping" },
+          { code: "FB", name: "F&B Operations" }
+        ],
+        dimCategory: [
+          { code: "M_DIM01", name: "Mkt Source" },
+          { code: "M_DIM02", name: "Meal Type" },
+          { code: "M_DIM03", name: "Outlet Type" }
+        ],
+        dimSubcode: {
+          "M_DIM01": [{ code: "AGODA", name: "Agoda OTA" }, { code: "EXP", name: "Expedia" }, { code: "B2B", name: "B2B Corp" }],
+          "M_DIM02": [{ code: "AM", name: "Morning Meal" }, { code: "PM", name: "Evening Meal" }]
+        }
+      },
+      "BU-03": {
+        account: [
+          { code: "A-110", name: "Cash on Hand", type: ACCOUNT_TYPES.BS, nature: "Debit" },
+          { code: "R-100", name: "Rooms Gross", type: ACCOUNT_TYPES.IS, nature: "Credit" }
+        ],
+        dept: [
+          { code: "ROOMS", name: "Accommodations" },
+          { code: "ADMIN", name: "Administration" }
+        ],
+        dimCategory: [
+          { code: "C_D01", name: "ChiangMai Segment" }
+        ],
+        dimSubcode: {
+          "C_D01": [{ code: "AGD", name: "Agoda" }, { code: "FIT", name: "Free Independent" }]
+        }
+      }
+    };
+
+    // --- Data: Mapping Rules ---
+    let mappingRules = {
+      account: {
+        "1110": { "BU-02": [{ code: "1001", reverseSign: false }] },
+        "4110": { "BU-02": [{ code: "4010", reverseSign: true }] }
+      },
+      dept: {
+        "100": { "BU-02": [{ code: "FO" }, { code: "HK" }] }
+      },
+      dimCategory: {
+        "D01": { "BU-02": "M_DIM01" } // Std D01 maps to BU-02's M_DIM01
+      },
+      dimSubcode: {
+        "OTA": { "BU-02": [{ code: "AGODA" }, { code: "EXP" }] } // Standard OTA mapped to member's Agoda/Exp
+      }
+    };
+
+    // --- Initialization ---
+    document.addEventListener("DOMContentLoaded", () => {
+      // Sidebar Toggle
+      document.getElementById("sidebarToggleBtn").addEventListener("click", () => {
+        document.getElementById("mainSidebar").classList.toggle("collapsed-sidebar");
+      });
+      // Theme Toggle
+      document.getElementById("themeToggleBtn").addEventListener("click", () => {
+        document.documentElement.classList.toggle("dark");
+        const icon = document.getElementById("themeIcon");
+        icon.className = document.documentElement.classList.contains("dark") ? "fa-solid fa-sun text-sm" : "fa-solid fa-moon text-sm";
+      });
+
+      // Populate Target Focus Dropdown initially
+      populateFocusDropdown();
+      switchTab(TAB_TYPES.ACCOUNT);
+    });
+
+    // --- Settings Modal ---
+    function openSettingsModal() {
+      document.getElementById("settingsModal").classList.remove("hidden");
+    }
+    function closeSettingsModal() {
+      document.getElementById("settingsModal").classList.add("hidden");
+    }
+    function applySetup() {
+      standardBU = document.getElementById("setupStandardBU").value;
+      const checkboxes = document.querySelectorAll('#setupMemberBUs input[type="checkbox"]:checked');
+      selectedMemberBUs = Array.from(checkboxes).map(cb => cb.value);
+
+      if (selectedMemberBUs.length === 0) {
+        showToast("Please select at least one Member BU.", "error");
+        return;
+      }
+      document.getElementById("displayStandardBu").textContent = standardBU;
+      populateFocusDropdown();
+      
+      // Keep current activeFocusBu if valid, else set to first
+      if(!selectedMemberBUs.includes(activeFocusBu)) {
+        activeFocusBu = selectedMemberBUs[0];
+      }
+      document.getElementById("targetBuFocus").value = activeFocusBu;
+      
+      showToast("Consolidation Profile Saved Successfully.", "success");
+      closeSettingsModal();
+      refreshCurrentView();
+    }
+
+    function populateFocusDropdown() {
+      const focusSelect = document.getElementById("targetBuFocus");
+      focusSelect.innerHTML = "";
+      selectedMemberBUs.forEach(bu => {
+        const opt = document.createElement("option");
+        opt.value = bu;
+        opt.textContent = `${bu}`;
+        focusSelect.appendChild(opt);
+      });
+      focusSelect.value = activeFocusBu;
+    }
+
+    function changeTargetBuFocus() {
+      activeFocusBu = document.getElementById("targetBuFocus").value;
+      refreshCurrentView();
+      showToast(`Mapping Focus changed to ${activeFocusBu}`, "info");
+    }
+
+    function refreshCurrentView() {
+      if(activeTab === TAB_TYPES.DIMENSION) {
+        renderDimensionTab();
+      } else {
+        renderMainTable();
+      }
+    }
+
+    // --- Tabs & Rendering ---
+    function switchTab(tabType) {
+      activeTab = tabType;
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('border-primary', 'text-primary', 'font-bold');
+        btn.classList.add('border-transparent', 'text-muted-foreground', 'font-semibold');
+      });
+      document.getElementById(`tab-${tabType}`).classList.remove('border-transparent', 'text-muted-foreground', 'font-semibold');
+      document.getElementById(`tab-${tabType}`).classList.add('border-primary', 'text-primary', 'font-bold');
+
+      if (tabType === TAB_TYPES.DIMENSION) {
+        document.getElementById("standardTabContent").classList.add("hidden");
+        document.getElementById("dimensionTabContent").classList.remove("hidden");
+        renderDimensionTab();
+      } else {
+        document.getElementById("standardTabContent").classList.remove("hidden");
+        document.getElementById("dimensionTabContent").classList.add("hidden");
+        renderTableHeaders();
+        renderMainTable();
+      }
+    }
+
+    function renderTableHeaders() {
+      const thead = document.getElementById("tableHeader");
+      let html = '<tr>';
+      if (activeTab === TAB_TYPES.ACCOUNT) {
+        html += `<th class="py-3 px-4 w-32">Account Code</th>
+                 <th class="py-3 px-4">Description</th>
+                 <th class="py-3 px-4 w-40">Account Type</th>
+                 <th class="py-3 px-4 w-28 text-center">Nature</th>
+                 <th class="py-3 px-4 w-36 text-center">Mapped Status</th>
+                 <th class="py-3 px-4 w-36 text-center">Action</th>`;
+      } else if (activeTab === TAB_TYPES.DEPT) {
+        html += `<th class="py-3 px-4 w-32">Dept Code</th>
+                 <th class="py-3 px-4">Description</th>
+                 <th class="py-3 px-4 w-36 text-center">Mapped Status</th>
+                 <th class="py-3 px-4 w-36 text-center">Action</th>`;
+      }
+      html += '</tr>';
+      thead.innerHTML = html;
+    }
+
+    function renderMainTable() {
+      const tbody = document.getElementById("mainTableBody");
+      const search = document.getElementById("searchInput").value.toLowerCase();
+      const showUnmappedOnly = document.getElementById("showUnmappedOnly").checked;
+      tbody.innerHTML = "";
+
+      const dataSet = standardData[activeTab] || [];
+      dataSet.forEach(std => {
+        const mappedArray = mappingRules[activeTab][std.code]?.[activeFocusBu] || [];
+        const isMapped = mappedArray.length > 0;
+        if (showUnmappedOnly && isMapped) return;
+        
+        const searchTarget = (std.code + " " + std.name).toLowerCase();
+        if (search && !searchTarget.includes(search)) return;
+
+        let statusHtml = isMapped 
+          ? `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-success/15 text-success border border-success/30"><i class="fa-solid fa-check-circle"></i> ${mappedArray.length} Mapped</span>`
+          : `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-warning/15 text-warning border border-warning/30"><i class="fa-solid fa-triangle-exclamation"></i> Unmapped</span>`;
+
+        let actionHtml = `<button onclick="openMappingModal('${std.code}')" class="px-3 py-1.5 rounded-lg bg-card border border-border hover:bg-muted hover:border-primary text-xs font-semibold text-foreground transition-all shadow-sm flex items-center justify-center gap-1.5 mx-auto">
+                            <i class="fa-solid fa-link text-primary"></i> Map Codes
+                          </button>`;
+
+        const tr = document.createElement("tr");
+        tr.className = "hover:bg-muted/30 transition-colors";
+        
+        if (activeTab === TAB_TYPES.ACCOUNT) {
+          let typeClass = std.type === ACCOUNT_TYPES.BS ? "bg-secondary text-secondary-foreground border-border" : "bg-primary/10 text-primary border-primary/20";
+          tr.innerHTML = `
+            <td class="py-3 px-4 font-mono font-bold text-foreground text-sm">${std.code}</td>
+            <td class="py-3 px-4 font-medium text-foreground">${std.name}</td>
+            <td class="py-3 px-4"><span class="px-2 py-0.5 rounded text-[10px] font-bold border ${typeClass}">${std.type}</span></td>
+            <td class="py-3 px-4 text-center font-bold text-[11px] ${std.nature === 'Debit' ? 'text-primary' : 'text-success'}">${std.nature}</td>
+            <td class="py-3 px-4 text-center">${statusHtml}</td>
+            <td class="py-3 px-4 text-center">${actionHtml}</td>
+          `;
+        } else {
+          tr.innerHTML = `
+            <td class="py-3 px-4 font-mono font-bold text-foreground text-sm">${std.code}</td>
+            <td class="py-3 px-4 font-medium text-foreground">${std.name}</td>
+            <td class="py-3 px-4 text-center">${statusHtml}</td>
+            <td class="py-3 px-4 text-center">${actionHtml}</td>
+          `;
+        }
+        tbody.appendChild(tr);
+      });
+    }
+
+    // --- Dimension Tab Specific Rendering ---
+    function renderDimensionTab() {
+      // Setup Step 1: Category Mapping
+      document.getElementById("step1TargetHeader").textContent = `Mapped Member Dim ID (${activeFocusBu})`;
+      const catTbody = document.getElementById("dimCategoryTableBody");
+      catTbody.innerHTML = "";
+      
+      const memberDimOptions = memberPools[activeFocusBu]?.dimCategory || [];
+      
+      standardData.dimension.forEach(stdDim => {
+        const mappedId = mappingRules.dimCategory[stdDim.code]?.[activeFocusBu] || "";
+        
+        let optionsHtml = `<option value="">-- Select Member Dim ID --</option>`;
+        memberDimOptions.forEach(m => {
+          optionsHtml += `<option value="${m.code}" ${m.code === mappedId ? 'selected' : ''}>${m.code} - ${m.name}</option>`;
+        });
+
+        const tr = document.createElement("tr");
+        tr.className = "hover:bg-muted/30 transition-colors";
+        tr.innerHTML = `
+          <td class="py-2.5 px-4 font-mono font-bold text-foreground text-xs border-r border-border">${stdDim.code}</td>
+          <td class="py-2.5 px-4 font-medium text-foreground text-xs border-r border-border">${stdDim.name}</td>
+          <td class="py-1.5 px-4 border-r border-border bg-primary/5">
+            <select id="sel_dimcat_${stdDim.code}" class="w-full text-xs bg-background border border-input rounded md:px-2 py-1 focus:outline-none focus:border-primary">
+              ${optionsHtml}
+            </select>
+          </td>
+          <td class="py-2 px-4 text-center">
+            <button onclick="saveDimCategoryMapping('${stdDim.code}')" class="px-2 py-1 rounded bg-secondary text-secondary-foreground text-[10px] font-bold hover:bg-primary hover:text-primary-foreground transition-colors border border-border">Save ID</button>
+          </td>
+        `;
+        catTbody.appendChild(tr);
+      });
+
+      // Setup Step 2: Populate Standard Dim Selector
+      const dimSelect = document.getElementById("step2DimSelect");
+      dimSelect.innerHTML = `<option value="" selected disabled>-- Select Dimension --</option>`;
+      standardData.dimension.forEach(stdDim => {
+        dimSelect.innerHTML += `<option value="${stdDim.code}">${stdDim.code} - ${stdDim.name}</option>`;
+      });
+      // Clear Subcode table container
+      document.getElementById("dimSubcodeTableContainer").innerHTML = `
+        <div class="flex flex-col items-center justify-center h-40 text-muted-foreground opacity-60">
+          <i class="fa-solid fa-list-check text-3xl mb-2"></i>
+          <span class="text-xs font-semibold">Select a Standard Dimension above to manage sub-codes.</span>
+        </div>
+      `;
+    }
+
+    function saveDimCategoryMapping(stdCode) {
+      const selectVal = document.getElementById(`sel_dimcat_${stdCode}`).value;
+      if(!mappingRules.dimCategory[stdCode]) mappingRules.dimCategory[stdCode] = {};
+      mappingRules.dimCategory[stdCode][activeFocusBu] = selectVal;
+      showToast(`Saved mapping for Dimension ID: ${stdCode}`, "success");
+      // Re-render Step 2 if it's currently showing this dimension
+      if(document.getElementById("step2DimSelect").value === stdCode) {
+        renderDimSubcodeTable();
+      }
+    }
+
+    function renderDimSubcodeTable() {
+      const stdCode = document.getElementById("step2DimSelect").value;
+      if(!stdCode) return;
+
+      const container = document.getElementById("dimSubcodeTableContainer");
+      const mappedCatId = mappingRules.dimCategory[stdCode]?.[activeFocusBu];
+      
+      if(!mappedCatId) {
+        container.innerHTML = `
+          <div class="flex flex-col items-center justify-center h-32 text-warning opacity-90 bg-warning/10 border border-warning/30 rounded-lg">
+            <i class="fa-solid fa-triangle-exclamation text-2xl mb-2"></i>
+            <span class="text-xs font-bold text-center px-4">Cannot map sub-codes.<br>Please map a Member Dim ID for ${stdCode} in Step 1 first.</span>
+          </div>
+        `;
+        return;
+      }
+
+      const subcodes = standardData.dimSubcode[stdCode] || [];
+      
+      let tableHtml = `
+        <div class="flex items-center gap-2 mb-3 bg-muted/30 p-2 rounded-md border border-border">
+          <span class="text-[10px] font-bold text-muted-foreground uppercase">Active Member ID Constraint:</span>
+          <span class="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/20">${mappedCatId}</span>
+        </div>
+        <table class="w-full text-left text-xs border-collapse border border-border rounded-lg overflow-hidden">
+          <thead class="bg-muted text-muted-foreground font-semibold border-b border-border text-[11px] uppercase tracking-wider">
+            <tr>
+              <th class="py-2.5 px-4 w-40">Standard Sub-Code</th>
+              <th class="py-2.5 px-4">Description</th>
+              <th class="py-2.5 px-4 w-36 text-center">Status (${activeFocusBu})</th>
+              <th class="py-2.5 px-4 w-32 text-center">Action</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-border">
+      `;
+
+      subcodes.forEach(sub => {
+        const mappedArray = mappingRules.dimSubcode[sub.code]?.[activeFocusBu] || [];
+        const isMapped = mappedArray.length > 0;
+        let statusHtml = isMapped 
+          ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-success/15 text-success border border-success/30"><i class="fa-solid fa-check-circle text-[9px]"></i> ${mappedArray.length} Mapped</span>`
+          : `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-warning/15 text-warning border border-warning/30"><i class="fa-solid fa-clock text-[9px]"></i> Pending</span>`;
+
+        tableHtml += `
+          <tr class="hover:bg-muted/30 transition-colors">
+            <td class="py-2 px-4 font-mono font-bold text-foreground text-xs">${sub.code}</td>
+            <td class="py-2 px-4 font-medium text-foreground">${sub.name}</td>
+            <td class="py-2 px-4 text-center">${statusHtml}</td>
+            <td class="py-2 px-4 text-center">
+              <button onclick="openDimSubcodeModal('${stdCode}', '${sub.code}')" class="px-2.5 py-1.5 rounded bg-card border border-border hover:bg-muted hover:border-primary text-xs font-semibold text-foreground transition-all shadow-sm flex items-center justify-center gap-1.5 mx-auto">
+                <i class="fa-solid fa-link text-primary"></i> Map Codes
+              </button>
+            </td>
+          </tr>
+        `;
+      });
+      tableHtml += `</tbody></table>`;
+      container.innerHTML = tableHtml;
+    }
+
+
+    // --- Dual-Pane Modal Logic ---
+    let modalContextType = null; // 'account', 'dept', 'dimSubcode'
+    let parentDimId = null;
+
+    function openMappingModal(stdCode) {
+      modalContextType = activeTab;
+      currentModalStdCode = stdCode;
+      const stdItem = standardData[activeTab].find(s => s.code === stdCode);
+      
+      let typeLabel = activeTab === TAB_TYPES.ACCOUNT ? "Account Code" : "Department Code";
+      document.getElementById("modalContextLabel").textContent = `Crosswalk: ${typeLabel}`;
+      document.getElementById("modalStdTitle").innerHTML = `Mapping to <span class="font-mono bg-muted/60 px-1.5 py-0.5 rounded border border-border mx-1 text-primary">${stdCode}</span> <span class="text-muted-foreground font-medium">- ${stdItem.name}</span>`;
+      document.getElementById("modalTargetBuLabelLeft").textContent = activeFocusBu;
+      
+      document.getElementById("searchAvailable").value = "";
+      document.getElementById("searchMapped").value = "";
+
+      loadTransferData(stdItem, memberPools[activeFocusBu][activeTab]);
+      renderTransferLists();
+      document.getElementById("mappingModal").classList.remove("hidden");
+    }
+
+    function openDimSubcodeModal(dimCatCode, subCode) {
+      modalContextType = 'dimSubcode';
+      currentModalStdCode = subCode;
+      parentDimId = dimCatCode;
+
+      const stdItem = standardData.dimSubcode[dimCatCode].find(s => s.code === subCode);
+      const mappedCatId = mappingRules.dimCategory[dimCatCode]?.[activeFocusBu]; // Member's Dimension ID
+      
+      document.getElementById("modalContextLabel").textContent = `Crosswalk: Dimension Sub-Codes`;
+      document.getElementById("modalStdTitle").innerHTML = `Mapping to Sub-Code <span class="font-mono bg-muted/60 px-1.5 py-0.5 rounded border border-border mx-1 text-primary">${subCode}</span> <span class="text-muted-foreground font-medium">- ${stdItem.name}</span>`;
+      document.getElementById("modalTargetBuLabelLeft").textContent = activeFocusBu;
+      
+      document.getElementById("searchAvailable").value = "";
+      document.getElementById("searchMapped").value = "";
+
+      // Raw pool for dimension subcodes is based on the MAPPED Member Dim ID
+      const rawPool = memberPools[activeFocusBu].dimSubcode[mappedCatId] || [];
+      loadTransferData(stdItem, rawPool);
+      renderTransferLists();
+      document.getElementById("mappingModal").classList.remove("hidden");
+    }
+
+    function closeMappingModal() {
+      document.getElementById("mappingModal").classList.add("hidden");
+    }
+
+    function loadTransferData(stdItem, rawPool) {
+      let eligiblePool = rawPool || [];
+      if (modalContextType === TAB_TYPES.ACCOUNT) {
+        // Enforce Account Type constraint
+        eligiblePool = eligiblePool.filter(acc => acc.type === stdItem.type);
+      }
+
+      // Get existing mappings
+      let existingMappings = [];
+      if(modalContextType === 'dimSubcode') {
+        existingMappings = mappingRules.dimSubcode[stdItem.code]?.[activeFocusBu] || [];
+      } else {
+        existingMappings = mappingRules[modalContextType][stdItem.code]?.[activeFocusBu] || [];
+      }
+
+      const mappedCodesList = existingMappings.map(m => m.code);
+
+      transferState.mapped = [];
+      existingMappings.forEach(mapping => {
+        const fullObj = eligiblePool.find(a => a.code === mapping.code);
+        if (fullObj) {
+          transferState.mapped.push({ ...fullObj, reverseSign: mapping.reverseSign || false });
+        }
+      });
+
+      transferState.available = eligiblePool.filter(item => !mappedCodesList.includes(item.code));
+    }
+
+    function renderTransferLists() {
+      const qAvail = document.getElementById("searchAvailable").value.toLowerCase();
+      const qMapped = document.getElementById("searchMapped").value.toLowerCase();
+      
+      const availContainer = document.getElementById("listAvailable");
+      const mappedContainer = document.getElementById("listMapped");
+
+      // Render Available
+      const filteredAvail = transferState.available.filter(a => a.code.toLowerCase().includes(qAvail) || a.name.toLowerCase().includes(qAvail));
+      if (filteredAvail.length === 0) {
+        availContainer.innerHTML = `<div class="p-4 text-center text-[11px] text-muted-foreground italic">No available codes found.</div>`;
+      } else {
+        availContainer.innerHTML = filteredAvail.map(item => `
+          <div class="flex items-center justify-between p-2.5 rounded-lg border border-transparent hover:border-border hover:bg-muted/40 transition-colors cursor-pointer group" onclick="moveToMapped('${item.code}')">
+            <div class="flex flex-col">
+              <span class="font-mono font-bold text-foreground text-sm">${item.code}</span>
+              <span class="text-[11px] text-muted-foreground font-medium">${item.name}</span>
+            </div>
+            <button class="w-7 h-7 rounded-lg bg-background border border-border group-hover:bg-primary group-hover:border-primary group-hover:text-primary-foreground flex items-center justify-center transition-all text-xs shrink-0 shadow-sm">
+              <i class="fa-solid fa-chevron-right"></i>
+            </button>
+          </div>
+        `).join('');
+      }
+      document.getElementById("countAvailable").textContent = transferState.available.length;
+
+      // Render Mapped
+      const filteredMapped = transferState.mapped.filter(a => a.code.toLowerCase().includes(qMapped) || a.name.toLowerCase().includes(qMapped));
+      if (filteredMapped.length === 0) {
+        mappedContainer.innerHTML = `<div class="p-8 text-center text-muted-foreground flex flex-col items-center gap-2">
+          <i class="fa-solid fa-link-slash text-2xl opacity-50"></i>
+          <span class="text-xs">No codes mapped yet.</span>
+        </div>`;
+      } else {
+        mappedContainer.innerHTML = filteredMapped.map(item => {
+          let extraInfoHtml = "";
+          
+          if (modalContextType === TAB_TYPES.ACCOUNT) {
+             extraInfoHtml = `
+              <div class="flex items-center gap-2 mt-1 flex-wrap">
+                <span class="px-1.5 py-0.5 rounded text-[9px] font-bold border border-border bg-muted text-muted-foreground uppercase tracking-wider">${item.type}</span>
+                <span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${item.nature === 'Debit' ? 'text-primary bg-primary/10 border-primary/20' : 'text-success bg-success/10 border-success/20'} border">Nature: ${item.nature}</span>
+                
+                <label class="flex items-center gap-1.5 ml-2 cursor-pointer border border-border px-2 py-0.5 rounded bg-muted/30 hover:bg-muted/70 transition-colors">
+                  <input type="checkbox" ${item.reverseSign ? 'checked' : ''} onchange="toggleModalReverseSign('${item.code}', this.checked)" class="w-3.5 h-3.5 rounded border-border checkbox-primary cursor-pointer">
+                  <span class="text-[10px] font-bold text-foreground select-none">Reverse Sign</span>
+                </label>
+              </div>
+             `;
+          }
+
+          return `
+          <div class="flex items-center justify-between p-3 rounded-lg border border-primary/20 bg-background shadow-sm hover:border-primary/50 transition-colors">
+            <div class="flex flex-col gap-1 flex-1 pr-2">
+              <div class="flex items-center gap-2">
+                <span class="font-mono font-bold text-foreground text-sm">${item.code}</span>
+                <span class="text-xs text-foreground font-medium">${item.name}</span>
+              </div>
+              ${extraInfoHtml}
+            </div>
+            <button onclick="moveToAvailable('${item.code}')" class="w-8 h-8 rounded-lg bg-card border border-border hover:bg-destructive hover:border-destructive hover:text-destructive-foreground flex items-center justify-center transition-all text-sm shrink-0 shadow-sm">
+              <i class="fa-solid fa-chevron-left"></i>
+            </button>
+          </div>
+          `;
+        }).join('');
+      }
+      document.getElementById("countMapped").textContent = transferState.mapped.length;
+    }
+
+    function moveToMapped(code) {
+      const idx = transferState.available.findIndex(a => a.code === code);
+      if (idx > -1) {
+        const item = transferState.available.splice(idx, 1)[0];
+        transferState.mapped.push({ ...item, reverseSign: false });
+        renderTransferLists();
+      }
+    }
+
+    function moveToAvailable(code) {
+      const idx = transferState.mapped.findIndex(a => a.code === code);
+      if (idx > -1) {
+        const item = transferState.mapped.splice(idx, 1)[0];
+        delete item.reverseSign;
+        transferState.available.push(item);
+        transferState.available.sort((a, b) => a.code.localeCompare(b.code));
+        renderTransferLists();
+      }
+    }
+
+    function toggleModalReverseSign(code, isChecked) {
+      const item = transferState.mapped.find(a => a.code === code);
+      if (item) item.reverseSign = isChecked;
+    }
+
+    function saveModalMapping() {
+      let targetMappingRule;
+      if (modalContextType === 'dimSubcode') {
+        if(!mappingRules.dimSubcode[currentModalStdCode]) mappingRules.dimSubcode[currentModalStdCode] = {};
+        targetMappingRule = mappingRules.dimSubcode[currentModalStdCode];
+      } else {
+        if(!mappingRules[modalContextType][currentModalStdCode]) mappingRules[modalContextType][currentModalStdCode] = {};
+        targetMappingRule = mappingRules[modalContextType][currentModalStdCode];
+      }
+      
+      const payload = transferState.mapped.map(item => {
+        let res = { code: item.code };
+        if (modalContextType === TAB_TYPES.ACCOUNT) res.reverseSign = item.reverseSign;
+        return res;
+      });
+      
+      targetMappingRule[activeFocusBu] = payload;
+      
+      showToast(`Saved ${payload.length} mapping(s) successfully.`, "success");
+      closeMappingModal();
+      
+      if(modalContextType === 'dimSubcode') {
+        renderDimSubcodeTable();
+      } else {
+        renderMainTable(); 
+      }
+    }
+
+    // --- Utility: Toast Notification ---
+    function showToast(message, type = 'info') {
+      const container = document.getElementById("toastContainer");
+      const toast = document.createElement("div");
+      let colorClass = type === 'success' ? "border-success text-success" : (type === 'error' ? "border-destructive text-destructive" : "border-primary text-primary");
+      let icon = type === 'success' ? "fa-circle-check" : (type === 'error' ? "fa-circle-xmark" : "fa-circle-info");
+
+      toast.className = `p-3.5 rounded-xl border bg-card shadow-xl text-xs font-semibold flex items-center gap-2.5 fade-in ${colorClass}`;
+      toast.innerHTML = `<i class="fa-solid ${icon} text-base"></i> <span>${message}</span>`;
+      
+      container.appendChild(toast);
+      setTimeout(() => { 
+        toast.classList.replace("fade-in", "opacity-0");
+        toast.classList.add("translate-y-2", "transition-all", "duration-300");
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+  </script>
+</body>
+</html>

@@ -455,8 +455,8 @@ describe('reportApi helpers', () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ Data: [
-        { Caption: 'Market Segment', ListOfValues: '["Retail","Corporate"]' },
-        { Caption: 'Meal Period', ListOfValues: 'Breakfast,Lunch|Dinner' },
+        { Id: 10, Caption: 'Market Segment', ListOfValues: '["Retail","Corporate"]' },
+        { Id: 20, Caption: 'Meal Period', ListOfValues: 'Breakfast,Lunch|Dinner' },
       ] }),
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -465,8 +465,8 @@ describe('reportApi helpers', () => {
       dim1: ['Retail', 'Corporate'],
       dim2: ['Breakfast', 'Lunch', 'Dinner'],
       definitions: [
-        { key: 'dim1', caption: 'Market Segment', values: ['Retail', 'Corporate'] },
-        { key: 'dim2', caption: 'Meal Period', values: ['Breakfast', 'Lunch', 'Dinner'] },
+        { id: '10', key: 'dim1', caption: 'Market Segment', values: ['Retail', 'Corporate'] },
+        { id: '20', key: 'dim2', caption: 'Meal Period', values: ['Breakfast', 'Lunch', 'Dinner'] },
       ],
     });
     expect(fetchMock).toHaveBeenCalledWith(

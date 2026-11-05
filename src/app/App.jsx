@@ -95,6 +95,10 @@ import {
 
 import MultiSelectDropdown from "../features/report/components/MultiSelectDropdown.jsx";
 import LanguagePreference from "./LanguagePreference.jsx";
+import useConsolidation from "../features/consolidation/hooks/useConsolidation.js";
+import ConsolidationNavigation, { ConsolidationReportTree } from "../features/consolidation/components/ConsolidationNavigation.jsx";
+import ConsolidationProfileDialog from "../features/consolidation/components/ConsolidationProfileDialog.jsx";
+import ConsolidationWorkspace from "../features/consolidation/components/ConsolidationWorkspace.jsx";
 import useBusinessUnitReports, { reportKey } from "../features/report/hooks/useBusinessUnitReports.js";
 import { BusinessUnitSelector, BusinessUnitReportList, BusinessUnitTargetDialog } from "../features/report/components/BusinessUnitReports.jsx";
 import usePersistentState from "../hooks/usePersistentState.js";
@@ -504,6 +508,7 @@ export default function App({ onLogout = null }) {
   const businessUnits = useBusinessUnitReports({ enabled: businessUnitsEnabled, session: storedCarmenSession, setReports });
   const [createTargetOpen, setCreateTargetOpen] = useState(false);
   const creatingReportRef = useRef(false);
+  const movingReportRef = useRef(false);
   const [loadedTenant, setLoadedTenant] = useState(null);
   const [setupDraft, setSetupDraft] = useState(null);
   const [isSetupDirty, setIsSetupDirty] = useState(false);
@@ -544,6 +549,15 @@ export default function App({ onLogout = null }) {
   const canCreateReports = businessUnitsEnabled ? creationUnits.length > 0 : canSetupReports;
   const setupReport =
     reportKey(setupDraft) === reportKey(activeReport) ? setupDraft : activeReport;
+  const consolidation = useConsolidation({
+    enabled: businessUnitsEnabled,
+    confirmDiscard: (onConfirm) => requestConfirmation({ title: "Discard unsaved changes?",
+      msg: "Changes since the last save will be lost.", actionLabel: "Discard changes", onConfirm }),
+    onSelectReport: (report) => {
+      handleBusinessUnitSelection([report.tenant], reportKey(report));
+      setIsSidebarOpen(false);
+    },
+  });
 
   useEffect(() => {
     if (!businessUnitsEnabled) return;
@@ -700,7 +714,7 @@ export default function App({ onLogout = null }) {
 
   useEffect(() => {
     if (!apiConfigured || !/^\d{4}$/.test(String(globalYear))) return;
-    if (businessUnitsEnabled && !activeTenant) return;
+    if (consolidation.active || (businessUnitsEnabled && !activeTenant)) return;
 
     const masterDataLoadKey = String(globalYear);
     if (!businessUnitsEnabled && masterDataLoadKeysRef.current.has(masterDataLoadKey)) return;
@@ -747,7 +761,7 @@ export default function App({ onLogout = null }) {
     return () => {
       isCancelled = true;
     };
-  }, [globalYear, apiConfigured, businessUnitsEnabled, activeTenant, onLogout, setMasterData]);
+  }, [globalYear, apiConfigured, businessUnitsEnabled, activeTenant, onLogout, setMasterData, consolidation.active]);
 
   useEffect(() => {
     if (!apiConfigured) return;
@@ -825,7 +839,7 @@ export default function App({ onLogout = null }) {
   // react-doctor-disable-next-line no-set-state-after-await-in-effect -- Cleanup flips isCancelled before any late request can update effect-owned notice state.
   useEffect(() => {
     if (
-      !apiConfigured ||
+      !apiConfigured || consolidation.active ||
       !/^\d{4}$/.test(String(appliedYear)) ||
       !activeReport?.id
     )
@@ -866,6 +880,7 @@ export default function App({ onLogout = null }) {
       isCancelled = true;
     };
   }, [
+    consolidation.active,
     appliedYear,
     appliedPeriod,
     appliedBudgetRevision,
@@ -931,12 +946,20 @@ export default function App({ onLogout = null }) {
   };
 
   const handleMoveReportToGroup = async (report, reportGroup) => {
-    if (!canSetupReports || isSetupDirty || isSetupSaving) {
+    const canMove = businessUnitsEnabled
+      ? businessUnits.units.find((unit) => unit.id === report.tenant)?.permission?.setup
+      : canSetupReports;
+    if (!canMove) throw new Error(t("You do not have permission to move reports in this business unit."));
+    if (isSetupDirty || isSetupSaving || consolidation.dirty || consolidation.busy || movingReportRef.current) {
       throw new Error(t("Save or cancel your edits to move reports."));
     }
-    const updated = { ...report, reportGroup };
+    movingReportRef.current = true;
     setIsSetupSaving(true);
     try {
+      const ownerContext = report.tenant ? { tenant: report.tenant } : {};
+      const source = apiConfigured ? await fetchCarmenReport(report.id, ownerContext) : report;
+      if (!source) throw new Error(t("Unable to load the report before moving it."));
+      const updated = { ...source, ...(report.tenant ? { tenant: report.tenant } : {}), reportGroup };
       const saved = apiConfigured
         ? await saveCarmenReport(updated, ...(report.tenant ? [{ tenant: report.tenant }] : []))
         : null;
@@ -944,7 +967,9 @@ export default function App({ onLogout = null }) {
       const next = lastModified ? { ...updated, lastModified } : updated;
       setReports((current) => current.map((item) => reportKey(item) === reportKey(report) ? next : item));
       if (reportKey(setupDraft) === reportKey(report)) setSetupDraft(next);
+      return next;
     } finally {
+      movingReportRef.current = false;
       setIsSetupSaving(false);
     }
   };
@@ -1422,7 +1447,7 @@ export default function App({ onLogout = null }) {
 
   const currentTheme = THEMES[activeReport?.theme || "blue"];
   const showPageSkeleton = isPageTransitioning;
-  const visibleActiveTab = canSetupReports ? activeTab : "report";
+  const visibleActiveTab = consolidation.active ? "consolidation" : canSetupReports ? activeTab : "report";
   const contextualGuideLabel =
     visibleActiveTab === "setup"
       ? "Open setup guide"
@@ -1436,11 +1461,11 @@ export default function App({ onLogout = null }) {
         ? "app-pane-enter-from-left"
         : "app-pane-enter-from-right";
   const mainContentPaddingClass =
-    visibleActiveTab === "setup" || visibleActiveTab === "import"
+    visibleActiveTab === "setup" || visibleActiveTab === "import" || visibleActiveTab === "consolidation"
       ? "p-0"
       : "p-4";
   const mainContentWidthClass =
-    visibleActiveTab === "setup" || visibleActiveTab === "import"
+    visibleActiveTab === "setup" || visibleActiveTab === "import" || visibleActiveTab === "consolidation"
       ? "flex h-full w-full min-h-0 flex-col"
       : "flex h-full w-full min-h-0 flex-col gap-3";
 
@@ -1453,6 +1478,7 @@ export default function App({ onLogout = null }) {
   };
 
   const handleTabChange = (nextTab) => {
+    if (consolidation.active) { consolidation.leave(() => applyTabChange(nextTab)); return; }
     if (nextTab === visibleActiveTab) return;
     if ((nextTab === "setup" || nextTab === "import") && !canSetupReports)
       return;
@@ -1533,12 +1559,17 @@ export default function App({ onLogout = null }) {
     void createAndOpenReport();
   };
 
-  const handleBusinessUnitSelection = (selection) => {
-    if (isSetupSaving || creatingReportRef.current || businessUnits.loading) return;
+  const handleBusinessUnitSelection = (selection, targetReportKey = null) => {
+    if (isSetupSaving || creatingReportRef.current || businessUnits.loading || consolidation.busy) return;
     const change = () => {
+      if (!targetReportKey && consolidation.navigationActive) consolidation.leave();
+      if (targetReportKey === resolvedCurrentReportId && selection[0] === activeTenant) {
+        applyTabChange("report");
+        return;
+      }
       latestReportDataRequestRef.current += 1;
       loadedReportDataRef.current = null;
-      setCurrentReportId(null); setEngineData([]); setBudgetData([]);
+      setCurrentReportId(targetReportKey); setEngineData([]); setBudgetData([]);
       businessUnits.setSelected(selection);
       applyTabChange("report");
     };
@@ -1546,6 +1577,21 @@ export default function App({ onLogout = null }) {
       requestConfirmation({ title: "Discard unsaved changes?", msg: "Changing business units will discard unsaved report changes.",
         actionLabel: "Discard changes", onConfirm: () => { discardSetupChanges(); change(); } });
     } else change();
+  };
+
+  const enterConsolidation = (open) => {
+    if (isSetupSaving || creatingReportRef.current) return;
+    const enter = () => {
+      latestReportDataRequestRef.current += 1;
+      loadedReportDataRef.current = null;
+      setIsGettingStartedOpen(false);
+      setIsSidebarOpen(false);
+      open();
+    };
+    if (isSetupDirty) requestConfirmation({ title: "Discard unsaved changes?",
+      msg: "Changes since the last save will be lost.", actionLabel: "Discard changes",
+      onConfirm: () => { discardSetupChanges(); enter(); } });
+    else enter();
   };
 
   const closeGettingStarted = () => {
@@ -1643,6 +1689,7 @@ export default function App({ onLogout = null }) {
 
       <ScrollArea className="min-w-0 flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
         <div className="p-3">
+          <section aria-label={t("Reports")}>
           <div className="mb-2 flex items-center justify-between gap-2 px-1">
             <div className="text-xs font-medium text-muted-foreground">{t("Reports")}</div>
           </div>
@@ -1650,24 +1697,37 @@ export default function App({ onLogout = null }) {
             className="flex flex-col gap-1 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-xl data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary"
             data-tour="reports"
           >
-            {businessUnitsEnabled ? <BusinessUnitReportList key={currentUser?.id || "anonymous"} storageKey={`carmen_report_navigation:${currentUser?.id || "anonymous"}`} catalog={businessUnits} reports={accessibleReports}
+            {businessUnitsEnabled && consolidation.navigationActive && consolidation.profile
+              ? <ConsolidationReportTree profile={consolidation.profile} units={businessUnits.units}
+                currentKey={consolidation.active ? null : resolvedCurrentReportId} onSelect={consolidation.selectReport}
+                storageKey={`carmen_report_navigation:${currentUser?.id || "anonymous"}`}
+                onMoveReport={handleMoveReportToGroup}
+                moveDisabledReason={isSetupDirty || consolidation.dirty ? t("Save or cancel your edits to move reports.")
+                  : isSetupSaving || consolidation.busy ? t("Saving report…") : undefined} />
+              : (businessUnitsEnabled ? <BusinessUnitReportList key={currentUser?.id || "anonymous"} storageKey={`carmen_report_navigation:${currentUser?.id || "anonymous"}`} catalog={businessUnits} reports={accessibleReports}
               currentKey={resolvedCurrentReportId} onSelect={handleReportChange}
               onMoveReport={canSetupReports && !isSetupDirty && !isSetupSaving ? handleMoveReportToGroup : undefined}
               moveDisabledReason={canSetupReports && isSetupDirty ? t("Save or cancel your edits to move reports.") : undefined} /> : <ReportGroupNavigation reports={accessibleReports} currentKey={resolvedCurrentReportId} onSelect={handleReportChange}
               storageKey={`carmen_report_groups:${currentUser?.id || "anonymous"}`}
               onMoveReport={canSetupReports && !isSetupDirty && !isSetupSaving ? handleMoveReportToGroup : undefined}
-              moveDisabledReason={canSetupReports && isSetupDirty ? t("Save or cancel your edits to move reports.") : undefined} />}
+              moveDisabledReason={canSetupReports && isSetupDirty ? t("Save or cancel your edits to move reports.") : undefined} />)}
           </div>
           {!businessUnitsEnabled && accessibleReports.length === 0 && (
             <div className="px-2 py-8 text-sm text-muted-foreground">{t("No reports available.")}</div>
           )}
+          </section>
+          {businessUnitsEnabled && <ConsolidationNavigation state={consolidation} onEnter={enterConsolidation} />}
         </div>
       </ScrollArea>
     </div>
   );
 
   return (
-    <div className="flex min-h-dvh bg-background text-foreground">
+    <div className={`flex min-h-dvh bg-background text-foreground ${consolidation.active ? 'h-dvh overflow-hidden' : ''}`}>
+      {businessUnitsEnabled && consolidation.profileOpen && <ConsolidationProfileDialog open
+        key={`${consolidation.profile?.tenant || 'new'}:${consolidation.profile?.revision || ''}`}
+        profile={consolidation.profile} profiles={consolidation.profiles || []} units={businessUnits.units}
+        onSaved={consolidation.profileSaved} onClose={() => consolidation.setProfileOpen(false)} />}
       <BusinessUnitTargetDialog open={createTargetOpen} units={creationUnits}
         onSelect={handleCreateReportFromSidebar} onClose={() => setCreateTargetOpen(false)} />
       {alertMsg && (
@@ -1877,7 +1937,7 @@ export default function App({ onLogout = null }) {
                   className="min-w-0 max-w-64 truncate font-semibold text-foreground"
                   onClick={() => handleTabChange("report")}
                 >
-                  {activeReport?.name || t("Reports")}
+                  {consolidation.active ? t("Consolidation") : activeReport?.name || t("Reports")}
                 </Button>
               )}
 
@@ -1954,8 +2014,10 @@ export default function App({ onLogout = null }) {
                   </div>
                 )}
 
-              {businessUnitsEnabled && <BusinessUnitSelector catalog={businessUnits} onChange={handleBusinessUnitSelection} />}
-<Button
+              {businessUnitsEnabled && <Button variant="outline" size="sm" disabled={consolidation.busy}
+                onClick={() => enterConsolidation(consolidation.openProfile)}>{t("Setup Profile")}</Button>}
+              {businessUnitsEnabled && !consolidation.active && <BusinessUnitSelector catalog={businessUnits} onChange={handleBusinessUnitSelection} />}
+              {!consolidation.active && <Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
@@ -1964,7 +2026,7 @@ export default function App({ onLogout = null }) {
                 title={contextualGuideLabel.replace("Open ", "")}
               >
                 <CircleHelp className="size-4" />
-              </Button>
+              </Button>}
 
               {/* User profile dropdown button with Avatar as in image */}
               <Popover>
@@ -2127,7 +2189,7 @@ export default function App({ onLogout = null }) {
                         type="button"
                         variant="ghost"
                         className="w-full justify-start text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        onClick={onLogout}
+                        onClick={() => consolidation.active ? consolidation.leave(onLogout) : onLogout()}
                       >
                         <LogOut className="size-4" />{t("Log out")}</Button>
                     </>
@@ -2396,6 +2458,7 @@ export default function App({ onLogout = null }) {
               </Card>
             ) : (
               <>
+                {consolidation.active && <ConsolidationWorkspace state={consolidation} units={businessUnits.units} />}
                 {visibleActiveTab === "report" && activeReport && (
                   <React.Suspense
                     fallback={

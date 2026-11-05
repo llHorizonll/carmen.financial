@@ -133,6 +133,16 @@ describe('report group navigation', () => {
     expect(screen.getByRole('button', { name: 'Room Daily' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Spa Revenue' })).not.toBeInTheDocument();
   });
+
+  it('offers report search for a two-report catalog and restores matches when cleared', () => {
+    render(<ReportGroupNavigation reports={reports} onSelect={vi.fn()} />);
+    const search = screen.getByRole('textbox', { name: 'Search reports...' });
+    fireEvent.change(search, { target: { value: 'Spa' } });
+    expect(screen.getByRole('button', { name: 'Spa', exact: true })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Daily', exact: true })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+    expect(screen.getByRole('button', { name: 'Daily', exact: true })).toBeInTheDocument();
+  });
 });
 
 describe('report group navigation labels', () => {

@@ -1,12 +1,13 @@
 import { useTranslation } from "@/lib/i18n.js";
 import React, { forwardRef, useImperativeHandle, useState } from 'react';
-import { ArrowLeft, LoaderCircle, RotateCcw, Save, Undo2 } from 'lucide-react';
+import { LoaderCircle, RotateCcw, Save, Undo2 } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import { Button } from '@/components/ui/button.jsx';
 import ReportDetailsPanel from './ReportDetailsPanel.jsx';
 import ColumnsConfigurator from './ColumnsConfigurator.jsx';
 import RowsConfigurator from './RowsConfigurator.jsx';
 import GettingStartedTour from './GettingStartedTour.jsx';
+import BackButton from './BackButton.jsx';
 
 const SETUP_TOUR_STEPS = [
   {
@@ -44,8 +45,7 @@ const ReportSetup = forwardRef(function ReportSetup(props, ref) {
     <div className="flex min-h-0 flex-col gap-4">
       <section aria-label={t("Report setup controls")} className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-2 border-b border-border bg-background/95 px-4 py-2.5 backdrop-blur-sm">
         <section aria-label={t("Report navigation and save status")} className="flex flex-wrap items-center gap-3">
-          <Button size="sm" type="button" variant="outline" onClick={props.onBack} disabled={props.isSaving}>
-            <ArrowLeft />{t("Back")}</Button>
+          {props.onBack && <BackButton onClick={props.onBack} disabled={props.isSaving} />}
           <p className="hidden max-w-64 truncate text-sm font-semibold lg:block" title={props.activeReport?.name}>{props.activeReport?.name}</p>
           <p className="flex items-center gap-2 text-sm" aria-live="polite">
             <span className={cn('size-2 rounded-full', props.isDirty ? 'bg-amber-500' : 'bg-emerald-500')} />

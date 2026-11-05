@@ -205,13 +205,15 @@ export default function ReportGroupNavigation({
   storageKey,
   onMoveReport,
   moveDisabledReason,
+  searchQuery: parentSearchQuery,
 }) {
   const t = useTranslation();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [overGroup, setOverGroup] = useState(null);
   const [draggedKey, setDraggedKey] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [localSearchQuery, setSearchQuery] = useState('');
+  const searchQuery = parentSearchQuery ?? localSearchQuery;
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [customGroups, setCustomGroups] = useState(() => loadCustomGroups(storageKey));
@@ -364,7 +366,7 @@ export default function ReportGroupNavigation({
     if (target) void move(report, target);
   };
 
-  const showSearch = reports.length > 3;
+  const showSearch = parentSearchQuery === undefined;
   const expandLabel = allOpen ? t('Collapse all') : t('Expand all');
 
   return (
@@ -394,9 +396,9 @@ export default function ReportGroupNavigation({
               )}
             </div>
           ) : (
-            <span className="flex-1" />
+            <span className="flex-1 px-1 text-xs font-medium text-muted-foreground">{t('Folders')}</span>
           )}
-          {filteredNames.length > 1 && (
+          {filteredNames.length > 1 && !searchQuery.trim() && (
             <Button
               variant="ghost"
               size="icon"
@@ -501,7 +503,7 @@ export default function ReportGroupNavigation({
               onDeleteGroup={handleDeleteGroup}
               overGroup={overGroup}
               draggedKey={draggedKey}
-              isOpen={folderOpenMap[name] !== false}
+              isOpen={Boolean(searchQuery.trim()) || folderOpenMap[name] !== false}
               onToggleOpen={(open) => handleToggleGroup(name, open)}
               startReportDrag={startReportDrag}
               endReportDrag={endReportDrag}
@@ -512,7 +514,7 @@ export default function ReportGroupNavigation({
         </div>
       )}
 
-      {onMoveReport && !moveDisabledReason && filteredNames.length > 0 && (
+      {showSearch && onMoveReport && !moveDisabledReason && filteredNames.length > 0 && (
         <p className="px-1.5 pt-1 text-[11px] leading-snug text-muted-foreground/80">
           {t('Drag a report onto a folder to move it.')}
         </p>
