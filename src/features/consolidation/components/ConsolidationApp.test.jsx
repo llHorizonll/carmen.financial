@@ -10,19 +10,41 @@ const api = vi.hoisted(() => ({
   fetchCarmenDimensions: vi.fn(), fetchCarmenMasterData: vi.fn(), fetchCarmenReportOptions: vi.fn(),
   fetchCarmenReports: vi.fn(), fetchCarmenReportData: vi.fn(), fetchCarmenReport: vi.fn(), saveCarmenReport: vi.fn(),
 }));
-const consolidation = vi.hoisted(() => ({ listProfiles: vi.fn(), listReports: vi.fn(), getReport: vi.fn(), getMappings: vi.fn(), saveProfile: vi.fn() }));
+const consolidation = vi.hoisted(() => ({ listProfiles: vi.fn(), listReports: vi.fn(), getReport: vi.fn(), getReportData: vi.fn(), getMappings: vi.fn(), saveProfile: vi.fn(), listDeletedReports: vi.fn(), setReportDeleted: vi.fn(), listActivity: vi.fn() }));
 vi.mock('../../report/lib/reportApi.js', async importOriginal => ({ ...await importOriginal(), ...api }));
-vi.mock('../lib/consolidationApi.js', () => ({ consolidationApi: consolidation, saveReport: vi.fn() }));
+vi.mock('../lib/consolidationApi.js', () => ({ consolidationApi: consolidation, getReportData: consolidation.getReportData, saveReport: vi.fn() }));
 
-const expectReportsBeforeConsolidation = () => {
-  const reports = screen.queryByLabelText('Configured business unit reports', { selector: 'nav' })
-    || screen.getByLabelText('Reports in hq', { selector: 'section' });
-  const actions = screen.getByLabelText('Consolidation Reports', { selector: 'section' });
-  expect(actions).not.toContainElement(reports);
-  expect(reports.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  const heading = screen.getByText('Reports', { exact: true });
-  expect(heading.compareDocumentPosition(reports) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+const openConsolidation = async () => {
+  const switcher = await screen.findByRole('navigation', { name: 'Workspace' });
+  fireEvent.click(within(switcher).getByRole('button', { name: 'Consolidation' }));
+  return screen.findByRole('region', { name: 'Consolidation workspace' });
 };
+const expectReportsBeforeConsolidation = () => {
+  expect(screen.getByRole('navigation', { name: 'Configured business unit reports' })).toBeInTheDocument();
+  expect(screen.getByRole('region', { name: 'Consolidation Reports' })).toBeInTheDocument();
+};
+
+it('keeps the same loading dialog open through the template and balance requests', async () => {
+  const template = { ...createBlankReport('', [], 'loading-report', 'admin'), profileTenant: 'hq', version: 1 };
+  consolidation.listReports.mockResolvedValue([template]);
+  let finishTemplate;
+  consolidation.getReport.mockImplementationOnce(() => new Promise(resolve => { finishTemplate = resolve; }));
+  let finishBalances;
+  consolidation.getReportData.mockImplementationOnce(() => new Promise(resolve => { finishBalances = resolve; }));
+  render(<App />);
+  await screen.findByText('100.00');
+  const switcher = screen.getByRole('navigation', { name: 'Workspace' });
+  fireEvent.click(within(switcher).getByRole('button', { name: 'Consolidation' }));
+  const loadingDialog = await screen.findByRole('dialog', { name: 'Loading report data' });
+  await waitFor(() => expect(finishTemplate).toBeTypeOf('function'));
+  finishTemplate(template);
+  await waitFor(() => expect(finishBalances).toBeTypeOf('function'));
+  expect(screen.getByRole('dialog', { name: 'Loading report data' })).toBe(loadingDialog);
+  expect(loadingDialog).toHaveAttribute('data-state', 'open');
+  finishBalances({ actualRows: [], budgetRows: [] });
+  await screen.findByRole('region', { name: 'Consolidation report' });
+  expect(screen.queryByRole('dialog', { name: 'Loading report data' })).not.toBeInTheDocument();
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -53,49 +75,214 @@ beforeEach(() => {
   }));
   consolidation.listProfiles.mockResolvedValue([{ tenant: 'hq', groupName: 'Hotel group', memberTenants: ['member'], revision: 'profile-1', canManage: true }]);
   consolidation.listReports.mockResolvedValue([]);
+  consolidation.getReportData.mockResolvedValue({ actualRows: [], budgetRows: [] });
   consolidation.getMappings.mockResolvedValue({ version: 0, profileRevision: 'profile-1', accounts: {}, departments: {}, dimensions: {} });
 });
 
-it('highlights the selected consolidation template instead of the previous BU report', async () => {
+it('opens and highlights the first consolidation template instead of the previous BU report', async () => {
   const template = { ...createBlankReport('', [], 'same-id', 'admin'), name: 'Consolidated report', profileTenant: 'hq', version: 1 };
-  consolidation.listReports.mockResolvedValue([template]);
+  const second = { ...template, id: 'second', name: 'Another consolidation report' };
+  consolidation.listReports.mockResolvedValue([template, second]);
   consolidation.getReport.mockResolvedValue(template);
   render(<App />);
+  await openConsolidation();
   const nav = await screen.findByRole('region', { name: 'Consolidation Reports' });
-  fireEvent.click(await within(nav).findByRole('button', { name: 'Consolidated report' }));
   await waitFor(() => expect(within(nav).getByRole('button', { name: 'Consolidated report' })).toHaveAttribute('aria-current', 'page'));
+  expect(consolidation.getReport).toHaveBeenCalledExactlyOnceWith(template.id);
+  expect(within(nav).getByRole('button', { name: second.name })).not.toHaveAttribute('aria-current');
   const tree = screen.getByRole('navigation', { name: 'Configured business unit reports' });
   expect(await within(tree).findByRole('button', { name: 'HQ Operating' })).not.toHaveAttribute('aria-current');
   fireEvent.click(within(nav).getByRole('button', { name: 'Mapping', exact: true }));
   await waitFor(() => expect(within(nav).getByRole('button', { name: 'Mapping', exact: true })).toHaveAttribute('aria-current', 'page'));
-  expect(within(nav).getByRole('button', { name: 'Consolidated report' })).not.toHaveAttribute('aria-current');
+  expect(await within(nav).findByRole('button', { name: 'Consolidated report' })).not.toHaveAttribute('aria-current');
   expect(within(tree).getByRole('button', { name: 'HQ Operating' })).not.toHaveAttribute('aria-current');
+  fireEvent.click(screen.getByRole('button', { name: 'Back', exact: true }));
+  expect(await screen.findByTestId('report-print-header')).toBeInTheDocument();
+  expect(within(nav).getByRole('button', { name: 'Consolidated report' })).toHaveAttribute('aria-current', 'page');
   fireEvent.click(within(tree).getByRole('button', { name: 'HQ Operating' }));
   await waitFor(() => expect(within(tree).getByRole('button', { name: 'HQ Operating' })).toHaveAttribute('aria-current', 'page'));
   expect(within(nav).getByRole('button', { name: 'Mapping', exact: true })).not.toHaveAttribute('aria-current');
   expect(within(nav).getByRole('button', { name: 'Consolidated report' })).not.toHaveAttribute('aria-current');
 });
 
-it('starts a new template directly while Mapping opens its own workspace', async () => {
+it('renders consolidated balances and applies year, period and BU filters together', async () => {
+  const blank = createBlankReport('', [], 'totals', 'admin');
+  const template = { ...blank, name: 'Combined balances', profileTenant: 'hq', version: 2,
+    rows: [
+      { ...blank.rows[1], desc: 'Room revenue', accCodes: '4001' },
+      { id: 'total', desc: 'Formula total', isTotal: true, isActive: true, formula: 'R1*2' },
+    ],
+  };
+  consolidation.listReports.mockResolvedValue([template]);
+  consolidation.getReport.mockResolvedValue(template);
+  consolidation.getReportData.mockImplementation(async (_, { year, period, tenants }) => ({
+    actualRows: tenants.map(tenant => ({ year, acccode: '4001', [`amt${period}`]: tenant === 'hq' ? 100 : 200 })),
+    budgetRows: [],
+  }));
+  render(<App />);
+  const workspace = await openConsolidation();
+  const view = await within(workspace).findByRole('region', { name: 'Consolidation report' });
+  expect(await within(view).findByText(/^300(?:\.00)?$/)).toBeInTheDocument();
+  expect(within(view).getByText(/^600(?:\.00)?$/)).toBeInTheDocument();
+  fireEvent.change(within(view).getByLabelText('Year'), { target: { value: '2025' } });
+  fireEvent.keyDown(within(view).getByRole('combobox', { name: 'Period' }), { key: 'ArrowDown' });
+  fireEvent.click(await screen.findByRole('option', { name: 'P3' }));
+  fireEvent.click(within(view).getByTestId('dropdown-consolidation-bu'));
+  expect(screen.queryByTestId('check-consolidation-bu-outside')).not.toBeInTheDocument();
+  fireEvent.click(await screen.findByTestId('check-consolidation-bu-member'));
+  expect(consolidation.getReportData).toHaveBeenCalledTimes(1);
+  fireEvent.click(within(view).getByRole('button', { name: 'Apply' }));
+  expect(await within(view).findByText(/^100(?:\.00)?$/)).toBeInTheDocument();
+  expect(within(view).getByText(/^200(?:\.00)?$/)).toBeInTheDocument();
+  expect(consolidation.getReportData).toHaveBeenLastCalledWith('totals', { version: 2, year: 2025, period: 3, day: '', tenants: ['hq'] });
+});
+
+it('opens profile over template setup and returns from setup to the same report view', async () => {
+  const template = { ...createBlankReport('', [], 'template-id', 'admin'), name: 'Consolidated report', profileTenant: 'hq', version: 1 };
+  consolidation.listReports.mockResolvedValue([template]);
+  consolidation.getReport.mockResolvedValue(template);
+  render(<App />);
+  const workspace = await openConsolidation();
+  fireEvent.click(await within(screen.getByRole('region', { name: 'Consolidation Reports' })).findByRole('button', { name: 'Consolidated report' }));
+  expect(await within(workspace).findByTestId('report-print-header')).toBeInTheDocument();
+  expect(within(workspace).queryByRole('region', { name: 'Profile mapping status' })).not.toBeInTheDocument();
+  expect(within(workspace).queryByRole('button', { name: 'Back', exact: true })).not.toBeInTheDocument();
+  fireEvent.click(within(workspace).getByRole('button', { name: 'Edit', exact: true }));
+  expect(within(workspace).getByRole('region', { name: 'Profile mapping status' })).toBeInTheDocument();
+  expect(within(workspace).getByRole('button', { name: 'Back', exact: true })).toBeInTheDocument();
+  const reportName = await within(workspace).findByDisplayValue('Consolidated report');
+  expect(within(workspace).queryByLabelText('Report Group')).not.toBeInTheDocument();
+  fireEvent.change(reportName, { target: { value: 'Unsaved draft' } });
+  fireEvent.click(within(workspace).getByRole('button', { name: 'Setup Profile' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Setup Profile' });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+  expect(await within(workspace).findByDisplayValue('Unsaved draft')).toBeInTheDocument();
+  fireEvent.click(within(workspace).getByRole('button', { name: 'Back', exact: true }));
+  let confirmation = screen.getByRole('alertdialog', { name: 'Discard unsaved changes?' });
+  fireEvent.click(within(confirmation).getByRole('button', { name: 'Cancel' }));
+  expect(within(workspace).getByDisplayValue('Unsaved draft')).toBeInTheDocument();
+  fireEvent.click(within(workspace).getByRole('button', { name: 'Back', exact: true }));
+  confirmation = screen.getByRole('alertdialog', { name: 'Discard unsaved changes?' });
+  fireEvent.click(within(confirmation).getByRole('button', { name: 'Discard changes' }));
+  expect(await within(workspace).findByTestId('report-print-header')).toBeInTheDocument();
+  expect(within(workspace).getByText('Consolidated report')).toBeInTheDocument();
+  expect(within(workspace).queryByRole('button', { name: 'Back', exact: true })).not.toBeInTheDocument();
+  expect(within(workspace).queryByRole('heading', { name: 'Consolidation Mapping' })).not.toBeInTheDocument();
+});
+
+it('deletes a selected template and restores it without modifying the profile or mapping', async () => {
+  const template = { ...createBlankReport('', [], 'template-id', 'admin'), name: 'Consolidated report', profileTenant: 'hq', version: 1 };
+  consolidation.listReports.mockResolvedValue([template]);
+  consolidation.getReport.mockResolvedValue(template);
+  consolidation.listDeletedReports.mockResolvedValueOnce([{ ...template, version: 2, isDeleted: true, deletedBy: 'admin' }]).mockResolvedValue([]);
+  consolidation.listActivity.mockResolvedValue([{ reportId: 'template-id', reportName: 'Consolidated report', version: 2, changeType: 'delete', changedBy: 'admin', changedAt: '2026-11-06T00:00:00Z' }]);
+  consolidation.setReportDeleted.mockImplementation(async (report, profile, deleted) => ({ ...report, version: report.version + 1, isDeleted: deleted }));
+  render(<App />);
+  const workspace = await openConsolidation();
+  const nav = screen.getByRole('region', { name: 'Consolidation Reports' });
+  fireEvent.click(await within(nav).findByRole('button', { name: 'Consolidated report' }));
+  await within(workspace).findByTestId('report-print-header');
+  fireEvent.click(within(workspace).getByRole('button', { name: 'Delete', exact: true }));
+  let dialog = screen.getByRole('alertdialog', { name: 'Delete consolidation report?' });
+  expect(within(dialog).getByText(/Consolidated report/)).toBeInTheDocument();
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+  expect(consolidation.setReportDeleted).not.toHaveBeenCalled();
+  fireEvent.click(within(workspace).getByRole('button', { name: 'Delete', exact: true }));
+  dialog = screen.getByRole('alertdialog', { name: 'Delete consolidation report?' });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Delete report' }));
+  await waitFor(() => expect(within(nav).queryByRole('button', { name: 'Consolidated report' })).not.toBeInTheDocument());
+  expect(consolidation.setReportDeleted).toHaveBeenCalledWith(expect.objectContaining({ id: 'template-id', version: 1 }), expect.objectContaining({ tenant: 'hq', revision: 'profile-1' }), true);
+  expect(consolidation.saveProfile).not.toHaveBeenCalled();
+  fireEvent.click(within(workspace).getByRole('button', { name: 'Activity' }));
+  const trash = await screen.findByRole('dialog', { name: 'Consolidation activity' });
+  expect(await within(trash).findByText(/Report deleted/)).toBeInTheDocument();
+  fireEvent.click(await within(trash).findByRole('button', { name: 'Restore' }));
+  await waitFor(() => expect(consolidation.listDeletedReports).toHaveBeenCalledTimes(2));
+  fireEvent.click(within(trash).getByRole('button', { name: 'Close' }));
+  await waitFor(() => expect(within(nav).getByRole('button', { name: 'Consolidated report' })).toBeInTheDocument());
+  expect(consolidation.setReportDeleted).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'template-id', version: 2 }), expect.objectContaining({ tenant: 'hq' }), false);
+  expect(consolidation.saveProfile).not.toHaveBeenCalled();
+});
+
+it('keeps the report open when delete conflicts', async () => {
+  const template = { ...createBlankReport('', [], 'template-id', 'admin'), name: 'Consolidated report', profileTenant: 'hq', version: 1 };
+  consolidation.listReports.mockResolvedValue([template]); consolidation.getReport.mockResolvedValue(template);
+  consolidation.setReportDeleted.mockRejectedValue(new Error('Version conflict. Reload before continuing.'));
+  render(<App />);
+  const workspace = await openConsolidation();
+  const nav = screen.getByRole('region', { name: 'Consolidation Reports' });
+  fireEvent.click(await within(nav).findByRole('button', { name: 'Consolidated report' }));
+  await within(workspace).findByTestId('report-print-header');
+  fireEvent.click(within(workspace).getByRole('button', { name: 'Delete', exact: true }));
+  const dialog = screen.getByRole('alertdialog', { name: 'Delete consolidation report?' });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Delete report' }));
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent('Version conflict');
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+  expect(within(nav).getByRole('button', { name: 'Consolidated report' })).toBeInTheDocument();
+});
+
+it('lands on the empty report view, offers New Report in the toolbar, and returns from Mapping', async () => {
   render(<App />);
   await screen.findByText('100.00');
+  const workspace = await openConsolidation();
   const navigation = screen.getByLabelText('Consolidation Reports', { selector: 'section' });
-  fireEvent.click(within(navigation).getByRole('button', { name: 'New Consolidate Report' }));
-  const workspace = await screen.findByRole('region', { name: 'Consolidation workspace' });
+  expect(await within(workspace).findByRole('heading', { name: 'No reports yet' })).toBeInTheDocument();
+  expect(within(navigation).queryByRole('button', { name: /new.*report/i })).not.toBeInTheDocument();
+  expect(consolidation.getMappings).not.toHaveBeenCalled();
+  fireEvent.click(within(workspace).getByRole('button', { name: 'New Report', exact: true }));
   expect(await within(workspace).findByRole('button', { name: 'Blank template' })).toBeInTheDocument();
   expect(within(workspace).getByRole('button', { name: 'Copy from HQ' })).toBeInTheDocument();
   expect(within(workspace).queryByRole('heading', { name: 'Consolidation Mapping' })).not.toBeInTheDocument();
   fireEvent.click(within(navigation).getByRole('button', { name: 'Mapping' }));
   expect(await within(workspace).findByRole('heading', { name: 'Consolidation Mapping' })).toBeInTheDocument();
+  fireEvent.click(within(workspace).getByRole('button', { name: 'Back', exact: true }));
+  expect(await within(workspace).findByRole('heading', { name: 'No reports yet' })).toBeInTheDocument();
+});
+
+it('loads the ordinary report once when returning from Consolidation for the same BU and year', async () => {
+  render(<App />);
+  await screen.findByText('100.00');
+  const workspace = await openConsolidation();
+  await within(workspace).findByRole('heading', { name: 'No reports yet' });
+  api.fetchCarmenReportData.mockClear();
+  api.fetchCarmenMasterData.mockClear();
+  let finishBalances;
+  api.fetchCarmenReportData.mockImplementationOnce(() => new Promise(resolve => { finishBalances = resolve; }));
+
+  const switcher = screen.getByRole('navigation', { name: 'Workspace' });
+  fireEvent.click(within(switcher).getByRole('button', { name: 'Reports' }));
+  expect(await screen.findByRole('dialog', { name: 'Loading report data' })).toBeInTheDocument();
+  finishBalances({ actualRows: [], budgetRows: [] });
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Loading report data' })).not.toBeInTheDocument());
+  expect(api.fetchCarmenReportData).toHaveBeenCalledOnce();
+  expect(api.fetchCarmenMasterData).not.toHaveBeenCalled();
+});
+
+it('keeps an unsaved consolidation template when workspace switching is cancelled', async () => {
+  render(<App />);
+  await screen.findByText('100.00');
+  const workspace = await openConsolidation();
+  await within(workspace).findByRole('heading', { name: 'No reports yet' });
+  fireEvent.click(within(workspace).getByRole('button', { name: 'New Report', exact: true }));
+  fireEvent.click(await within(workspace).findByRole('button', { name: 'Blank template' }));
+  await screen.findByDisplayValue('New Consolidation Report');
+  fireEvent.click(within(workspace).getByRole('button', { name: 'Back', exact: true }));
+  expect(await within(workspace).findByRole('table', { name: 'Consolidation template structure' })).toBeInTheDocument();
+  fireEvent.click(within(workspace).getByRole('button', { name: 'Edit', exact: true }));
+  expect(await screen.findByDisplayValue('New Consolidation Report')).toBeInTheDocument();
+  fireEvent.click(within(screen.getByRole('navigation', { name: 'Workspace' })).getByRole('button', { name: 'Reports' }));
+  fireEvent.click(within(screen.getByRole('alertdialog', { name: 'Discard unsaved changes?' })).getByRole('button', { name: 'Cancel' }));
+  expect(screen.getByDisplayValue('New Consolidation Report')).toBeInTheDocument();
+  expect(screen.getByRole('region', { name: 'Consolidation workspace' })).toBeInTheDocument();
 });
 
 it('keeps the configured BU tree available when switching between member and HQ reports', async () => {
   render(<App />);
   await screen.findByText('100.00');
+  await openConsolidation();
   expectReportsBeforeConsolidation();
   fireEvent.click(screen.getByRole('button', { name: 'Setup Profile', exact: true }));
   const profileDialog = await screen.findByRole('dialog', { name: 'Setup Profile' });
-  expectReportsBeforeConsolidation();
   fireEvent.click(within(profileDialog).getByRole('button', { name: 'Cancel', exact: true }));
   expect(consolidation.saveProfile).not.toHaveBeenCalled();
   expectReportsBeforeConsolidation();
@@ -130,7 +317,7 @@ it('keeps the configured BU tree available when switching between member and HQ 
   expectReportsBeforeConsolidation();
   expect(api.fetchCarmenMasterData).toHaveBeenLastCalledWith(expect.objectContaining({ tenant: 'hq' }));
   expect(api.fetchCarmenReportData).toHaveBeenLastCalledWith(expect.objectContaining({ tenant: 'hq', reportId: 'same-id' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Back', exact: true }));
+  fireEvent.click(within(screen.getByRole('navigation', { name: 'Workspace' })).getByRole('button', { name: 'Reports' }));
   expect(await screen.findByRole('region', { name: 'Reports in hq' })).toBeInTheDocument();
   expect(screen.queryByRole('navigation', { name: 'Configured business unit reports' })).not.toBeInTheDocument();
 });
@@ -138,13 +325,19 @@ it('keeps the configured BU tree available when switching between member and HQ 
 it('keeps an unsaved member draft on cancelled HQ navigation and switches both tenant and report after confirmation', async () => {
   render(<App />);
   await screen.findByText('100.00');
-  fireEvent.click(screen.getByRole('button', { name: 'New Consolidate Report' }));
+  await openConsolidation();
+  await screen.findByRole('heading', { name: 'No reports yet' });
+  fireEvent.click(screen.getByRole('button', { name: 'New Report', exact: true }));
   const tree = await screen.findByRole('navigation', { name: 'Configured business unit reports' });
   fireEvent.click(within(tree).getByRole('button', { name: 'Member BU', exact: true }));
   fireEvent.click(await within(tree).findByRole('button', { name: 'Member Profit', exact: true }));
   await screen.findByText('200.00');
   fireEvent.click(screen.getByRole('button', { name: 'Edit', exact: true }));
   fireEvent.change(await screen.findByDisplayValue('Member Profit'), { target: { value: 'Member draft' } });
+  fireEvent.click(within(screen.getByRole('navigation', { name: 'Workspace' })).getByRole('button', { name: 'Reports' }));
+  fireEvent.click(within(screen.getByRole('alertdialog', { name: 'Discard unsaved changes?' })).getByRole('button', { name: 'Cancel', exact: true }));
+  expect(screen.getByDisplayValue('Member draft')).toBeInTheDocument();
+  expect(within(screen.getByRole('navigation', { name: 'Workspace' })).getByRole('button', { name: 'Consolidation' })).toHaveAttribute('aria-pressed', 'true');
   fireEvent.click(within(tree).getByRole('button', { name: 'HQ Operating', exact: true }));
   let confirmation = screen.getByRole('alertdialog', { name: 'Discard unsaved changes?' });
   fireEvent.click(within(confirmation).getByRole('button', { name: 'Cancel', exact: true }));
@@ -177,7 +370,9 @@ it('moves an HQ report using its latest owner definition while the selected memb
   api.saveCarmenReport.mockImplementation(async report => ({ ...report, lastModified: 'saved-version' }));
   render(<App />);
   await screen.findByText('100.00');
-  fireEvent.click(screen.getByRole('button', { name: 'New Consolidate Report' }));
+  await openConsolidation();
+  await screen.findByRole('heading', { name: 'No reports yet' });
+  fireEvent.click(screen.getByRole('button', { name: 'New Report', exact: true }));
   const tree = await screen.findByRole('navigation', { name: 'Configured business unit reports' });
   fireEvent.click(within(tree).getByRole('button', { name: 'Member BU', exact: true }));
   fireEvent.click(await within(tree).findByRole('button', { name: 'Member Profit', exact: true }));

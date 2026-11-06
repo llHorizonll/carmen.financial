@@ -26,7 +26,6 @@ export function BusinessUnitReportList({ catalog, reports, currentKey, onSelect,
     {tenant && <section aria-label={`Reports in ${tenant}`} className="space-y-1 pt-1">
       {status?.loading && <p role="status" className="px-2 text-xs text-muted-foreground">{t("Loading reports…")}</p>}
       {status?.error && <p role="alert" className="px-2 text-xs text-destructive">{status.error}</p>}
-      {!catalog.loading && !catalog.error && !status?.loading && !status?.error && !items.length && <p className="px-2 text-xs text-muted-foreground">{t("No reports available.")}</p>}
       <ReportGroupNavigation key={`${storageKey}:${tenant}`} storageKey={`${storageKey}:${tenant}:groups`} reports={items} currentKey={currentKey} onSelect={onSelect} onMoveReport={onMoveReport} moveDisabledReason={moveDisabledReason} />
     </section>}
   </>;

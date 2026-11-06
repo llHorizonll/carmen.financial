@@ -1,0 +1,11 @@
+- main [ref=e3]:
+  - region "Language" [ref=e5]:
+    - button "EN" [pressed] [ref=e6] [cursor=pointer]
+    - button "ไทย" [ref=e7] [cursor=pointer]
+  - generic [ref=e9]:
+    - generic [ref=e11]:
+      - generic [ref=e12]: Carmen Blue Financial Report
+      - generic [ref=e13]:
+        - heading "A focused workspace for financial reporting." [level=1] [ref=e14]
+        - paragraph [ref=e15]: Sign in to review reports, adjust report structure, and manage access in one consistent workspace.
+    - generic "Loading sign-in form" [ref=e17]

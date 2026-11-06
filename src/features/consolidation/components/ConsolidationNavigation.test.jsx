@@ -34,6 +34,18 @@ beforeEach(() => {
 });
 
 describe('configured business unit report navigation', () => {
+  it('expands and collapses every BU and report group from the search toolbar', async () => {
+    render(<ConsolidationReportTree profile={profile} units={units} onSelect={vi.fn()} onMoveReport={vi.fn()} />);
+    await screen.findByRole('button', { name: 'hq Spa', exact: true });
+    expect(screen.queryByText('Folders')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Expand all' }));
+    expect(await screen.findByRole('button', { name: 'member Spa', exact: true })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse all' }));
+    expect(screen.getByRole('button', { name: 'Member BU', exact: true })).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(screen.getByRole('button', { name: 'Headquarters · HQ', exact: true }));
+    const hq = await unitNavigation('Headquarters · HQ');
+    expect(within(hq).getByRole('button', { name: 'Operations', exact: true })).toHaveAttribute('aria-expanded', 'false');
+  });
   it('uses one report search to reveal matching reports in a collapsed member BU', async () => {
     render(<ConsolidationReportTree profile={profile} units={units} onSelect={vi.fn()} />);
     await screen.findByRole('button', { name: 'hq Spa', exact: true });

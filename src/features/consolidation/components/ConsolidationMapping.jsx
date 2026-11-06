@@ -185,7 +185,7 @@ export default function ConsolidationMapping({ profile, units = [], onDirtyChang
           : <Tabs.Root value={tab} onValueChange={(value) => { setTab(value); setSearch(''); setSaveError(''); }} className="min-w-0">
             <Tabs.List aria-label={t('Mapping type')} className="mx-4 mt-4 flex flex-wrap items-center gap-1 rounded-lg border border-border bg-muted/60 p-1">
               {[['accounts', 'Account Code'], ['departments', 'Department Code'], ['dimensions', 'Dimension']].map(([value, label]) => <Tabs.Trigger key={value} value={value} asChild>
-                <Button variant="ghost" className="min-h-9 flex-1 rounded-md text-sm font-medium text-muted-foreground hover:bg-background hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">{t(label)}</Button>
+                <Button variant="ghost" className="min-h-9 flex-1 rounded-md text-sm font-medium text-muted-foreground hover:bg-background hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:hover:bg-primary data-[state=active]:hover:text-primary-foreground dark:data-[state=active]:hover:bg-primary dark:data-[state=active]:hover:text-primary-foreground">{t(label)}</Button>
               </Tabs.Trigger>)}
             </Tabs.List>
             <Tabs.Content value={tab} className="p-4">
@@ -221,7 +221,7 @@ export default function ConsolidationMapping({ profile, units = [], onDirtyChang
                     <TableBody>{rows.map((row) => <TableRow key={row.id} className="border-border/60 even:bg-muted/20 hover:bg-muted/40">
                       <TableCell className="font-mono font-semibold text-primary tabular-nums">{row.id}</TableCell><TableCell>{row.name}</TableCell>
                       {tab === 'accounts' && <><TableCell>{row.sourceType || row.type}</TableCell><TableCell>{row.nature}</TableCell></>}
-                      <TableCell><Badge variant={storedTargets[row.id]?.length ? 'secondary' : 'outline'} className="font-normal text-muted-foreground tabular-nums">{storedTargets[row.id]?.length ? `${storedTargets[row.id].length} ${t('Mapped')}` : t('Unmapped')}</Badge></TableCell>
+                      <TableCell><Badge variant={storedTargets[row.id]?.length ? 'secondary' : 'outline'} className="font-normal text-foreground tabular-nums">{storedTargets[row.id]?.length ? `${storedTargets[row.id].length} ${t('Mapped')}` : t('Unmapped')}</Badge></TableCell>
                       <TableCell><Button size="sm" variant="outline" aria-label={`${t('Map codes for')} ${row.id}`} disabled={!canEdit || (tab === 'accounts' && !row.missing && !['B', 'I', 'S'].includes(row.type))} onClick={() => openEditor(row)}><Link2 />{t('Map Codes')}</Button></TableCell>
                     </TableRow>)}</TableBody>
                   </Table>

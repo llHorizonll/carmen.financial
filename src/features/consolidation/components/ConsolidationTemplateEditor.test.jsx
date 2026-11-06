@@ -3,10 +3,10 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ConsolidationTemplateEditor from './ConsolidationTemplateEditor.jsx';
 import { createConsolidationTemplate } from '../lib/templateModel.js';
-import { saveReport } from '../lib/consolidationApi.js';
+import { getReportData, saveReport } from '../lib/consolidationApi.js';
 import { fetchCarmenDimensions, fetchCarmenMasterData, fetchCarmenReport, fetchCarmenReportOptions, fetchCarmenReports } from '../../report/lib/reportApi.js';
 
-vi.mock('../lib/consolidationApi.js', () => ({ saveReport: vi.fn() }));
+vi.mock('../lib/consolidationApi.js', () => ({ saveReport: vi.fn(), getReportData: vi.fn() }));
 vi.mock('./TemplateMappingSummary.jsx', () => ({ default: () => null }));
 vi.mock('../../report/lib/reportApi.js', async importOriginal => ({ ...await importOriginal(),
   fetchCarmenDimensions: vi.fn(), fetchCarmenMasterData: vi.fn(), fetchCarmenReport: vi.fn(),
@@ -82,12 +82,22 @@ describe('consolidation template editor', () => {
     await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(false));
   });
 
-  it('previews structure using placeholders, and read-only users cannot save', async () => {
-    render(<ConsolidationTemplateEditor profile={{ ...profile, canManage: false }} template={saved()} />);
-    expect(screen.getByRole('table', { name: 'Consolidation template structure' })).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('Consolidated amounts are not calculated');
-    expect(screen.getByText('—')).toBeInTheDocument();
+  it('keeps the draft and uses the current profile revision after profile setup is saved', async () => {
+    saveReport.mockImplementation(async report => ({ ...report, version: 3 }));
+    const { rerender } = render(<ConsolidationTemplateEditor profile={profile} template={saved()} />);
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Report name' }), { target: { value: 'Draft after profile change' } });
+    rerender(<ConsolidationTemplateEditor profile={{ ...profile, revision: 'profile-2' }} template={saved()} />);
+    expect(screen.getByDisplayValue('Draft after profile change')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(saveReport).toHaveBeenCalledWith(expect.objectContaining({ name: 'Draft after profile change', profileRevision: 'profile-2', version: 2 })));
+  });
+
+  it('shows balances for read-only users without exposing editing actions', async () => {
+    getReportData.mockResolvedValue({ actualRows: [], budgetRows: [] });
+    render(<ConsolidationTemplateEditor profile={{ ...profile, canManage: false }} units={[]} template={saved()} preview />);
+    expect(await screen.findByTestId('report-print-header')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit', exact: true })).not.toBeInTheDocument();
     expect(saveReport).not.toHaveBeenCalled();
     await waitFor(() => expect(fetchCarmenMasterData).toHaveBeenCalled());
   });

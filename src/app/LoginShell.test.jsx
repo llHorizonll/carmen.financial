@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import LoginShell from './LoginShell.jsx';
 import { clearCarmenApiFailure, reportCarmenApiFailure } from '../lib/carmenApiFailure.js';
 import { clearCarmenSession } from '../features/report/lib/carmenSession.js';
-import { fetchBusinessUnitsByUsername, loginWithCarmenCredentials } from '../features/report/lib/reportApi.js';
+import { fetchBusinessUnitsByUsername, fetchCarmenMasterData, loginWithCarmenCredentials } from '../features/report/lib/reportApi.js';
 
 vi.mock('./App.jsx', () => ({
   default: () => <main>Report workspace</main>,
@@ -26,6 +26,7 @@ describe('LoginShell', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('renders the login hero and form content', async () => {
@@ -125,6 +126,25 @@ describe('LoginShell', () => {
     expect(screen.queryByRole('alertdialog', { name: 'API request failed' })).not.toBeInTheDocument();
     expect(screen.getByText('Report workspace')).toBeInTheDocument();
     expect(window.localStorage.getItem('carmen_access_token')).toBe('token');
+  });
+
+  it('notifies when department groups are denied without blocking the workspace or ending the session', async () => {
+    window.localStorage.setItem('carmen_access_token', 'token');
+    vi.stubGlobal('fetch', vi.fn(async url => url.includes('/api/DepartmentCategory/search?useTenant=deevana_plaza_asset')
+      ? { ok: false, status: 403, json: async () => ({ Message: 'Access denied' }) }
+      : { ok: true, json: async () => ({ Data: [] }) }));
+    render(<LoginShell />);
+    expect(await screen.findByText('Report workspace')).toBeInTheDocument();
+
+    await act(async () => {
+      await expect(fetchCarmenMasterData({ year: 2026, tenant: 'deevana_plaza_asset' })).resolves.toMatchObject({ deptGroups: [] });
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('You do not have permission to load department groups (HTTP 403).');
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(window.localStorage.getItem('carmen_access_token')).toBe('token');
+    fireEvent.click(screen.getByRole('button', { name: 'Close notification' }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('shows the popup even when the API fails before LoginShell mounts', async () => {

@@ -70,13 +70,6 @@ import {
   SelectValue,
 } from "@/components/ui/select.jsx";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog.jsx";
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -97,6 +90,7 @@ import MultiSelectDropdown from "../features/report/components/MultiSelectDropdo
 import LanguagePreference from "./LanguagePreference.jsx";
 import useConsolidation from "../features/consolidation/hooks/useConsolidation.js";
 import ConsolidationNavigation, { ConsolidationReportTree } from "../features/consolidation/components/ConsolidationNavigation.jsx";
+import WorkspaceSwitcher from "../features/consolidation/components/WorkspaceSwitcher.jsx";
 import ConsolidationProfileDialog from "../features/consolidation/components/ConsolidationProfileDialog.jsx";
 import ConsolidationWorkspace from "../features/consolidation/components/ConsolidationWorkspace.jsx";
 import useBusinessUnitReports, { reportKey } from "../features/report/hooks/useBusinessUnitReports.js";
@@ -146,7 +140,8 @@ import {
   getAccessibleReports,
 } from "./reportAccess.js";
 
-import ReportFiltersPanel from '../features/report/components/ReportFiltersPanel.jsx';
+import ReportFiltersPanel, { ReportFilterGrid, ReportPeriodFilter } from '../features/report/components/ReportFiltersPanel.jsx';
+import ReportLoadingDialog from '../features/report/components/ReportLoadingDialog.jsx';
 import MappingConflictPreview from '../features/report/components/MappingConflictPreview.jsx';
 
 const ReportView = React.lazy(
@@ -714,7 +709,7 @@ export default function App({ onLogout = null }) {
 
   useEffect(() => {
     if (!apiConfigured || !/^\d{4}$/.test(String(globalYear))) return;
-    if (consolidation.active || (businessUnitsEnabled && !activeTenant)) return;
+    if (businessUnitsEnabled && !activeTenant) return;
 
     const masterDataLoadKey = String(globalYear);
     if (!businessUnitsEnabled && masterDataLoadKeysRef.current.has(masterDataLoadKey)) return;
@@ -761,7 +756,7 @@ export default function App({ onLogout = null }) {
     return () => {
       isCancelled = true;
     };
-  }, [globalYear, apiConfigured, businessUnitsEnabled, activeTenant, onLogout, setMasterData, consolidation.active]);
+  }, [globalYear, apiConfigured, businessUnitsEnabled, activeTenant, onLogout, setMasterData]);
 
   useEffect(() => {
     if (!apiConfigured) return;
@@ -1584,6 +1579,7 @@ export default function App({ onLogout = null }) {
     const enter = () => {
       latestReportDataRequestRef.current += 1;
       loadedReportDataRef.current = null;
+      setIsLoading(false);
       setIsGettingStartedOpen(false);
       setIsSidebarOpen(false);
       open();
@@ -1592,6 +1588,14 @@ export default function App({ onLogout = null }) {
       msg: "Changes since the last save will be lost.", actionLabel: "Discard changes",
       onConfirm: () => { discardSetupChanges(); enter(); } });
     else enter();
+  };
+
+  const returnToReports = () => {
+    if (!consolidation.navigationActive || isSetupSaving || consolidation.busy) return;
+    const leave = () => consolidation.leave(() => applyTabChange("report"));
+    if (isSetupDirty) requestConfirmation({ title: "Discard unsaved changes?", msg: "Changes since the last save will be lost.",
+      actionLabel: "Discard changes", onConfirm: () => { discardSetupChanges(); leave(); } });
+    else leave();
   };
 
   const closeGettingStarted = () => {
@@ -1689,6 +1693,10 @@ export default function App({ onLogout = null }) {
 
       <ScrollArea className="min-w-0 flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
         <div className="p-3">
+          {businessUnitsEnabled && <WorkspaceSwitcher consolidation={consolidation.navigationActive}
+            disabled={isSetupSaving || consolidation.busy} onReports={returnToReports}
+            onConsolidation={() => { if (!consolidation.active) enterConsolidation(consolidation.openReports); }} />}
+          {businessUnitsEnabled && consolidation.navigationActive && <ConsolidationNavigation state={consolidation} onEnter={enterConsolidation} />}
           <section aria-label={t("Reports")}>
           <div className="mb-2 flex items-center justify-between gap-2 px-1">
             <div className="text-xs font-medium text-muted-foreground">{t("Reports")}</div>
@@ -1697,13 +1705,13 @@ export default function App({ onLogout = null }) {
             className="flex flex-col gap-1 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-xl data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary"
             data-tour="reports"
           >
-            {businessUnitsEnabled && consolidation.navigationActive && consolidation.profile
-              ? <ConsolidationReportTree profile={consolidation.profile} units={businessUnits.units}
+            {businessUnitsEnabled && consolidation.navigationActive
+              ? (consolidation.profile && <ConsolidationReportTree profile={consolidation.profile} units={businessUnits.units}
                 currentKey={consolidation.active ? null : resolvedCurrentReportId} onSelect={consolidation.selectReport}
                 storageKey={`carmen_report_navigation:${currentUser?.id || "anonymous"}`}
                 onMoveReport={handleMoveReportToGroup}
                 moveDisabledReason={isSetupDirty || consolidation.dirty ? t("Save or cancel your edits to move reports.")
-                  : isSetupSaving || consolidation.busy ? t("Saving report…") : undefined} />
+                  : isSetupSaving || consolidation.busy ? t("Saving report…") : undefined} />)
               : (businessUnitsEnabled ? <BusinessUnitReportList key={currentUser?.id || "anonymous"} storageKey={`carmen_report_navigation:${currentUser?.id || "anonymous"}`} catalog={businessUnits} reports={accessibleReports}
               currentKey={resolvedCurrentReportId} onSelect={handleReportChange}
               onMoveReport={canSetupReports && !isSetupDirty && !isSetupSaving ? handleMoveReportToGroup : undefined}
@@ -1712,11 +1720,7 @@ export default function App({ onLogout = null }) {
               onMoveReport={canSetupReports && !isSetupDirty && !isSetupSaving ? handleMoveReportToGroup : undefined}
               moveDisabledReason={canSetupReports && isSetupDirty ? t("Save or cancel your edits to move reports.") : undefined} />)}
           </div>
-          {!businessUnitsEnabled && accessibleReports.length === 0 && (
-            <div className="px-2 py-8 text-sm text-muted-foreground">{t("No reports available.")}</div>
-          )}
           </section>
-          {businessUnitsEnabled && <ConsolidationNavigation state={consolidation} onEnter={enterConsolidation} />}
         </div>
       </ScrollArea>
     </div>
@@ -1727,7 +1731,7 @@ export default function App({ onLogout = null }) {
       {businessUnitsEnabled && consolidation.profileOpen && <ConsolidationProfileDialog open
         key={`${consolidation.profile?.tenant || 'new'}:${consolidation.profile?.revision || ''}`}
         profile={consolidation.profile} profiles={consolidation.profiles || []} units={businessUnits.units}
-        onSaved={consolidation.profileSaved} onClose={() => consolidation.setProfileOpen(false)} />}
+        onSaved={consolidation.profileSaved} onClose={() => consolidation.setProfileOpen(false)} lockHeadquarter={consolidation.dirty} />}
       <BusinessUnitTargetDialog open={createTargetOpen} units={creationUnits}
         onSelect={handleCreateReportFromSidebar} onClose={() => setCreateTargetOpen(false)} />
       {alertMsg && (
@@ -1791,20 +1795,7 @@ export default function App({ onLogout = null }) {
         </div>
       )}
 
-      <Dialog open={isLoading}>
-        <DialogContent
-          showCloseButton={false}
-          onEscapeKeyDown={(event) => event.preventDefault()}
-          onPointerDownOutside={(event) => event.preventDefault()}
-          className="sm:max-w-sm"
-        >
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <LoaderCircle className="size-5 animate-spin motion-reduce:animate-none" />{t("Loading report data")}</DialogTitle>
-            <DialogDescription>{t("Please wait while Carmen prepares the report. Other actions are temporarily unavailable.")}</DialogDescription>
-          </DialogHeader>
-        </DialogContent>
-      </Dialog>
+      <ReportLoadingDialog open={isLoading && !consolidation.active} />
 
       <AlertDialog
         open={setupSaveWarnings.length > 0}
@@ -1972,7 +1963,7 @@ export default function App({ onLogout = null }) {
             </div>
 
             <div className="flex min-w-0 items-center justify-end gap-1 sm:gap-2">
-              {visibleActiveTab === "report" && (
+              {(visibleActiveTab === "report" || consolidation.active) && (
                   <div className="flex shrink-0 items-center gap-1 rounded-lg border border-border bg-card/80 px-1 py-1 shadow-sm sm:px-2">
                     <Button
                       type="button"
@@ -2014,10 +2005,8 @@ export default function App({ onLogout = null }) {
                   </div>
                 )}
 
-              {businessUnitsEnabled && <Button variant="outline" size="sm" disabled={consolidation.busy}
-                onClick={() => enterConsolidation(consolidation.openProfile)}>{t("Setup Profile")}</Button>}
               {businessUnitsEnabled && !consolidation.active && <BusinessUnitSelector catalog={businessUnits} onChange={handleBusinessUnitSelection} />}
-              {!consolidation.active && <Button
+              {!consolidation.active && visibleActiveTab !== "report" && <Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
@@ -2219,6 +2208,8 @@ export default function App({ onLogout = null }) {
                     {activeReport?.name || t("Reports")}
                   </span>
                 </Button>
+                <Button type="button" variant="ghost" size="icon-sm" onClick={openContextualGuide}
+                  aria-label={contextualGuideLabel} title={contextualGuideLabel.replace("Open ", "")}><CircleHelp className="size-4" /></Button>
               </h1>
               {(canSetupReports || canCreateReports) && (
                 <div data-tour="report-actions" className="flex flex-wrap items-center justify-end gap-2 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-lg data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary">
@@ -2279,14 +2270,15 @@ export default function App({ onLogout = null }) {
                   )}
                 </div>
               )}
+              <div className="flex flex-wrap items-center gap-2" aria-label={t("Report output actions")}>
+                <Button variant="outline" size="sm" onClick={exportToExcel} title={t("Export to Excel")}><Download />Excel</Button>
+                <Button variant="outline" size="sm" onClick={() => window.print()} title={t("Print")}><Printer />{t("Print")}</Button>
+              </div>
             </section>
             <ReportFiltersPanel isMobile={isMobile}
               summary={`${appliedYear} · P${appliedPeriod}${activeReportUsesDayFilter ? ` · ${t("Day")} ${activeReportDay}` : ''} · ${appliedDepts.length ? `${t("Department")}: ${appliedDepts.join(', ')}` : t("All departments")}`}
               pending={String(globalYear) !== String(appliedYear) || String(globalPeriod) !== String(appliedPeriod) || String(globalRevision) !== String(appliedRevision) || (activeReportUsesDayFilter && String(globalDay) !== String(activeReportDay)) || [...globalDepts].sort().join(',') !== [...appliedDepts].sort().join(',')}>
-                <div className="flex flex-col gap-2 2xl:flex-row 2xl:items-end 2xl:justify-between">
-                  <div
-                    className={`grid gap-2 sm:grid-cols-2 sm:items-end md:grid-cols-3 lg:grid-cols-4 2xl:flex-none ${activeReportUsesDayFilter ? "2xl:grid-cols-[180px_110px_180px_120px_88px_88px]" : "2xl:grid-cols-[180px_110px_180px_88px_88px]"}`}
-                  >
+                  <ReportFilterGrid daily={activeReportUsesDayFilter} budget>
                     <div className="min-w-0">
                       <MultiSelectDropdown
                         testIdPrefix="dept"
@@ -2307,29 +2299,7 @@ export default function App({ onLogout = null }) {
                       />
                     </div>
 
-                    <div className="space-y-1">
-                      <span className="block text-xs font-medium text-muted-foreground">{t("Period")}</span>
-                      <Select
-                        value={globalPeriod}
-                        onValueChange={setGlobalPeriod}
-                      >
-                        <SelectTrigger
-                          className={`h-9 min-w-0 text-sm ${NEUTRAL_FILTER_TRIGGER_CLASS}`}
-                        >
-                          <SelectValue placeholder={t("Period")} />
-                        </SelectTrigger>
-                        <SelectContent position="popper">
-                          {periodSelectOptions.map((option) => (
-                            <SelectItem
-                              key={option.id}
-                              value={String(option.id)}
-                            >
-                              {t(option.label)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    <ReportPeriodFilter id="view-period" value={globalPeriod} options={periodSelectOptions} onValueChange={setGlobalPeriod} />
 
                     {activeReportUsesDayFilter && (
                       <div className="space-y-1">
@@ -2401,31 +2371,7 @@ export default function App({ onLogout = null }) {
                       ) : null}
                       {isLoading ? t("Loading...") : t("Apply")}
                     </Button>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2 2xl:ml-4 2xl:flex-nowrap 2xl:self-end 2xl:justify-end">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className={`h-9 w-full px-3 text-sm sm:w-auto ${NEUTRAL_BUTTON_CLASS}`}
-                      onClick={exportToExcel}
-                      title={t("Export to Excel")}
-                    >
-                      <Download />
-                      Excel
-                    </Button>
-                    <Button
-                      className={`h-9 w-full px-3 text-sm sm:w-9 sm:px-0 pointer-coarse:sm:w-11 ${NEUTRAL_BUTTON_CLASS}`}
-                      size="sm"
-                      variant="outline"
-                      onClick={() => window.print()}
-                      title={t("Print")}
-                      aria-label={t("Print")}
-                    >
-                      <Printer />
-                    </Button>
-                  </div>
-                </div>
+                  </ReportFilterGrid>
             </ReportFiltersPanel>
           </div>
         )}
@@ -2458,7 +2404,7 @@ export default function App({ onLogout = null }) {
               </Card>
             ) : (
               <>
-                {consolidation.active && <ConsolidationWorkspace state={consolidation} units={businessUnits.units} />}
+                {consolidation.active && <ConsolidationWorkspace state={consolidation} units={businessUnits.units} zoom={tableZoom} />}
                 {visibleActiveTab === "report" && activeReport && (
                   <React.Suspense
                     fallback={

@@ -217,7 +217,7 @@ export default function RowsConfigurator({
         </div>
       </CardHeader>
 
-      <CardContent className="p-0">
+      <CardContent className="relative p-0">
         <p className="sr-only" aria-live="polite">
           {announcement}
         </p>

@@ -16,7 +16,15 @@ export const getMappings = (tenant) => request(`${profilePath(tenant)}/mappings`
 export const saveMappings = (tenant, mapping) => request(`${profilePath(tenant)}/mappings`, { method: 'PUT', body: mapping });
 export const listReports = (profileTenant) => request('/reports', { query: { profileTenant } });
 export const getReport = (id) => request(`/reports/${encodeURIComponent(id)}`);
+export const getReportData = (id, filters) => request(`/reports/${encodeURIComponent(id)}/data`, {
+  method: 'POST', body: filters, timeoutMs: 120000,
+});
+export const listActivity = (tenant) => request(`${profilePath(tenant)}/activity`);
+export const listDeletedReports = (profileTenant) => request('/reports/deleted', { query: { profileTenant } });
+export const setReportDeleted = (report, profile, deleted) => request(`/reports/${encodeURIComponent(report.id)}/${deleted ? 'delete' : 'restore'}`, {
+  method: 'POST', body: { profileTenant: profile.tenant, profileRevision: profile.revision, version: report.version },
+});
 export const saveReport = (report) => request(report.version ? `/reports/${encodeURIComponent(report.id)}` : '/reports', {
   method: report.version ? 'PUT' : 'POST', body: report,
 });
-export const consolidationApi = { listProfiles, saveProfile, getMappings, saveMappings, listReports, getReport, saveReport };
+export const consolidationApi = { listProfiles, saveProfile, getMappings, saveMappings, listReports, getReport, getReportData, saveReport, listDeletedReports, setReportDeleted, listActivity };

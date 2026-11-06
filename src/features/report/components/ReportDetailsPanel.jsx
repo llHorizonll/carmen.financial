@@ -33,6 +33,7 @@ export default function ReportDetailsPanel({
   reportOptions = EMPTY_REPORT_OPTIONS,
   updateActiveReport,
   onBusyTransition,
+  showReportGroup = true,
 }) {
   const t = useTranslation();
   const periodFormatOptions = (reportOptions.periodFormats?.length > 0
@@ -68,7 +69,7 @@ export default function ReportDetailsPanel({
             <Label className="text-foreground">{t("Report Name")}</Label>
             <Input value={activeReport.name} onChange={(e) => updateActiveReport({ name: e.target.value })} />
           </div>
-          <section className="space-y-2">
+          {showReportGroup && <section className="space-y-2">
             <Label htmlFor="report-group">{t("Report Group")}</Label>
             <Input id="report-group" value={activeReport.reportGroup || ''} maxLength={100}
               placeholder={getReportGroup(activeReport)} list="report-group-options"
@@ -77,7 +78,7 @@ export default function ReportDetailsPanel({
               {DEFAULT_REPORT_GROUPS.map(name => <option key={name} value={name} />)}
             </datalist>
             <CardDescription>{t("Enter a new name to create a group. This changes the group for this report only; save to apply.")}</CardDescription>
-          </section>
+          </section>}
           <div className="space-y-2">
             <Label className="text-foreground">{t("Company Name")}</Label>
             <Input

@@ -1,7 +1,8 @@
 import { useTranslation, useLanguage } from "@/lib/i18n.js";
 import React, { Suspense, lazy, useCallback, useSyncExternalStore } from 'react';
-import { BarChart3 } from 'lucide-react';
+import { BarChart3, TriangleAlert, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge.jsx';
+import { Button } from '@/components/ui/button.jsx';
 import { Skeleton } from '@/components/ui/skeleton.jsx';
 import {
   AlertDialog,
@@ -26,6 +27,10 @@ import LanguagePreference from './LanguagePreference.jsx';
 const App = lazy(() => import('./App.jsx'));
 const LoginForm = lazy(() => import('./LoginForm.jsx'));
 const LoginFeatures = lazy(() => import('./LoginFeatures.jsx'));
+const groupLookupWarnings = {
+  '/api/DepartmentCategory/search': 'You do not have permission to load department groups (HTTP 403).',
+  '/api/accountGroup/search': 'You do not have permission to load account groups (HTTP 403).',
+};
 const hasSession = () => Boolean(getStoredCarmenSession()?.accessToken);
 const subscribeToCarmenSession = (listener) => {
   if (typeof window === 'undefined') return () => {};
@@ -56,8 +61,10 @@ export default function LoginShell() {
     message: 'Your Carmen session has expired. Please sign in again.',
     action: 'Back to sign in',
   } : null;
-  // The authenticated workspace already renders API failures inline. Keep the
-  // global modal for sign-in failures only so it cannot block in-app guides.
+  const groupLookupWarning = isAuthenticated && apiFailure?.status === 403
+    ? groupLookupWarnings[apiFailure.path]
+    : null;
+  // Required workspace requests render errors inline; optional group lookups show a warning.
   const apiErrorNotice = !isAuthenticated && apiFailure && apiFailure.kind !== 'session' ? {
     title: 'API request failed',
     message: apiFailure.message,
@@ -122,6 +129,19 @@ export default function LoginShell() {
   return (
     <>
       {content}
+      {groupLookupWarning && (
+        <aside className="fixed inset-x-4 bottom-[calc(var(--spacing)*16+env(safe-area-inset-bottom))] z-50 flex items-start gap-3 rounded-xl border border-border bg-popover p-4 text-popover-foreground shadow-lg print:hidden sm:left-auto sm:w-96">
+          <TriangleAlert aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <section role="alert" className="min-w-0 flex-1 space-y-1">
+            <h2 className="text-balance text-sm font-semibold leading-5">{t('Group lookup unavailable')}</h2>
+            <p className="text-pretty text-sm leading-5 text-muted-foreground">{t(groupLookupWarning)}</p>
+          </section>
+          <Button type="button" variant="ghost" size="icon-sm" className="text-muted-foreground"
+            aria-label={t('Close notification')} onClick={clearCarmenApiFailure}>
+            <X aria-hidden="true" />
+          </Button>
+        </aside>
+      )}
       <AlertDialog open={Boolean(sessionNotice || apiErrorNotice)} onOpenChange={(open) => !open && clearCarmenApiFailure()}>
         <AlertDialogContent>
           <AlertDialogHeader>

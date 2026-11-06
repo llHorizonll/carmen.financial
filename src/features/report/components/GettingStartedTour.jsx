@@ -35,7 +35,7 @@ const TOUR_STEPS = [
   {
     target: "report-filters",
     title: "Filter and export",
-    description: "Choose a department, year, period, and budget revision, then select Apply. Export or print from the same bar.",
+    description: "Choose a department, year, period, and budget revision, then select Apply. Export and print are beside the report actions.",
   },
 ];
 

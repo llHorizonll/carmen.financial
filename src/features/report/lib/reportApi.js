@@ -476,6 +476,7 @@ export const fetchCarmenUsers = async () => {
 
 const fetchCarmenLookupSearch = async (path, context) => requestCarmenJson(path, {
   ...context,
+  authorizationFailureAffectsSession: false,
   method: 'POST',
   body: {
     Limit: 0,

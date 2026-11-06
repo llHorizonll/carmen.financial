@@ -29,7 +29,7 @@ it('renders the existing report configurators and previews copied totals without
   expect(screen.getByDisplayValue('TODAY Actual')).toHaveValue('TODAY\nActual');
   fireEvent.click(screen.getByRole('button', { name: 'Structure preview' }));
   expect(screen.getByRole('table', { name: 'Consolidation template structure' })).toHaveTextContent('Total Room Revenue');
-  expect(screen.getByRole('status')).toHaveTextContent('Consolidated amounts are not calculated');
+  expect(screen.getByRole('status')).toHaveTextContent('Save the report to view consolidated balances');
   expect(screen.getAllByText('—')).toHaveLength(2);
 });
 

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Eye, Pencil } from 'lucide-react';
 import { HStack } from '@astryxdesign/core/HStack';
 import { VStack } from '@astryxdesign/core/VStack';
 import { Button } from '@/components/ui/button.jsx';
@@ -17,12 +18,13 @@ import { deleteColAndRewriteReferences, deleteRowAndRewriteReferences, getIndent
 import { saveReport } from '../lib/consolidationApi.js';
 import { appendTemplateColumn, appendTemplateRow, createConsolidationTemplate } from '../lib/templateModel.js';
 import TemplateMappingSummary from './TemplateMappingSummary.jsx';
+import ConsolidationReportView from './ConsolidationReportView.jsx';
 
 const hasUnsavedChanges = (draft, saved, row, detail) => Boolean(detail)
   || Boolean(draft && (!saved || JSON.stringify(draft) !== JSON.stringify(saved)))
   || Boolean(row && JSON.stringify(row) !== JSON.stringify(draft?.rows.find(item => item.id === row.id)));
 
-export default function ConsolidationTemplateEditor({ profile, units, template, onSaved, onDirtyChange, onBusyChange, onClose, previewContainer }) {
+export default function ConsolidationTemplateEditor({ profile, units, template, onSaved, onDirtyChange, onBusyChange, onClose, previewContainer, preview: controlledPreview, onPreviewChange, onDraftChange, onReportLoading, zoom = 100 }) {
   const t = useTranslation();
   const [draft, setDraft] = useState(template);
   const [saved, setSaved] = useState(template);
@@ -35,12 +37,16 @@ export default function ConsolidationTemplateEditor({ profile, units, template, 
   const [copyMode, setCopyMode] = useState(false);
   const [sources, setSources] = useState(null);
   const [sourceId, setSourceId] = useState('');
-  const [preview, setPreview] = useState(false);
+  const [localPreview, setLocalPreview] = useState(false);
+  const preview = controlledPreview ?? localPreview;
   const [editingRow, setEditingRow] = useState(null);
   const [detail, setDetail] = useState(null);
   const [category, setCategory] = useState('ALL');
   const [confirmation, setConfirmation] = useState(null);
   const dirty = hasUnsavedChanges(draft, saved, editingRow, detail);
+  const showReport = Boolean(saved && !dirty && controlledPreview);
+  useEffect(() => { onDraftChange?.(Boolean(draft)); }, [Boolean(draft), onDraftChange]);
+  useEffect(() => () => onDraftChange?.(false), [onDraftChange]);
   useEffect(() => {
     let cancelled = false;
     setLookups(null); setLookupError('');
@@ -95,7 +101,7 @@ export default function ConsolidationTemplateEditor({ profile, units, template, 
     if (!draft.name?.trim()) { setError('Report name is required.'); return; }
     commitBusy(true); setError('');
     try {
-      const result = await saveReport({ ...draft, profileRevision: draft.profileRevision || profile.revision });
+      const result = await saveReport({ ...draft, profileRevision: profile.revision });
       setDraft(result); setSaved(result); setUndo([]); onDirtyChange?.(false); onSaved?.(result);
     } catch (failure) { setError(failure.message || 'Unable to save the consolidation template.'); }
     finally { commitBusy(false); }
@@ -117,11 +123,11 @@ export default function ConsolidationTemplateEditor({ profile, units, template, 
     setEditingRow(null);
   };
   const displayColumns = draft ? getReportDisplayColumns(draft, draft.columns.filter(column => column.isActive !== false)) : [];
-  const previewButton = draft && <Button size="sm" variant="outline" disabled={busy} onClick={() => setPreview(value => !value)}>{t(preview ? 'Edit template' : 'Structure preview')}</Button>;
+  const canPreviewStructure = !onPreviewChange || !saved || dirty;
+  const previewButton = draft && profile.canManage && (preview || canPreviewStructure) && <Button size="sm" variant="outline" disabled={busy} onClick={() => onPreviewChange ? onPreviewChange(!preview) : setLocalPreview(value => !value)}>{preview ? <Pencil /> : <Eye />}{t(preview ? 'Edit' : 'Structure preview')}</Button>;
 
-  return <VStack as="section" gap={4} className="min-w-0 w-full" aria-label="Consolidation template editor">
+  return <VStack as="section" gap={4} className={showReport ? 'min-h-0 min-w-0 w-full flex-1' : 'min-w-0 w-full'} aria-label="Consolidation template editor">
     {previewContainer ? createPortal(previewButton, previewContainer) : previewContainer === undefined && previewButton}
-    <TemplateMappingSummary profile={profile} units={units} onOpenMapping={onClose} />
     {error && <p className="px-4 text-pretty text-sm text-destructive" role="alert">{error}</p>}
     {!draft && profile.canManage && <VStack gap={3} className="p-4">
       <h3 className="text-balance font-semibold">{t('Start a consolidation template')}</h3>
@@ -141,9 +147,10 @@ export default function ConsolidationTemplateEditor({ profile, units, template, 
       {busy && <p role="status" className="text-pretty text-sm">{t('Loading…')}</p>}
     </VStack>}
     {!draft && !profile.canManage && <p className="px-4 text-pretty text-sm">{t('You do not have permission to create consolidation templates.')}</p>}
-    {draft && (preview || !profile.canManage) && <VStack gap={3} className="p-4">
+    {showReport && <ConsolidationReportView key={profile.revision} report={saved} profile={profile} units={units} zoom={zoom} onLoadingChange={onReportLoading} />}
+    {draft && !showReport && (preview || !profile.canManage) && <VStack gap={3} className="p-4">
       <h3 className="text-balance font-semibold">{draft.name}</h3>
-      <p role="status" className="text-pretty text-sm text-muted-foreground">{t('Structure only. Consolidated amounts are not calculated in this phase.')}</p>
+      <p role="status" className="text-pretty text-sm text-muted-foreground">{t('Structure preview. Save the report to view consolidated balances.')}</p>
       <Table aria-label="Consolidation template structure">
         <TableHeader><TableRow>{displayColumns.map(column => <TableHead key={column.id} className="whitespace-pre-line">{column.label}</TableHead>)}</TableRow></TableHeader>
         <TableBody>{draft.rows.filter(row => row.isActive !== false).map(row => <TableRow key={row.id} className={cn(row.isTotal && 'bg-muted font-semibold', row.isHeader && 'font-semibold')}>
@@ -154,10 +161,11 @@ export default function ConsolidationTemplateEditor({ profile, units, template, 
       </Table>
     </VStack>}
     {draft && !preview && profile.canManage && <>
+      <TemplateMappingSummary profile={profile} units={units} onOpenMapping={onClose} />
       {lookupError ? <HStack gap={2} className="p-4" wrap="wrap"><p role="alert" className="text-pretty text-sm text-destructive">{lookupError}</p><Button size="sm" variant="outline" onClick={() => setLookupAttempt(value => value + 1)}>{t('Retry')}</Button></HStack>
         : !lookups ? <p role="status" className="px-4 text-pretty text-sm">{t('Loading HQ setup data…')}</p>
           : <fieldset disabled={busy} className="min-w-0">
-            <ReportSetup guideStoragePrefix="carmen_consolidation" activeReport={draft} savedReport={saved}
+            <ReportSetup guideStoragePrefix="carmen_consolidation" activeReport={draft} savedReport={saved} showReportGroup={false}
               masterData={lookups.master} reportOptions={lookups.options} updateActiveReport={update}
               isDirty={dirty} isSaving={busy} onSave={save}
               onCancel={() => setConfirmation({ title: 'Discard unsaved changes?', msg: 'Changes since the last save will be lost.', onConfirm: cancel })}

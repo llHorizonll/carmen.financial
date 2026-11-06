@@ -57,11 +57,11 @@ export default function ReportView({
     <Card data-report-surface className="flex h-full min-h-0 flex-col gap-0 border border-border shadow-none ring-0">
       <CardHeader className="relative border-b px-4 pt-4 sm:px-5">
         <CardTitle className="text-center text-2xl font-semibold text-balance text-foreground sm:px-20 lg:text-3xl">
-          {displayCompanyLabel}
+          {displayCompanyLabel || activeReport.name}
         </CardTitle>
-        <CardDescription className="text-center text-sm font-medium text-foreground/80 sm:text-[0.95rem]">
+        {displayCompanyLabel && <CardDescription className="text-center text-sm font-medium text-foreground/80 sm:text-[0.95rem]">
           {activeReport.name}
-        </CardDescription>
+        </CardDescription>}
         <CardDescription className="text-center text-sm text-muted-foreground">
           {displayDateLabel}
         </CardDescription>

@@ -12,7 +12,7 @@ import { useTranslation } from '@/lib/i18n.js';
 import { cn } from '@/lib/utils.js';
 import { consolidationApi } from '../lib/consolidationApi.js';
 
-export default function ConsolidationProfileDialog({ open, profile, profiles = [], units, onSaved, onClose }) {
+export default function ConsolidationProfileDialog({ open, profile, profiles = [], units, onSaved, onClose, lockHeadquarter = false }) {
   const t = useTranslation();
   const [original, setOriginal] = useState(profile);
   const [tenant, setTenant] = useState(profile?.tenant || '');
@@ -59,12 +59,13 @@ export default function ConsolidationProfileDialog({ open, profile, profiles = [
           <VStack gap={3} className="rounded-xl border border-border bg-background p-4">
           {step === 1 ? <>
             <p className="text-sm font-medium text-foreground">{t('Headquarter BU')}</p>
-            <Select value={tenant} onValueChange={selectTenant} disabled={saving || Boolean(original?.headquarterLocked)}>
+            <Select value={tenant} onValueChange={selectTenant} disabled={saving || Boolean(original?.headquarterLocked) || lockHeadquarter}>
               <SelectTrigger aria-label={t('Headquarter BU')} className="bg-background"><SelectValue placeholder={t('Select headquarter BU')} /></SelectTrigger>
               <SelectContent>{units.filter((unit) => unit.permission?.view).map((unit) =>
                 <SelectItem key={unit.id} value={unit.id}>{unit.name || unit.id}</SelectItem>)}</SelectContent>
             </Select>
             {original?.headquarterLocked && <p className="text-sm text-muted-foreground">{t('Headquarter is locked because mappings or templates already exist.')}</p>}
+            {!original?.headquarterLocked && lockHeadquarter && <p className="text-sm text-muted-foreground">{t('Save or discard the current draft before changing headquarters.')}</p>}
           </> : <>
             <HStack gap={2} vAlign="center" className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-sm font-medium text-foreground"><Building2 className="size-4 text-muted-foreground" />{t('Headquarter')}: {unitName(tenant)}</HStack>
             <VStack gap={0} className="max-h-80 overflow-y-auto rounded-lg border border-border bg-card">

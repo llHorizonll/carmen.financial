@@ -103,7 +103,7 @@ function ReportFolder({
               aria-controls={contentId}
               onDragOver={(e) => acceptReportDrag(e, name)}
               onDrop={(e) => dropReport(e, name)}
-              className={`h-8 min-w-0 flex-1 justify-start gap-1.5 rounded-md px-1.5 text-xs font-semibold hover:bg-sidebar-accent ${
+              className={`h-8 min-w-0 flex-1 justify-start gap-1.5 rounded-md px-1.5 text-sm font-medium hover:bg-sidebar-accent ${
                 isDropTarget ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -170,7 +170,7 @@ function ReportFolder({
                     onClick={() => onSelect(key)}
                     className={`group/report h-8 w-full min-w-0 justify-start gap-2 overflow-hidden rounded-md px-2 text-left text-sm font-normal ${
                       isCurrent
-                        ? 'bg-primary font-medium text-primary-foreground hover:bg-primary hover:text-primary-foreground'
+                        ? 'bg-primary font-medium text-primary-foreground hover:bg-primary hover:text-primary-foreground dark:hover:bg-primary'
                         : 'text-foreground/85 hover:bg-sidebar-accent hover:text-foreground'
                     } ${isDragged ? 'opacity-40' : ''}`}
                   >
@@ -206,6 +206,7 @@ export default function ReportGroupNavigation({
   onMoveReport,
   moveDisabledReason,
   searchQuery: parentSearchQuery,
+  bulkOpen,
 }) {
   const t = useTranslation();
   const [busy, setBusy] = useState(false);
@@ -259,6 +260,12 @@ export default function ReportGroupNavigation({
   }, [groups, searchQuery]);
 
   const filteredNames = useMemo(() => [...filteredGroups.keys()], [filteredGroups]);
+  const groupsRef = useRef(groups);
+  groupsRef.current = groups;
+
+  useEffect(() => {
+    if (bulkOpen) setFolderOpenMap(Object.fromEntries([...groupsRef.current.keys()].map((name) => [name, bulkOpen.open])));
+  }, [bulkOpen]);
 
   const allOpen = useMemo(
     () => filteredNames.every((name) => folderOpenMap[name] !== false),
@@ -395,10 +402,8 @@ export default function ReportGroupNavigation({
                 </Button>
               )}
             </div>
-          ) : (
-            <span className="flex-1 px-1 text-xs font-medium text-muted-foreground">{t('Folders')}</span>
-          )}
-          {filteredNames.length > 1 && !searchQuery.trim() && (
+          ) : null}
+          {showSearch && filteredNames.length > 1 && !searchQuery.trim() && (
             <Button
               variant="ghost"
               size="icon"
@@ -413,13 +418,14 @@ export default function ReportGroupNavigation({
           {onMoveReport && (
             <Button
               variant="ghost"
-              size="icon"
+              size={showSearch ? 'icon' : 'sm'}
               onClick={() => setIsCreatingGroup(true)}
               title={t('New folder')}
               aria-label={t('New folder')}
-              className="size-8 shrink-0 text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+              className={showSearch ? 'size-8 shrink-0 text-muted-foreground hover:bg-sidebar-accent hover:text-foreground' : 'h-8 justify-start text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'}
             >
               <FolderPlus className="size-4" />
+              {!showSearch && t('New folder')}
             </Button>
           )}
         </div>
