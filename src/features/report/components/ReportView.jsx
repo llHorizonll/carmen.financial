@@ -1,5 +1,5 @@
-import { useTranslation } from "@/lib/i18n.js";
-import React, { useMemo, useState } from 'react';
+import { getLocale, useTranslation } from "@/lib/i18n.js";
+import React, { useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card.jsx';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area.jsx';
 import {
@@ -36,6 +36,7 @@ export default function ReportView({
 }) {
   const t = useTranslation();
   const [selectedCell, setSelectedCell] = useState(null);
+  const drilldownTrigger = useRef(null);
   const drilldown = useMemo(() => selectedCell && activeReport ? buildReportDrilldown({
     activeReport,
     row: selectedCell.row,
@@ -52,6 +53,8 @@ export default function ReportView({
   if (!activeReport) return null;
   const displayColumns = getReportDisplayColumns(activeReport, activeCols);
   const descriptionIsFirst = displayColumns[0]?.isDescription;
+  const locale = getLocale();
+  const amountFormat = { minimumFractionDigits: 2 };
 
   return (
     <Card data-report-surface className="flex h-full min-h-0 flex-col gap-0 border border-border shadow-none ring-0">
@@ -117,7 +120,7 @@ export default function ReportView({
                             <TableCell
                               key={col.id}
                               data-description-cell
-                              className={`${descriptionIsFirst ? 'sticky left-0 z-10' : ''} border-r px-3 py-2.5 text-sm leading-6 sm:px-4 ${currentTheme.cellBorder} ${isTotal || isHeader ? '' : 'bg-background font-semibold'}`}
+                              className={`${descriptionIsFirst ? 'sticky left-0 z-10' : ''} border-r px-3 py-2.5 text-sm leading-6 sm:px-4 ${currentTheme.cellBorder} ${isTotal || isHeader ? (descriptionIsFirst ? 'bg-secondary print:bg-transparent' : '') : 'bg-background font-semibold'}`}
                             >
                               <span className={`block ${indentClass}`}>{row.desc}</span>
                             </TableCell>
@@ -134,10 +137,18 @@ export default function ReportView({
                         return (
                           <TableCell
                             key={col.id}
-                            className={`border-r px-2 py-2.5 text-right tabular-nums sm:px-3 ${currentTheme.cellBorder} ${col.isFormula ? 'bg-muted/70' : ''} ${isNegativeVar || val < 0 ? 'font-bold text-destructive' : ''}`}
+                            className={`border-r px-2 py-2.5 text-right tabular-nums sm:px-3 ${currentTheme.cellBorder} ${col.isFormula ? 'bg-muted/70' : ''} ${isNegativeVar || val < 0 ? 'font-bold text-danger-content' : ''}`}
                           >
                             {['AC', 'BC'].includes(String(col.type || '').toUpperCase()) && !row.isTotal && !col.isFormula && !col.isPercent ? (
-                              <button type="button" className="w-full cursor-pointer text-right underline-offset-2 hover:underline focus-visible:underline" aria-label={`View ${row.desc} ${col.label} breakdown`} onClick={() => setSelectedCell({ row, col, value: val })}>
+                              <button
+                                type="button"
+                                className="min-h-6 w-full cursor-pointer text-right underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-coarse:min-h-11 print:min-h-0"
+                                aria-label={t('View {row} {column} breakdown', { row: row.desc, column: String(col.label ?? '').replace(/\s+/g, ' ') })}
+                                onClick={(event) => {
+                                  drilldownTrigger.current = event.currentTarget;
+                                  setSelectedCell({ row, col, value: val });
+                                }}
+                              >
                                 {displayValue}
                               </button>
                             ) : displayValue}
@@ -154,21 +165,28 @@ export default function ReportView({
         </ScrollArea>
       </CardContent>
       <Sheet open={Boolean(selectedCell)} onOpenChange={(open) => { if (!open) setSelectedCell(null); }}>
-        <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
+        <SheetContent className="w-full overflow-y-auto motion-reduce:animate-none sm:max-w-lg"
+          onCloseAutoFocus={(event) => {
+            if (!drilldownTrigger.current?.isConnected) return;
+            event.preventDefault();
+            drilldownTrigger.current.focus({ preventScroll: true });
+          }}>
           <SheetHeader>
-            <SheetTitle>{selectedCell?.row.desc} · {selectedCell?.col.label}</SheetTitle>
-            <SheetDescription>{t("Account and department contributions from the")} {drilldown?.source || 'report'} {t("summary data.")}</SheetDescription>
+            <SheetTitle className="pe-8">{selectedCell?.row.desc} · {selectedCell?.col.label}</SheetTitle>
+            <SheetDescription>{drilldown?.source === 'budget'
+              ? t('Account and department contributions from the budget summary.')
+              : t('Account and department contributions from the actual summary.')}</SheetDescription>
           </SheetHeader>
           {drilldown && <section className="grid gap-3 px-4 pb-4 text-sm">
             <table className="w-full text-left tabular-nums">
               <thead><tr className="border-b"><th className="py-2">{t("Account")}</th><th>{t("Department")}</th><th className="text-right">{t("Amount")}</th></tr></thead>
               <tbody>{drilldown.lines.map((line) => <tr key={`${line.accountCode}:${line.departmentCode}`} className="border-b">
                 <td className="py-2">{line.accountCode || '—'}</td><td>{line.departmentCode || '—'}</td>
-                <td className="text-right">{line.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                <td className="text-right">{line.amount.toLocaleString(locale, amountFormat)}</td>
               </tr>)}</tbody>
               <tfoot><tr className="border-t font-semibold">
                 <th colSpan={2} scope="row" className="py-2">{t("Total")}</th>
-                <td className="py-2 text-right">{drilldown.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                <td className="py-2 text-right">{drilldown.total.toLocaleString(locale, amountFormat)}</td>
               </tr></tfoot>
             </table>
             {drilldown.lines.length === 0 && <p className="text-muted-foreground">{t("No matching source rows.")}</p>}

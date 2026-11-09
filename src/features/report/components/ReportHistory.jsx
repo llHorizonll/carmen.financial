@@ -85,7 +85,7 @@ export default function ReportHistory({ report, isDirty, onRestored }) {
             <DialogTitle>{t("Report activity")}</DialogTitle>
             <DialogDescription>{report.name} {t("· Review changes and revisit a saved version.")}</DialogDescription>
           </DialogHeader>
-          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+          {error && <p role="alert" className="rounded-lg bg-danger-surface px-3 py-2 text-sm text-danger-content">{t(error)}</p>}
           {busy && <p className="flex items-center gap-2 text-sm text-muted-foreground"><LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" /> {t("Loading activity...")}</p>}
           {!busy && !error && entries.length === 0 && <p className="text-sm text-muted-foreground">{t("No saved versions yet.")}</p>}
           {selected && <VStack as="section" ref={selectedVersionRef} tabIndex={-1} gap={2} aria-label={t("Selected version")} className="gap-2! rounded-lg border border-border bg-muted/50 p-3! text-sm">

@@ -65,7 +65,7 @@ export default function ConnectivityFeedbackCoordinator({
         <Overlay isOnline={isOnline} />
       ) : loadFailed && !isOnline ? (
         <aside
-          className="sticky top-0 z-50 border-b border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive print:hidden"
+          className="sticky top-0 z-50 border-b border-warning-content/30 bg-warning-surface px-4 py-3 text-sm text-warning-content print:hidden"
           role="status"
         >{t("You are offline. Check your internet connection.")}</aside>
       ) : null}

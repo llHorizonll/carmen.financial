@@ -1,4 +1,4 @@
-import { useTranslation, getLocale } from "@/lib/i18n.js";
+import { useTranslation, getLanguage, getLocale } from "@/lib/i18n.js";
 import React, {
   useCallback,
   useEffect,
@@ -125,13 +125,13 @@ import {
   deleteColAndRewriteReferences,
   moveColumnsAndRewriteReferences,
   moveRowsAndRewriteReferences,
-  buildExcelHtml,
   findBrokenReferences,
   findRowMappingConflicts,
   rowDimensionsOverlap,
   rowDepartmentsOverlap,
   getLatestCreatedReport,
 } from "../features/report/lib/reportLogic.js";
+import { buildExcelWorkbook } from "../features/report/lib/excelReportWorkbook.js";
 import { mergeCarmenMasterData } from "../features/report/lib/reportAdapters.js";
 import { normalizeAccLookupCode } from "../features/report/lib/normalizeCode.js";
 import {
@@ -407,7 +407,7 @@ export default function App({ onLogout = null }) {
   const setupGuideRef = useRef(null);
   const importGuideRef = useRef(null);
 
-  const [alertMsg, setAlertMsg] = useState(null);
+  const [reportNotice, setReportNotice] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
   const confirmActionRef = useRef(null);
   const [setupSaveWarnings, setSetupSaveWarnings] = useState([]);
@@ -665,7 +665,7 @@ export default function App({ onLogout = null }) {
       // Applying the same day explicitly still refreshes from the server.
       if (loaded?.scope === dataScope && loaded.day !== String(day)) {
         loadedReportDataRef.current = { ...loaded, day: String(day) };
-        setAlertMsg(null);
+        setReportNotice(null);
         return loaded.data;
       }
       const requestId = ++latestReportDataRequestRef.current;
@@ -686,7 +686,7 @@ export default function App({ onLogout = null }) {
           loadedReportDataRef.current = { scope: dataScope, day: String(day), data: apiData };
           setEngineData(apiData.actualRows || []);
           setBudgetData(apiData.budgetRows || []);
-          setAlertMsg(null);
+          setReportNotice(null);
         }
         return apiData;
       } catch (error) {
@@ -697,7 +697,7 @@ export default function App({ onLogout = null }) {
         const message =
           error.message || `Unable to load Carmen ${source} data.`;
         if (requestId === latestReportDataRequestRef.current)
-          setAlertMsg(message);
+          setReportNotice({ kind: "error", message });
         throw error;
       } finally {
         if (requestId === latestReportDataRequestRef.current)
@@ -865,7 +865,7 @@ export default function App({ onLogout = null }) {
         });
       } catch (error) {
         if (!isCancelled) {
-          setAlertMsg(error.message || "Unable to load Carmen report data.");
+          setReportNotice({ kind: "error", message: error.message || "Unable to load Carmen report data." });
         }
       }
     };
@@ -1044,9 +1044,7 @@ export default function App({ onLogout = null }) {
       appliedDay: nextDay,
     });
     if (!activeReportUsesBudget && String(globalRevision) !== "0") {
-      setAlertMsg(
-        "Revision selector is ignored for reports without budget columns.",
-      );
+      setReportNotice({ kind: "warning", message: "Revision selector is ignored for reports without budget columns." });
     }
     setGlobalRevision(nextRevision);
     setAppliedRevision(nextRevision);
@@ -1061,7 +1059,7 @@ export default function App({ onLogout = null }) {
         day: nextDay,
       });
     } catch (error) {
-      setAlertMsg(error.message || "Unable to load Carmen report data.");
+      setReportNotice({ kind: "error", message: error.message || "Unable to load Carmen report data." });
     }
   };
 
@@ -1387,11 +1385,14 @@ export default function App({ onLogout = null }) {
       dailyReportDate.setFullYear(periodStart.getFullYear(), periodStart.getMonth(), Number(activeReportDay));
     }
   }
-  const autoDateLabel = dailyReportDate && !Number.isNaN(dailyReportDate.getTime())
-    ? `${t("As of")} ${dailyReportDate.toLocaleDateString(getLocale(), { year: 'numeric', month: 'long', day: 'numeric' })}`
+  const reportHeaderDate = dailyReportDate || (getLanguage() === "th" && selectedAppliedPeriod?.date
+    ? new Date(selectedAppliedPeriod.date)
+    : null);
+  const autoDateLabel = reportHeaderDate && !Number.isNaN(reportHeaderDate.getTime())
+    ? `${t("As of")} ${reportHeaderDate.toLocaleDateString(getLocale(), { year: 'numeric', month: 'long', day: 'numeric' })}`
     : selectedAppliedPeriod?.dateLabel
-    ? `As of ${selectedAppliedPeriod.dateLabel}`
-    : `As of ${formatAutoPeriod(appliedYear, appliedPeriod, "end_of_month")}`;
+    ? `${t("As of")} ${selectedAppliedPeriod.dateLabel}`
+    : `${t("As of")} ${formatAutoPeriod(appliedYear, appliedPeriod, "end_of_month")}`;
   const displayDateLabel =
     activeReport?.overrideDateDisplay ||
     activeReport?.customDateLabel ||
@@ -1400,8 +1401,8 @@ export default function App({ onLogout = null }) {
     activeReport?.periodFormat && activeReport.periodFormat !== "standard"
       ? formatAutoPeriod(appliedYear, appliedPeriod, activeReport.periodFormat)
       : selectedAppliedPeriod?.dateLabel
-        ? `Period : ${appliedYear}-${selectedPeriodCode}${selectedAppliedPeriod.status ? ` (${selectedAppliedPeriod.status})` : ""}`
-        : formatAutoPeriod(appliedYear, appliedPeriod, "standard");
+        ? `${t("Period :")} ${appliedYear}-${selectedPeriodCode}${selectedAppliedPeriod.status ? ` (${selectedAppliedPeriod.status})` : ""}`
+        : formatAutoPeriod(appliedYear, appliedPeriod, "standard").replace(/^Period :/, t("Period :"));
   const displayPeriodLabel =
     activeReport?.overridePeriodDisplay ||
     activeReport?.customPeriodLabel ||
@@ -1413,26 +1414,29 @@ export default function App({ onLogout = null }) {
     () => activeReport?.columns?.filter((c) => c.isActive) || [],
     [activeReport],
   );
-  // --- Export Excel (HTML-to-XLSX) ---
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
     if (!activeReport) return;
-    const themeColors = THEMES[activeReport.theme || "blue"];
-    const tableHtml = buildExcelHtml({
-      activeReport,
-      activeCols,
-      displayCompanyLabel,
-      displayDateLabel,
-      displayPeriodLabel,
-      reportData,
-      themeColors,
-    });
-    const blob = new Blob([tableHtml], { type: "application/vnd.ms-excel" });
+    let bytes;
+    try {
+      bytes = await buildExcelWorkbook({
+        activeReport,
+        activeCols,
+        displayCompanyLabel,
+        displayDateLabel,
+        displayPeriodLabel,
+        reportData,
+      });
+    } catch {
+      window.alert(t("Unable to export the report to Excel."));
+      return;
+    }
+    const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
     link.setAttribute(
       "download",
-      `${activeReport.name.replace(/[^a-zA-Z0-9]/g, "_")}_Export.xls`,
+      `${activeReport.name.replace(/[<>:"/\\|?*\s]+/g, "_")}_Export.xlsx`,
     );
     document.body.appendChild(link);
     link.click();
@@ -1734,28 +1738,33 @@ export default function App({ onLogout = null }) {
         onSaved={consolidation.profileSaved} onClose={() => consolidation.setProfileOpen(false)} lockHeadquarter={consolidation.dirty} />}
       <BusinessUnitTargetDialog open={createTargetOpen} units={creationUnits}
         onSelect={handleCreateReportFromSidebar} onClose={() => setCreateTargetOpen(false)} />
-      {alertMsg && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 px-4 sm:right-4 sm:left-auto sm:w-full sm:max-w-136 sm:px-0">
-          <Card className="pointer-events-auto mx-auto w-full max-w-136 border border-border/80 bg-background/98 shadow-xl ring-1 ring-black/5 backdrop-blur-sm">
+      {reportNotice && (
+        <section className="pointer-events-none fixed inset-x-0 bottom-4 z-50 px-4 print:hidden sm:right-4 sm:left-auto sm:w-full sm:max-w-136 sm:px-0">
+          <Card
+            role={reportNotice.kind === "warning" ? "status" : "alert"}
+            className={`pointer-events-auto mx-auto w-full max-w-136 border shadow-xl ring-0 ${reportNotice.kind === "warning"
+              ? "border-warning-content/30 bg-warning-surface text-warning-content"
+              : "border-danger-content/30 bg-danger-surface text-danger-content"}`}
+          >
             <CardHeader className="space-y-1.5 pb-3">
               <CardTitle className="text-base tracking-tight">
-                {String(alertMsg).includes(t("Revision selector"))
+                {reportNotice.kind === "warning"
                   ? t("Budget revision not applied")
                   : t("Unable to load report data")}
               </CardTitle>
-              <CardDescription className="whitespace-pre-line text-sm leading-6">
-                {alertMsg}
+              <CardDescription className="whitespace-pre-line wrap-anywhere text-sm leading-6 text-current">
+                {t(reportNotice.message)}
               </CardDescription>
             </CardHeader>
             <CardContent className="flex justify-end pt-0">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setAlertMsg(null)}
+                onClick={() => setReportNotice(null)}
               >{t("Dismiss")}</Button>
             </CardContent>
           </Card>
-        </div>
+        </section>
       )}
 
       {showPageSkeleton && (
@@ -1856,7 +1865,7 @@ export default function App({ onLogout = null }) {
             <AlertDialogCancel onClick={closeConfirmation}>{t("Cancel")}</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              className={confirmAction?.actionLabel === "Delete report" ? "bg-destructive text-white hover:bg-destructive/90 dark:bg-destructive dark:hover:bg-destructive/90" : undefined}
+              className={confirmAction?.actionLabel === "Delete report" ? "bg-danger-action text-white hover:bg-danger-action hover:shadow-sm dark:border-danger-content dark:bg-danger-action dark:hover:bg-danger-action" : undefined}
               onClick={confirmPendingAction}
             >
               {t(confirmAction?.actionLabel || "Confirm")}
@@ -1907,10 +1916,10 @@ export default function App({ onLogout = null }) {
                     setIsSidebarCollapsed((collapsed) => !collapsed)
                   }
                   aria-label={
-                    isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
+                    t(isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar")
                   }
                   title={
-                    isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
+                    t(isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar")
                   }
                 >
                   {isSidebarCollapsed ? (
@@ -1947,16 +1956,16 @@ export default function App({ onLogout = null }) {
                 )}
                 {masterDataError && (
                   <Badge
-                    variant="destructive"
+                    variant="outline"
                     title={masterDataError}
-                    className="rounded-full border-destructive/30 bg-destructive/15 px-2.5 py-1 text-xs text-destructive"
+                    className="rounded-full border-danger-content/30 bg-danger-surface px-2.5 py-1 text-xs text-danger-content"
                   >{t("Carmen API unavailable")}</Badge>
                 )}
                 {reportCatalogError && (
                   <Badge
-                    variant="destructive"
+                    variant="outline"
                     title={reportCatalogError}
-                    className="rounded-full border-destructive/30 bg-destructive/15 px-2.5 py-1 text-xs text-destructive"
+                    className="rounded-full border-danger-content/30 bg-danger-surface px-2.5 py-1 text-xs text-danger-content"
                   >{t("Report catalog error")}</Badge>
                 )}
               </div>
@@ -2011,8 +2020,8 @@ export default function App({ onLogout = null }) {
                 variant="ghost"
                 size="icon-sm"
                 onClick={openContextualGuide}
-                aria-label={contextualGuideLabel}
-                title={contextualGuideLabel.replace("Open ", "")}
+                aria-label={t(contextualGuideLabel)}
+                title={t(contextualGuideLabel)}
               >
                 <CircleHelp className="size-4" />
               </Button>}
@@ -2209,12 +2218,13 @@ export default function App({ onLogout = null }) {
                   </span>
                 </Button>
                 <Button type="button" variant="ghost" size="icon-sm" onClick={openContextualGuide}
-                  aria-label={contextualGuideLabel} title={contextualGuideLabel.replace("Open ", "")}><CircleHelp className="size-4" /></Button>
+                  aria-label={t(contextualGuideLabel)} title={t(contextualGuideLabel)}><CircleHelp className="size-4" /></Button>
               </h1>
               {(canSetupReports || canCreateReports) && (
                 <div data-tour="report-actions" className="flex flex-wrap items-center justify-end gap-2 data-[tour-active=true]:relative data-[tour-active=true]:z-50 data-[tour-active=true]:rounded-lg data-[tour-active=true]:bg-background data-[tour-active=true]:ring-4 data-[tour-active=true]:ring-primary">
                   <Button
                     size="sm"
+                    className="hover:bg-primary hover:shadow-sm"
                     onClick={handleCreateReportFromSidebar}
                   >
                     <FilePlus />{t("New Report")}</Button>
@@ -2237,7 +2247,7 @@ export default function App({ onLogout = null }) {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive focus-visible:border-destructive focus-visible:ring-destructive/20"
+                        className="border-danger-content/50 text-danger-content hover:bg-danger-surface hover:text-danger-content dark:hover:bg-danger-surface"
                         onClick={handleDeleteReport}
                       >
                         <Trash2 />{t("Delete")}</Button>
@@ -2282,7 +2292,7 @@ export default function App({ onLogout = null }) {
                     <div className="min-w-0">
                       <MultiSelectDropdown
                         testIdPrefix="dept"
-                        label="DEPT"
+                        label={t("DEPT")}
                         options={masterData.depts}
                         selected={globalDepts}
                         onChange={setGlobalDepts}
@@ -2290,8 +2300,9 @@ export default function App({ onLogout = null }) {
                     </div>
 
                     <div className="space-y-1">
-                      <span className="block text-xs font-medium text-muted-foreground">{t("Year")}</span>
+                      <label htmlFor="view-year" className="block text-xs font-medium text-muted-foreground">{t("Year")}</label>
                       <Input
+                        id="view-year"
                         type="number"
                         value={globalYear}
                         onChange={(event) => setGlobalYear(event.target.value)}
@@ -2327,22 +2338,21 @@ export default function App({ onLogout = null }) {
                     )}
 
                     <div className="space-y-1">
-                      <span className="block text-xs font-medium text-muted-foreground">{t("Budget revision")}</span>
+                      <label htmlFor="view-budget-revision" className="block text-xs font-medium text-muted-foreground">{t("Budget revision")}</label>
                       <Select
                         value={globalRevision}
                         onValueChange={(nextValue) => {
                           if (!activeReportUsesBudget && nextValue !== "0") {
                             setGlobalRevision("0");
                             setAppliedRevision("0");
-                            setAlertMsg(
-                              "Revision selector is ignored for reports without budget columns.",
-                            );
+                            setReportNotice({ kind: "warning", message: "Revision selector is ignored for reports without budget columns." });
                             return;
                           }
                           setGlobalRevision(nextValue);
                         }}
                       >
                         <SelectTrigger
+                          id="view-budget-revision"
                           className={`h-9 w-full min-w-0 text-sm ${NEUTRAL_FILTER_TRIGGER_CLASS}`}
                         >
                           <SelectValue placeholder={t("Revision")} />
@@ -2362,7 +2372,7 @@ export default function App({ onLogout = null }) {
 
                     <Button
                       size="sm"
-                      className="h-9 w-full self-end px-3 text-sm sm:w-auto sm:min-w-24 sm:justify-self-start"
+                      className="h-9 w-full self-end px-3 text-sm hover:bg-primary hover:shadow-sm sm:w-auto sm:min-w-24 sm:justify-self-start pointer-coarse:min-h-11"
                       onClick={handleApplyFilters}
                       disabled={isLoading}
                     >
@@ -2381,9 +2391,9 @@ export default function App({ onLogout = null }) {
         >
           <div className={`${mainContentWidthClass} ${activeTabMotionClass}`}>
             {visibleActiveTab === "report" && (masterDataError || reportCatalogError) && reports.length === 0 ? (
-              <Card className="mx-auto w-full max-w-[500px] border border-destructive/20 bg-destructive/5 shadow-none ring-0">
+              <Card role="alert" className="mx-auto w-full max-w-[500px] border border-danger-content/30 bg-danger-surface text-danger-content shadow-none ring-0">
                 <CardContent className="flex flex-col items-center justify-center p-6 text-center sm:p-10">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-destructive/10 text-destructive mb-4">
+                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-background text-danger-content">
                     <AlertTriangle className="size-6" />
                   </div>
                   <h3 className="text-lg font-semibold text-foreground mb-2">
@@ -2391,13 +2401,13 @@ export default function App({ onLogout = null }) {
                       ? t("Unable to load master data")
                       : t("Unable to load report catalog")}
                   </h3>
-                  <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
-                    {masterDataError || reportCatalogError}
+                  <p className="mb-6 wrap-anywhere text-sm leading-relaxed text-current">
+                    {t(masterDataError || reportCatalogError)}
                   </p>
                   <Button
                     onClick={() => window.location.reload()}
                     variant="outline"
-                    className="h-9 border border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:border-destructive/40 transition-colors gap-2"
+                    className="h-9 gap-2"
                   >
                     <RefreshCw className="size-3.5" />{t("Retry")}</Button>
                 </CardContent>

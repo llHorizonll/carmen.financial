@@ -137,7 +137,7 @@ it('renders consolidated balances and applies year, period and BU filters togeth
   expect(consolidation.getReportData).toHaveBeenLastCalledWith('totals', { version: 2, year: 2025, period: 3, day: '', tenants: ['hq'] });
 });
 
-it('opens profile over template setup and returns from setup to the same report view', async () => {
+it('hides Setup Profile in report view and setup and returns to the same report', async () => {
   const template = { ...createBlankReport('', [], 'template-id', 'admin'), name: 'Consolidated report', profileTenant: 'hq', version: 1 };
   consolidation.listReports.mockResolvedValue([template]);
   consolidation.getReport.mockResolvedValue(template);
@@ -146,17 +146,15 @@ it('opens profile over template setup and returns from setup to the same report 
   fireEvent.click(await within(screen.getByRole('region', { name: 'Consolidation Reports' })).findByRole('button', { name: 'Consolidated report' }));
   expect(await within(workspace).findByTestId('report-print-header')).toBeInTheDocument();
   expect(within(workspace).queryByRole('region', { name: 'Profile mapping status' })).not.toBeInTheDocument();
+  expect(within(workspace).queryByRole('button', { name: 'Setup Profile' })).not.toBeInTheDocument();
   expect(within(workspace).queryByRole('button', { name: 'Back', exact: true })).not.toBeInTheDocument();
   fireEvent.click(within(workspace).getByRole('button', { name: 'Edit', exact: true }));
   expect(within(workspace).getByRole('region', { name: 'Profile mapping status' })).toBeInTheDocument();
+  expect(within(workspace).queryByRole('button', { name: 'Setup Profile' })).not.toBeInTheDocument();
   expect(within(workspace).getByRole('button', { name: 'Back', exact: true })).toBeInTheDocument();
   const reportName = await within(workspace).findByDisplayValue('Consolidated report');
   expect(within(workspace).queryByLabelText('Report Group')).not.toBeInTheDocument();
   fireEvent.change(reportName, { target: { value: 'Unsaved draft' } });
-  fireEvent.click(within(workspace).getByRole('button', { name: 'Setup Profile' }));
-  const dialog = await screen.findByRole('dialog', { name: 'Setup Profile' });
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
-  expect(await within(workspace).findByDisplayValue('Unsaved draft')).toBeInTheDocument();
   fireEvent.click(within(workspace).getByRole('button', { name: 'Back', exact: true }));
   let confirmation = screen.getByRole('alertdialog', { name: 'Discard unsaved changes?' });
   fireEvent.click(within(confirmation).getByRole('button', { name: 'Cancel' }));
@@ -227,6 +225,10 @@ it('lands on the empty report view, offers New Report in the toolbar, and return
   const workspace = await openConsolidation();
   const navigation = screen.getByLabelText('Consolidation Reports', { selector: 'section' });
   expect(await within(workspace).findByRole('heading', { name: 'No reports yet' })).toBeInTheDocument();
+  expect(within(workspace).queryByRole('button', { name: 'Setup Profile' })).not.toBeInTheDocument();
+  fireEvent.click(within(workspace).getByRole('button', { name: 'Open consolidation guide' }));
+  expect(screen.getByText('Create a template')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Done' }));
   expect(within(navigation).queryByRole('button', { name: /new.*report/i })).not.toBeInTheDocument();
   expect(consolidation.getMappings).not.toHaveBeenCalled();
   fireEvent.click(within(workspace).getByRole('button', { name: 'New Report', exact: true }));
@@ -237,6 +239,33 @@ it('lands on the empty report view, offers New Report in the toolbar, and return
   expect(await within(workspace).findByRole('heading', { name: 'Consolidation Mapping' })).toBeInTheDocument();
   fireEvent.click(within(workspace).getByRole('button', { name: 'Back', exact: true }));
   expect(await within(workspace).findByRole('heading', { name: 'No reports yet' })).toBeInTheDocument();
+});
+
+it('offers one Setup Profile action in empty Mapping and still opens the wizard from New Report', async () => {
+  consolidation.listProfiles.mockResolvedValue([]);
+  render(<App />);
+  const workspace = await openConsolidation();
+  const navigation = screen.getByRole('region', { name: 'Consolidation Reports' });
+  await within(workspace).findByRole('heading', { name: 'No reports yet' });
+  fireEvent.click(within(navigation).getByRole('button', { name: 'Mapping' }));
+  let dialog = await screen.findByRole('dialog', { name: 'Setup Profile' });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+  expect(within(workspace).getByRole('button', { name: 'Setup Profile' })).toBeInTheDocument();
+  fireEvent.click(within(workspace).getByRole('button', { name: 'Back', exact: true }));
+  fireEvent.click(within(workspace).getByRole('button', { name: 'New Report' }));
+  dialog = await screen.findByRole('dialog', { name: 'Setup Profile' });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+  expect(within(workspace).queryByRole('button', { name: 'Setup Profile' })).not.toBeInTheDocument();
+});
+
+it('hides Setup Profile in Mapping when the profile is view-only', async () => {
+  consolidation.listProfiles.mockResolvedValue([{ tenant: 'hq', memberTenants: ['member'], revision: 'profile-1', canManage: false }]);
+  render(<App />);
+  const workspace = await openConsolidation();
+  await within(workspace).findByRole('heading', { name: 'No reports yet' });
+  fireEvent.click(within(screen.getByRole('region', { name: 'Consolidation Reports' })).getByRole('button', { name: 'Mapping' }));
+  await within(workspace).findByRole('heading', { name: 'Consolidation Mapping' });
+  expect(within(workspace).queryByRole('button', { name: 'Setup Profile' })).not.toBeInTheDocument();
 });
 
 it('loads the ordinary report once when returning from Consolidation for the same BU and year', async () => {
@@ -281,13 +310,16 @@ it('keeps the configured BU tree available when switching between member and HQ 
   await screen.findByText('100.00');
   await openConsolidation();
   expectReportsBeforeConsolidation();
-  fireEvent.click(screen.getByRole('button', { name: 'Setup Profile', exact: true }));
+  fireEvent.click(within(screen.getByLabelText('Consolidation Reports', { selector: 'section' })).getByRole('button', { name: 'Mapping' }));
+  const workspace = await screen.findByRole('region', { name: 'Consolidation workspace' });
+  const setupProfile = await within(workspace).findByRole('button', { name: 'Setup Profile', exact: true });
+  fireEvent.click(within(workspace).getByRole('button', { name: 'Open consolidation guide' }));
+  expect(setupProfile).toHaveAttribute('data-tour-active', 'true');
+  fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+  fireEvent.click(setupProfile);
   const profileDialog = await screen.findByRole('dialog', { name: 'Setup Profile' });
   fireEvent.click(within(profileDialog).getByRole('button', { name: 'Cancel', exact: true }));
   expect(consolidation.saveProfile).not.toHaveBeenCalled();
-  expectReportsBeforeConsolidation();
-  fireEvent.click(within(screen.getByLabelText('Consolidation Reports', { selector: 'section' })).getByRole('button', { name: 'Mapping' }));
-  const workspace = await screen.findByRole('region', { name: 'Consolidation workspace' });
   expect(await within(workspace).findByRole('heading', { name: 'Consolidation Mapping' })).toBeInTheDocument();
   expect(await within(workspace).findByRole('tab', { name: 'Account Code' })).toBeInTheDocument();
   expectReportsBeforeConsolidation();

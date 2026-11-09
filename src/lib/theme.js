@@ -22,7 +22,7 @@ const SHELL_TEMPLATE_PRESETS = {
       '--muted-foreground': 'oklch(0.535 0.03 252)',
       '--accent': 'oklch(0.94 0.02 254)',
       '--accent-foreground': 'oklch(0.205 0.03 252)',
-      '--destructive': 'oklch(0.577 0.245 27.325)',
+      '--destructive': 'var(--danger-action)',
       '--border': 'oklch(0.91 0.01 252)',
       '--input': 'oklch(0.91 0.01 252)',
       '--ring': 'oklch(0.5852 0.1706 253.27)',

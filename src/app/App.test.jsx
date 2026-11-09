@@ -451,10 +451,10 @@ describe('App shell', { timeout: 20_000 }, () => {
 
     render(<App />);
     expect(screen.getByRole('button', { name: 'New Report' })).toHaveAttribute('data-variant', 'default');
-    expect(screen.getByRole('button', { name: 'Delete' })).toHaveClass('border-destructive/50', 'text-destructive');
+    expect(screen.getByRole('button', { name: 'Delete' })).toHaveClass('border-danger-content/50', 'text-danger-content');
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     const confirmDelete = await screen.findByRole('button', { name: 'Delete report' });
-    expect(confirmDelete).toHaveClass('bg-destructive', 'text-white');
+    expect(confirmDelete).toHaveClass('bg-danger-action', 'text-white');
     fireEvent.click(confirmDelete);
 
     await waitFor(() => {
@@ -917,6 +917,7 @@ describe('App shell', { timeout: 20_000 }, () => {
     );
     fireEvent.click(revisionSelect);
     fireEvent.click(screen.getByRole('option', { name: 'Rev 9' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Budget revision not applied');
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
 
     await waitFor(() => {
@@ -1967,21 +1968,38 @@ describe('App shell', { timeout: 20_000 }, () => {
     await waitFor(() => expect(reportApiMocks.fetchCarmenReportData).toHaveBeenCalledTimes(initialCalls + 1));
   });
 
-  it('downloads an Excel-compatible report from the toolbar', async () => {
+  it('imports the workbook downloaded from the report toolbar as a new report', async () => {
     const createObjectURLSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:report-export');
     let downloadedName = '';
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function captureDownload() {
       downloadedName = this.download;
     });
-    const { container } = render(<App />);
+    try {
+      render(<App />);
+      await screen.findByText('Carmen Hotel & Resorts');
+      fireEvent.click(screen.getByTitle('Export to Excel'));
+      await waitFor(() => expect(downloadedName).toBeTruthy());
+      const [blob] = createObjectURLSpy.mock.lastCall;
 
-    await waitFor(() => expect(screen.getByText('Carmen Hotel & Resorts')).toBeInTheDocument());
-    fireEvent.click(container.querySelector('button[title="Export to Excel"]'));
+      fireEvent.click(screen.getByRole('button', { name: 'Import Excel' }));
+      fireEvent.change(await screen.findByLabelText('Choose an Excel workbook'), {
+        target: { files: [new File([blob], downloadedName, { type: blob.type })] },
+      });
+      fireEvent.click(await screen.findByRole('button', { name: 'Create 1 report' }));
+      await screen.findByRole('heading', { name: '1 report created' });
 
-    expect(createObjectURLSpy).toHaveBeenCalledWith(expect.any(Blob));
-    expect(downloadedName).toBe('Profit_and_Loss_Export.xls');
-    clickSpy.mockRestore();
-    createObjectURLSpy.mockRestore();
+      expect(downloadedName).toBe('Profit_and_Loss_Export.xlsx');
+      const original = getDefaultReports()[0];
+      const savedReports = JSON.parse(localStorageStore.carmen_bi_reports_config_v5_23);
+      expect(savedReports.find((report) => report.id.startsWith('rep-excel-'))).toMatchObject({
+        name: original.name,
+        rows: original.rows,
+        columns: original.columns,
+      });
+    } finally {
+      clickSpy.mockRestore();
+      createObjectURLSpy.mockRestore();
+    }
   });
 
   it('keeps the browser print action wired from the report toolbar', async () => {
@@ -2004,7 +2022,7 @@ describe('App shell', { timeout: 20_000 }, () => {
 
     await waitFor(() => expect(screen.getByText('Carmen Hotel & Resorts')).toBeInTheDocument());
     expect(screen.getByRole('button', { name: 'New Report' })).toHaveAttribute('data-variant', 'default');
-    expect(screen.getByRole('button', { name: 'Delete' })).toHaveClass('border-destructive/50', 'text-destructive');
+    expect(screen.getByRole('button', { name: 'Delete' })).toHaveClass('border-danger-content/50', 'text-danger-content');
     expect(screen.getByRole('button', { name: /DEPT/i }).className).toMatch(/bg-stone|border-stone|text-stone|bg-muted|border-border|text-muted/);
     expect(screen.getByRole('button', { name: 'Apply' })).toHaveAttribute('data-variant', 'default');
     expect(screen.getByTitle('Export to Excel').className).toMatch(/bg-stone|border-stone|text-stone|bg-muted|border-border|text-muted/);

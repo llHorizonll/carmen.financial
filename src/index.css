@@ -23,6 +23,11 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-danger-action: var(--danger-action);
+  --color-danger-content: var(--danger-content);
+  --color-danger-surface: var(--danger-surface);
+  --color-warning-content: var(--warning-content);
+  --color-warning-surface: var(--warning-surface);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -111,6 +116,13 @@ body {
     --font-heading: var(--font-sans);
   }
   :root {
+    color-scheme: light;
+    /* OpenDesigner semantic status pairs. */
+    --danger-action: oklch(55% .2013 24.11);
+    --danger-content: #c8000a;
+    --danger-surface: #ffe6e3;
+    --warning-content: #845d00;
+    --warning-surface: #f5eada;
     --background: oklch(1 0 0);
     --foreground: oklch(0.145 0 0);
     --card: oklch(1 0 0);
@@ -125,7 +137,7 @@ body {
     --muted-foreground: oklch(0.556 0 0);
     --accent: oklch(0.97 0 0);
     --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
+    --destructive: var(--danger-action);
     --border: oklch(0.922 0 0);
     --input: oklch(0.922 0 0);
     --ring: oklch(0.5852 0.1706 253.27);
@@ -145,6 +157,11 @@ body {
     --sidebar-ring: oklch(0.5852 0.1706 253.27);
   }
   .dark {
+    color-scheme: dark;
+    --danger-content: #ff5d60;
+    --danger-surface: #38221f;
+    --warning-content: #fecf80;
+    --warning-surface: #2f2618;
     --background: oklch(0.2 0 0);
     --foreground: oklch(0.93 0 0);
     --card: oklch(0.24 0 0);
@@ -187,6 +204,22 @@ body {
   }
   html {
     font-family: var(--font-sans);
+  }
+}
+
+@media screen {
+  [data-report-surface] [data-slot="table-container"] {
+    overflow: visible;
+  }
+
+  @media (width < 40rem) {
+    [data-report-surface] [data-description-cell] {
+      min-inline-size: 0;
+      inline-size: min(44vw, 11rem);
+      max-inline-size: min(44vw, 11rem);
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
   }
 }
 

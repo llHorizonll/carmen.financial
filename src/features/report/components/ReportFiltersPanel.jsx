@@ -39,7 +39,7 @@ export default function ReportFiltersPanel({ isMobile, summary, pending, childre
           <Button type="button" size="sm" variant="outline"><SlidersHorizontal />{t('Filters')}<ChevronDown /></Button>
         </Collapsible.Trigger>
       </section>
-      {pending && <p role="status" className="px-3 pb-2 text-xs font-medium text-amber-700 dark:text-amber-400">{t('Filters changed. Select Apply to update the report.')}</p>}
+      {pending && <p role="status" className="px-3 pb-2 text-xs font-medium text-warning-content">{t('Filters changed. Select Apply to update the report.')}</p>}
       <Collapsible.Content><section className="px-3">{children}</section></Collapsible.Content>
     </Collapsible.Root>
   </section>;

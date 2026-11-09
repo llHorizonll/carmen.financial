@@ -2,6 +2,7 @@ import {
   normalizeAccLookupCode,
   normalizeDeptLookupCode,
 } from "./normalizeCode.js";
+import { readExcelReportTemplate } from "./excelReportWorkbook.js";
 
 const ERROR_VALUE = /^#(?:NAME\?|REF!|DIV\/0!|VALUE!|N\/A|NULL!|NUM!)/i;
 const NUMBER_VALUE = /^\(?-?[\d,.]+\)?%?$/;
@@ -1192,11 +1193,14 @@ export const parseExcelWorkbook = async (file, mappingCatalogs = {}) => {
     dense: true,
     type: "array",
   });
+  const reportTemplate = readExcelReportTemplate(XLSX, workbook);
   const styles = parseWorkbookStyles(workbook);
 
   return {
     fileName: file.name,
-    sheets: workbook.SheetNames.map((name, sheetIndex) => {
+    sheets: workbook.SheetNames.flatMap((name, sheetIndex) => {
+      if (name === reportTemplate?.templateSheetName || name === reportTemplate?.mappingSheetName) return [];
+      if (name === reportTemplate?.name) return [reportTemplate];
       const sheet = workbook.Sheets[name];
       const matrix = XLSX.utils.sheet_to_json(sheet, {
         header: 1,
@@ -1217,11 +1221,11 @@ export const parseExcelWorkbook = async (file, mappingCatalogs = {}) => {
         {},
         mappingCatalogs,
       );
-      return {
+      return [{
         ...analyzed,
         source,
         autoImportConfig: analyzed.importConfig,
-      };
+      }];
     }),
   };
 };
@@ -1259,6 +1263,7 @@ export const createReportsFromExcelSheets = (
       overridePeriodDisplay: "",
       day: "",
       theme: "blue",
+      ...sheet.reportDefinition,
       sourceWorkbook: workbookName,
       sourceSheet: sheet.name,
       columns: sheet.detectedColumns,

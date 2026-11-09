@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
+import { buildExcelWorkbook } from './excelReportWorkbook.js';
 import {
   THEMES,
   INITIAL_MASTER_DATA,
@@ -21,7 +24,6 @@ import {
   moveColumnsAndRewriteReferences,
   moveDisplayColumnsAndRewriteReferences,
   moveRowsAndRewriteReferences,
-  buildExcelHtml,
   formatReportCell,
 } from './reportLogic.js';
 
@@ -69,7 +71,7 @@ describe('reportLogic helpers', () => {
     expect(formatReportCell({ ...row, numberFormat: 'column' }, { id: 'C1' })).toBe('0.50');
   });
 
-  it('keeps occupancy ratios numeric and exports percentage formatting', () => {
+  it('keeps occupancy ratios numeric and exports percentage formatting', async () => {
     const columns = [{ id: 'C1', label: 'Actual', type: 'AC' }, { id: 'C2', label: 'Variance', isFormula: true, formula: 'C1' }];
     const activeReport = { name: 'Occupancy', rows: [
       { id: 'available', accCodes: '4001' },
@@ -83,7 +85,8 @@ describe('reportLogic helpers', () => {
     const reportData = buildReportData(inputs);
     expect(reportData[2].results.C1).toBe(0.5);
     expect(reportData[2].results.C2).toBe(0.5);
-    expect(buildExcelHtml({ activeReport, activeCols: columns, reportData, themeColors: THEMES.blue })).toContain('50.00%');
+    const workbook = XLSX.read(await buildExcelWorkbook({ activeReport, activeCols: columns, reportData }));
+    expect(workbook.Sheets.Occupancy.B9).toMatchObject({ t: 'n', v: 0.5, w: '50.00%' });
     const empty = buildReportData({ ...inputs, engineData: [] });
     expect(empty[2].results.C1).toBeNull();
     expect(empty[2].results.C2).toBeNull();
@@ -937,19 +940,36 @@ describe('buildReportData', () => {
     expect(result[0].results.C1).toBe(10);
   });
 
-  it('builds excel html output', () => {
-    const html = buildExcelHtml({
-      activeReport: { name: 'Report' },
-      activeCols: [{ id: 'C1', label: 'Actual\nThis & That', width: '' }],
+  it('writes themed headings, totals and native numeric formats to an Excel workbook', async () => {
+    const columns = [{ id: 'C1', label: 'Actual\nThis & That', width: '' }];
+    const rows = [
+      { id: 'row-1', desc: 'Revenue', isHeader: true },
+      { id: 'row-2', desc: 'Rooms', indent: 1, results: { C1: -100 } },
+      { id: 'row-3', desc: 'Total Revenue', isTotal: true, results: { C1: -100 } },
+    ];
+    const bytes = await buildExcelWorkbook({
+      activeReport: { name: 'Report', theme: 'green', columns, rows },
+      activeCols: columns,
       displayCompanyLabel: 'Carmen',
       displayDateLabel: 'As of Feb',
       displayPeriodLabel: 'P2',
-      reportData: [{ desc: 'Revenue', indent: 0, results: { C1: 100 }, isHeader: false, isTotal: false }],
-      themeColors: THEMES.blue,
+      reportData: rows,
     });
-    expect(html).toContain('Carmen');
-    expect(html).toContain('Actual<br>This &amp; That');
-    expect(html).toContain('Revenue');
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(bytes);
+    const sheet = workbook.getWorksheet('Report');
+    expect(sheet.getCell('A1').value).toBe('Carmen');
+    expect(sheet.getCell('B6')).toMatchObject({
+      value: 'Actual\nThis & That',
+      font: { bold: true },
+      fill: { fgColor: { argb: 'FF047857' } },
+      alignment: { wrapText: true },
+    });
+    expect(sheet.getCell('A7').fill.fgColor.argb).toBe('FFD1FAE5');
+    expect(sheet.getCell('A8')).toMatchObject({ value: 'Rooms', alignment: { indent: 2 } });
+    expect(sheet.getCell('A9')).toMatchObject({ font: { bold: true }, fill: { fgColor: { argb: 'FFECFDF5' } } });
+    expect(sheet.views[0]).toMatchObject({ state: 'frozen', xSplit: 1, ySplit: 6, showGridLines: false });
+    expect(XLSX.read(bytes).Sheets.Report.B8).toMatchObject({ t: 'n', v: -100, w: '(100.00)' });
   });
 
   it('prorates monthly budget rows for daily budget columns', () => {
@@ -1065,19 +1085,22 @@ describe('buildReportData', () => {
     expect(result[0].results.C1).toBe(25);
   });
 
-  it('exports Description at the configured column position', () => {
-    const html = buildExcelHtml({
-      activeReport: { name: 'Report', descriptionPosition: 1, columns: [{ id: 'C1' }] },
-      activeCols: [{ id: 'C1', label: 'Actual', width: '' }],
+  it('exports Description at the configured column position', async () => {
+    const columns = [{ id: 'C1', label: 'Actual', width: '' }];
+    const rows = [{ id: 'row-1', desc: 'Revenue', results: { C1: 100 } }];
+    const workbook = XLSX.read(await buildExcelWorkbook({
+      activeReport: { name: 'Report', descriptionPosition: 1, columns, rows },
+      activeCols: columns,
       displayCompanyLabel: 'Carmen',
       displayDateLabel: 'As of Feb',
       displayPeriodLabel: 'P2',
-      reportData: [{ desc: 'Revenue', results: { C1: 100 } }],
-      themeColors: THEMES.blue,
-    });
+      reportData: rows,
+    }));
 
-    expect(html.indexOf('Actual')).toBeLessThan(html.indexOf('Description'));
-    expect(html.indexOf('100.00')).toBeLessThan(html.indexOf('Revenue'));
+    expect(workbook.Sheets.Report.A6.v).toBe('Actual');
+    expect(workbook.Sheets.Report.B6.v).toBe('Description');
+    expect(workbook.Sheets.Report.A7.v).toBe(100);
+    expect(workbook.Sheets.Report.B7.v).toBe('Revenue');
   });
 
   it('calculates an imported-report-sized dataset within the interactive calculation budget', () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
+import { buildExcelWorkbook } from "./excelReportWorkbook.js";
 import {
   analyzeExcelSheet,
   configureExcelSheetImport,
@@ -12,6 +13,49 @@ import {
 } from "./excelTemplateImport.js";
 
 describe("Excel template import", () => {
+  it("restores a single-cell Carmen report with its mapping in the destination context", async () => {
+    const columns = [{ id: "C1", label: "TODAY\nActual", type: "DAC", isActive: true }];
+    const rows = [{
+      id: "r-1", desc: "ห้องพัก", dept: "001", deptGroup: "ROOMS",
+      accCodes: "04001", groupLevel: "L2", groups: "REVENUE", dim1: "A",
+    }];
+    const activeReport = {
+      name: "Sheet1",
+      companyName: "Source hotel",
+      owner: "source-user",
+      access: [{ userId: "source-user", canEdit: true }],
+      assignedUsers: ["source-user"],
+      tenant: "source-tenant",
+      reportType: "Daily",
+      columns,
+      rows,
+    };
+    const bytes = await buildExcelWorkbook({
+      activeReport,
+      activeCols: columns,
+      reportData: [{ ...rows[0], results: { C1: 123 } }],
+    });
+    const workbook = XLSX.read(bytes);
+    expect(workbook.Workbook.Sheets).toContainEqual(expect.objectContaining({ name: "Mapping", Hidden: 0 }));
+    expect(XLSX.utils.sheet_to_json(workbook.Sheets.Mapping, { header: 1 })[1]).toEqual([
+      "R1", "ห้องพัก", "Active", "001", "ROOMS", "04001", "L2", "REVENUE", "DIM1 = A",
+    ]);
+    const parsed = await parseExcelWorkbook({ name: "export.xlsx", arrayBuffer: async () => bytes });
+
+    expect(parsed.sheets.map(({ name, isRecommended }) => ({ name, isRecommended })))
+      .toEqual([{ name: "Sheet1", isRecommended: true }]);
+    const [restored] = createReportsFromExcelSheets(parsed, ["Sheet1"], {
+      companyName: "Destination hotel", userIds: [], owner: "destination-user", idSeed: 1,
+    });
+    expect(restored).toMatchObject({
+      id: "rep-excel-1-1", companyName: "Destination hotel", owner: "destination-user",
+      assignedUsers: [], rows, columns, reportType: "Daily",
+    });
+    expect(restored).not.toHaveProperty("access");
+    expect(restored).not.toHaveProperty("tenant");
+    expect(restored.rows[0]).not.toHaveProperty("results");
+  });
+
   it("imports only same-row column arithmetic and keeps vertical totals as row formulas", () => {
     const matrix = [
       ["Description", "Actual", "Budget", "TOTAL", "Difference", "Unsupported", "Self"],

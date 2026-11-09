@@ -471,13 +471,15 @@ const ExcelTemplateImportWizard = forwardRef(function ExcelTemplateImportWizard(
                               className="max-w-full rounded-lg"
                             >
                               <CheckCircle2 aria-hidden="true" />{t("Ready")}</Badge>
-                            <Button
-                              type="button"
-                              variant={isConfigured ? "secondary" : "outline"}
-                              size="sm"
-                              onClick={() => setConfiguredSheetName(sheet.name)}
-                            >
-                              <Settings2 aria-hidden="true" />{t("Configure")}</Button>
+                            {!sheet.reportDefinition && (
+                              <Button
+                                type="button"
+                                variant={isConfigured ? "secondary" : "outline"}
+                                size="sm"
+                                onClick={() => setConfiguredSheetName(sheet.name)}
+                              >
+                                <Settings2 aria-hidden="true" />{t("Configure")}</Button>
+                            )}
                           </section>
                         )}
                       </section>
@@ -486,7 +488,12 @@ const ExcelTemplateImportWizard = forwardRef(function ExcelTemplateImportWizard(
                 })}
               </ul>
             </ScrollArea>
-            {configuredSheet && (
+            {configuredSheet?.reportDefinition && (
+              <CardDescription className="border-t px-4 py-3">
+                {t("Carmen imports the saved report setup. Worksheet values are for reference.")}
+              </CardDescription>
+            )}
+            {configuredSheet && !configuredSheet.reportDefinition && (
               <section className="border-t border-border">
                 <ExcelImportAdvancedSettings
                   sheet={configuredSheet}

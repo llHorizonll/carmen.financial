@@ -1,7 +1,7 @@
 import React, { Suspense, useCallback, useState } from 'react';
 import { VStack } from '@astryxdesign/core/VStack';
 import { HStack } from '@astryxdesign/core/HStack';
-import { CircleHelp, FilePlus, History, Network, Trash2 } from 'lucide-react';
+import { CircleHelp, FilePlus, History, Network, Settings2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Card, CardContent } from '@/components/ui/card.jsx';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select.jsx';
@@ -26,6 +26,7 @@ export default function ConsolidationWorkspace({ state, units, zoom = 100 }) {
   const [activityOpen, setActivityOpen] = useState(false);
   const [balanceLoad, setBalanceLoad] = useState(null);
   const reportsLanding = state.mode === 'reports';
+  const mappingMode = state.mode === 'mapping';
   const reportView = reportsLanding || (state.mode === 'template' && state.templateView);
   const openingReport = state.openingTemplate || (reportView && (state.loading || (reportsLanding && state.templatesLoading)));
   const showingSavedReport = state.mode === 'template' && state.templateView && state.template && state.profile && !state.dirty && !state.error;
@@ -37,20 +38,25 @@ export default function ConsolidationWorkspace({ state, units, zoom = 100 }) {
   }, [reportLoadKey]);
   const loadingBalances = reportLoadKey !== null && (balanceLoad?.key !== reportLoadKey || balanceLoad.loading);
   const canCreate = state.profile?.canManage ?? units.some(unit => unit.permission?.setup);
-  const steps = state.mode === 'mapping' ? [
-    { target: 'consolidation-profile', title: 'Consolidation profile', description: 'Set up the headquarters and member business units for this profile.' },
-    { target: 'consolidation-content', title: 'Map member codes', description: 'Choose a member, then map accounts, departments and dimensions to headquarters codes.' },
-  ] : [
-    { target: 'consolidation-profile', title: 'Consolidation profile', description: 'Templates share the mappings of this headquarters profile.' },
+  const showProfileSetup = mappingMode && canCreate && !state.loading && !state.error;
+  const profileSetupButton = showProfileSetup && (
+    <Button size="sm" variant="outline" data-tour="consolidation-profile" onClick={state.openProfile} disabled={state.busy}>
+      <Settings2 aria-hidden="true" data-icon="inline-start" />{t('Setup Profile')}
+    </Button>
+  );
+  const steps = mappingMode ? [
+    showProfileSetup && { target: 'consolidation-profile', title: 'Consolidation profile', description: 'Set up the headquarters and member business units for this profile.' },
+    state.profile && { target: 'consolidation-content', title: 'Map member codes', description: 'Choose a member, then map accounts, departments and dimensions to headquarters codes.' },
+  ].filter(Boolean) : [
     { target: 'consolidation-content', title: 'Create a template', description: 'Start blank or copy a headquarters report, then configure and save its structure.' },
   ];
   return <VStack gap={0} className="h-full min-h-0 overflow-y-auto bg-background text-foreground" as="section" aria-label={t('Consolidation workspace')}>
     <HStack gap={3} justify="between" wrap="wrap" vAlign="center" className="border-b border-border bg-background px-4 py-3">
       <HStack gap={2} wrap="wrap" vAlign="center">{!reportView && <BackButton onClick={() => {
-        if (state.mode === 'mapping' || (!state.template && !hasTemplateDraft)) state.backToReports();
+        if (mappingMode || (!state.template && !hasTemplateDraft)) state.backToReports();
         else if (state.template) state.viewTemplate();
         else state.previewTemplate();
-      }} disabled={state.busy} />}<Network className="size-4 text-muted-foreground" /><h1 className="text-base font-semibold text-balance text-foreground">{t('Consolidation')}</h1><Button size="icon-sm" variant="ghost" aria-label={t('Open consolidation guide')} title={t('Consolidation guide')} onClick={() => { setGuideStep(0); setGuideOpen(true); }}><CircleHelp /></Button></HStack>
+      }} disabled={state.busy} />}<Network className="size-4 text-muted-foreground" /><h1 className="text-base font-semibold text-balance text-foreground">{t('Consolidation')}</h1>{steps.length > 0 && <Button size="icon-sm" variant="ghost" aria-label={t('Open consolidation guide')} title={t('Consolidation guide')} onClick={() => { setGuideStep(0); setGuideOpen(true); }}><CircleHelp /></Button>}</HStack>
       <HStack gap={2} wrap="wrap" vAlign="center">
         {reportView && canCreate && <Button size="sm" onClick={state.openNewTemplate} disabled={state.busy || state.loading}>
           <FilePlus />{t('New Report')}
@@ -58,7 +64,7 @@ export default function ConsolidationWorkspace({ state, units, zoom = 100 }) {
         <HStack ref={setPreviewContainer} />
         {state.profile?.canManage && state.mode === 'template' && state.template && <Button size="sm" variant="outline" className="text-destructive" disabled={state.busy} onClick={() => { setDeleteError(''); setDeleteOpen(true); }}><Trash2 />{t('Delete')}</Button>}
         {state.profile && <Button size="sm" variant="outline" disabled={state.busy} onClick={() => setActivityOpen(true)}><History />{t('Activity')}</Button>}
-        <HStack gap={2} vAlign="center" data-tour="consolidation-profile"><Button size="sm" variant="outline" onClick={state.openProfile} disabled={state.busy}>{t('Setup Profile')}</Button></HStack>
+        {state.profile && profileSetupButton}
         {state.profiles?.length > 1 && <Select value={state.profile?.tenant || ''} onValueChange={(tenant) => state.selectProfile(state.profiles.find((item) => item.tenant === tenant))} disabled={state.busy}>
           <SelectTrigger aria-label={t('Headquarter profile')} size="sm" className="w-48 bg-background"><SelectValue placeholder={t('Select profile')} /></SelectTrigger>
           <SelectContent>{state.profiles.map((profile) => <SelectItem key={profile.tenant} value={profile.tenant}>{profile.groupName || profile.tenant}</SelectItem>)}</SelectContent>
@@ -68,9 +74,9 @@ export default function ConsolidationWorkspace({ state, units, zoom = 100 }) {
     <ReportLoadingDialog open={openingReport || loadingBalances} />
     {state.loading && !openingReport && <p role="status" className="p-4 text-sm text-muted-foreground">{t('Loading consolidation profile…')}</p>}
     {state.error && <VStack gap={3} className="p-4"><p role="alert" className="text-sm text-destructive">{state.error}</p><Button size="sm" variant="outline" onClick={state.retry}>{t('Retry')}</Button></VStack>}
-    {!reportsLanding && !state.loading && !state.error && !state.profile && <VStack gap={3} className="p-4">
+    {!reportsLanding && !state.loading && !state.error && !state.profile && <VStack gap={3} data-tour="consolidation-content" className="p-4">
       <p className="text-sm text-pretty text-muted-foreground">{state.profiles?.length ? t('Select a headquarter profile to continue.') : t('Set up a headquarter and member business units to start consolidation.')}</p>
-      <Button size="sm" variant="outline" onClick={state.openProfile}>{t('Setup Profile')}</Button>
+      {profileSetupButton}
     </VStack>}
     {reportsLanding && !openingReport && !state.error && (
       !state.profile || !state.templateError
@@ -87,7 +93,7 @@ export default function ConsolidationWorkspace({ state, units, zoom = 100 }) {
           : <p className="p-4 text-sm text-destructive">{state.templateError}</p>
     )}
     {!reportsLanding && !state.loading && !state.openingTemplate && !state.error && state.profile && <Suspense fallback={loadingBalances ? null : <p role="status" className="p-4 text-sm text-muted-foreground">{t('Loading workspace…')}</p>}>
-      {state.mode === 'mapping'
+      {mappingMode
         ? <section data-tour="consolidation-content" className="min-h-0 px-4 pt-4 pb-6" style={{ zoom: zoom / 100 }}><Mapping key={`mapping:${state.profile.tenant}:${state.generation}`} profile={state.profile} units={units} onDirtyChange={state.setDirty} onBusyChange={state.setBusy} onSaved={state.mappingSaved} /></section>
         : <section data-tour="consolidation-content" className={state.templateView && state.template && !state.dirty ? 'flex min-h-0 flex-1 flex-col' : undefined} style={state.templateView && state.template && !state.dirty ? undefined : { zoom: zoom / 100 }}><TemplateEditor key={`template:${state.template?.id || 'new'}:${state.profile.tenant}:${state.generation}`} profile={state.profile} units={units} previewContainer={previewContainer} zoom={zoom}
           template={state.template} preview={state.templateView} onReportLoading={handleReportLoading} onPreviewChange={(view) => view ? state.previewTemplate() : state.editTemplate()} onDraftChange={setHasTemplateDraft} onSaved={state.templateSaved} onDirtyChange={state.setDirty} onBusyChange={state.setBusy} onClose={state.openMapping} /></section>}
